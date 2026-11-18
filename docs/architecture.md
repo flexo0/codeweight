@@ -21,7 +21,7 @@ as a command, no `git2` / `gix`.
   `.gitignore`s (and `.ignore`s, the global gitignore) honoured, hidden files and folders left out, each folder's
   entries in the order of their names, so the walk is the same on every run. A file the excludes match is left
   out, unlisted; a folder whose every path is excluded (an exclude ending in `/**`) isn't walked at all. A file in no
-  language codeweight reads is skipped and listed. A path under a folder given that the walk can't read (a folder
+  language codeweight reads is left out, unlisted. A path under a folder given that the walk can't read (a folder
   it may not list) is left out and listed as unreadable, a warning, so one root-owned folder doesn't make the tree
   unscannable; a folder given that can't be read is an error, as it leaves nothing to weigh. The globs (`*` and `?` within a path's part, `**` across parts)
   are matched against a file's path from the root of the git repo it is in (the root `config::find` uses), so one
@@ -36,7 +36,7 @@ as a command, no `git2` / `gix`.
   it: its path (from the root, as `git diff-tree` gives it) not hidden (no part starting with `.`), not excluded, in
   a language codeweight reads, not a test at `test_factor` 0; a side that isn't a regular file (a symlink, a
   submodule) is none. A side's language is its own path's, so a rename `a.js -> a.ts` is an added file. A change with
-  no side kept is skipped and listed when a side was in no language codeweight reads, else left out unlisted. Then
+  no side kept is left out, unlisted. Then
   the kept sides' blobs, each once, all through one `git cat-file --batch`; all of a commit's texts are in memory
   at once (a commit's, or a range's, changed files only), then weighed in parallel.
 - The files are listed first, then read and weighed in parallel (`rayon`), each read when weighed so the texts are

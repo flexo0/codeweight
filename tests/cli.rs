@@ -66,17 +66,17 @@ fn scan_reports_a_java_file_s_functions_and_classes() {
 }
 
 #[test]
-fn scan_skips_and_lists_an_unsupported_file_and_warns_of_syntax_errors() {
+fn scan_leaves_out_an_unsupported_file_and_warns_of_syntax_errors() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("notes.txt"), "hello").unwrap();
     fs::write(dir.path().join("B.java"), "class B { void f( }").unwrap();
     let output = codeweight(dir.path(), &["scan", "notes.txt", "B.java", "-v"]);
     assert!(output.status.success(), "{}", stderr(&output));
     let out = stdout(&output);
-    assert!(out.contains("skipped: notes.txt"), "{out}");
+    assert!(!out.contains("notes.txt"), "{out}");
     assert!(out.contains("warning: B.java has syntax errors"), "{out}");
 
-    // The total alone: the warning to stderr, the skipped file unlisted.
+    // The total alone: the warning to stderr.
     let quiet = codeweight(dir.path(), &["scan", "notes.txt", "B.java"]);
     assert!(quiet.status.success(), "{}", stderr(&quiet));
     assert_eq!(stdout(&quiet).lines().count(), 1, "{}", stdout(&quiet));
@@ -173,16 +173,13 @@ fn scan_walks_a_folder_its_excludes_and_tests_left_out_and_scan_tests_weighs_the
          3.5  src/a.py  f\n\
          3.5  src/c.rs  c\n\
          2.5  src/b.ts  h\n\
-         \x20 1  src/b.ts  (file)\n\
-         skipped: codeweight.toml (not a language codeweight reads)\n\
-         skipped: src/notes.md (not a language codeweight reads)\n"
+         \x20 1  src/b.ts  (file)\n"
     );
 
     let by_file = codeweight(root, &["scan", "src", "tests", "--by", "file"]);
     assert_eq!(
         stdout(&by_file),
-        "total 10.5\n3.5  src/a.py\n3.5  src/b.ts\n3.5  src/c.rs\n\
-         skipped: src/notes.md (not a language codeweight reads)\n"
+        "total 10.5\n3.5  src/a.py\n3.5  src/b.ts\n3.5  src/c.rs\n"
     );
 
     let tests = codeweight(root, &["scanTests", "."]);
@@ -194,9 +191,7 @@ fn scan_walks_a_folder_its_excludes_and_tests_left_out_and_scan_tests_weighs_the
         "total 12\n\
          \x20 5  src/c.rs  tests (class)\n\
          3.5  src/c.rs  tests.u\n\
-         3.5  tests/test_a.py  t\n\
-         skipped: codeweight.toml (not a language codeweight reads)\n\
-         skipped: src/notes.md (not a language codeweight reads)\n"
+         3.5  tests/test_a.py  t\n"
     );
 }
 
@@ -281,8 +276,7 @@ fn commit_weighs_the_root_commit_against_the_empty_tree() {
     assert_eq!(
         repo.weigh(&["HEAD"]),
         "total +103\n\
-         +103  added    a.py  f\n\
-         skipped: notes.md (not a language codeweight reads)\n"
+         +103  added    a.py  f\n"
     );
 
     // The total delta alone, without `-v`.
@@ -464,8 +458,7 @@ fn scan_s_json_lists_the_rows_of_its_text() {
             "total": 8.5,
             "by": "function",
             "rows": [{"path": "A.java", "kind": "class", "name": "A", "line": 1, "weight": 5.0}],
-            "warnings": [],
-            "skipped": ["notes.txt"]
+            "warnings": []
         })
     );
 }

@@ -39,11 +39,10 @@ fn lossy(bytes: Vec<u8>) -> String {
     }
 }
 
-/// The files to weigh, those skipped as in no language codeweight reads, and the paths under a folder given that
-/// couldn't be read, all in the order found.
+/// The files to weigh and the paths under a folder given that couldn't be read, all in the order found; a file in
+/// no language codeweight reads is left out.
 pub struct Input {
     pub items: Vec<Item>,
-    pub skipped: Vec<PathBuf>,
     pub unreadable: Vec<Unreadable>,
 }
 
@@ -92,24 +91,15 @@ pub struct Changed {
     pub after: Option<Blob>,
 }
 
-/// A commit's changed files to weigh (at least one side each), and those skipped as in no language codeweight
-/// reads, in git's order.
-pub struct CommitInput {
-    pub changes: Vec<Changed>,
-    pub skipped: Vec<PathBuf>,
-}
-
 /// The files `range` changed in the repo at `repo`, as a walk of the repo's root would weigh them on each side:
 /// a side that is hidden (a part of its path starts with `.`), excluded, in no language codeweight reads, or a
-/// test at `test_factor` 0 is left out. A change with neither side left is skipped and listed when a side was in
-/// no language codeweight reads, else left out unlisted.
-pub fn from_commit(repo: &Path, range: &Range, files: &Files) -> Result<CommitInput> {
+/// test at `test_factor` 0 is left out, and a change with neither side left; the rest (at least one side each) in
+/// git's order.
+pub fn from_commit(repo: &Path, range: &Range, files: &Files) -> Result<Vec<Changed>> {
     let matchers = Matchers::new(files)?;
     let mut kept = Vec::new();
-    let mut skipped = Vec::new();
     for change in git::changes(repo, range)? {
-        let mut unsupported = None;
-        let mut keep = |side: Option<git::Side>| {
+        let keep = |side: Option<git::Side>| {
             let side = side?;
             let hidden = side
                 .path
@@ -118,20 +108,15 @@ pub fn from_commit(repo: &Path, range: &Range, files: &Files) -> Result<CommitIn
             if hidden || matchers.exclude.is_match(&side.path) {
                 return None;
             }
-            let Some(lang) = lang::for_path(&side.path) else {
-                unsupported = Some(side.path);
-                return None;
-            };
+            let lang = lang::for_path(&side.path)?;
             let test = matchers.tests.is_match(&side.path);
             (!test || files.test_factor != 0.0).then_some((side, lang, test))
         };
         let before = keep(change.before);
         let after = keep(change.after);
-        if before.is_none() && after.is_none() {
-            skipped.extend(unsupported);
-            continue;
+        if before.is_some() || after.is_some() {
+            kept.push((before, after));
         }
-        kept.push((before, after));
     }
 
     // How many sides use each blob (two for a pure rename's), so each is read once and moved out at its last use.
@@ -172,7 +157,7 @@ pub fn from_commit(repo: &Path, range: &Range, files: &Files) -> Result<CommitIn
             after: blob(after)?,
         });
     }
-    Ok(CommitInput { changes, skipped })
+    Ok(changes)
 }
 
 /// A glob of the weights file's `[files]`: `*` and `?` stay within a path's part, `**` crosses parts.
@@ -188,7 +173,6 @@ pub fn from_paths(paths: &[PathBuf], files: &Files) -> Result<Input> {
     let matchers = Matchers::new(files)?;
     let mut input = Input {
         items: Vec::new(),
-        skipped: Vec::new(),
         unreadable: Vec::new(),
     };
     let mut seen = HashSet::new();
@@ -253,7 +237,6 @@ impl Input {
             return;
         }
         let Some(lang) = lang::for_path(&path) else {
-            self.skipped.push(path);
             return;
         };
         let test = matchers.tests.is_match(key);
@@ -370,22 +353,18 @@ mod tests {
         }
     }
 
-    fn found(input: &Input, root: &Path) -> (Vec<String>, Vec<String>) {
-        let relative = |p: &Path| p.strip_prefix(root).unwrap().display().to_string();
-        (
-            input
-                .items
-                .iter()
-                .map(|i| {
-                    format!(
-                        "{}{}",
-                        relative(&i.path),
-                        if i.test { " (test)" } else { "" }
-                    )
-                })
-                .collect(),
-            input.skipped.iter().map(|p| relative(p)).collect(),
-        )
+    fn found(input: &Input, root: &Path) -> Vec<String> {
+        input
+            .items
+            .iter()
+            .map(|i| {
+                format!(
+                    "{}{}",
+                    i.path.strip_prefix(root).unwrap().display(),
+                    if i.test { " (test)" } else { "" }
+                )
+            })
+            .collect()
     }
 
     #[test]
@@ -422,17 +401,14 @@ mod tests {
         .unwrap();
         assert_eq!(
             found(&input, root),
-            (
-                vec![
-                    "src/a/Z.java".to_string(),
-                    "src/b.py".to_string(),
-                    "src/c.ts".to_string(),
-                    "src/view.tsx".to_string(),
-                    "tests/helper.py (test)".to_string(),
-                    "tests/test_b.py (test)".to_string(),
-                ],
-                vec!["src/README.md".to_string()]
-            )
+            vec![
+                "src/a/Z.java".to_string(),
+                "src/b.py".to_string(),
+                "src/c.ts".to_string(),
+                "src/view.tsx".to_string(),
+                "tests/helper.py (test)".to_string(),
+                "tests/test_b.py (test)".to_string(),
+            ]
         );
     }
 
@@ -449,7 +425,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            found(&input, root).0,
+            found(&input, root),
             vec![
                 "src/keep.ts".to_string(),
                 "src/test/t.ts (test)".to_string()
@@ -468,7 +444,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            found(&input, &root).0,
+            found(&input, &root),
             vec!["a.py".to_string(), "tests/b.py (test)".to_string()]
         );
     }
@@ -482,7 +458,7 @@ mod tests {
             let mut input =
                 from_paths(&[root.to_path_buf()], &files(&[], &["**/test_*.py"], 1.0)).unwrap();
             input.keep(tests);
-            found(&input, root).0
+            found(&input, root)
         };
         assert_eq!(scan(false), vec!["a.py".to_string(), "b.rs".to_string()]);
         assert_eq!(
@@ -498,7 +474,7 @@ mod tests {
         write(root, &["gen/a.ts"]);
         let file = root.join("gen/a.ts");
         let input = from_paths(&[file.clone(), file], &files(&["**/gen/**"], &[], 1.0)).unwrap();
-        assert_eq!(found(&input, root).0, vec!["gen/a.ts".to_string()]);
+        assert_eq!(found(&input, root), vec!["gen/a.ts".to_string()]);
     }
 
     #[cfg(unix)]
@@ -525,7 +501,7 @@ mod tests {
         mode(0o755);
         let input = walked.unwrap();
         assert_eq!(
-            found(&input, root).0,
+            found(&input, root),
             vec!["a.py".to_string(), "z.py".to_string()]
         );
         let unreadable: Vec<_> = input

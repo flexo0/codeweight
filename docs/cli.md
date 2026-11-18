@@ -26,13 +26,14 @@ heaviest functions", or files).
   (alias `scan-tests`) the tests alone: two numbers, not one mixed by `test_factor`, so neither hides the other.
   Each weighs at its full weight; `test_factor` is `commit`'s alone (a delta is one number for a change to both).
   The tests are the test files (by path) and the test code inside a source file (Rust's, see [languages.md](languages.md)). With the
-  total alone, the warnings (syntax errors, unreadable folders) go to stderr and the skipped files aren't listed. The JSON is the whole report,
+  total alone, the warnings (syntax errors, unreadable folders) go to stderr. The JSON is the whole report,
   `--verbose` or not: a machine reads the fields it wants.
 - `scan`'s text with `--verbose`: the total, then one line per function or class (`<weight>  <path>  <name>`, a class as
   `Name (class)`, a file's code outside any class as `(file)`) or per file with `--by file`, heaviest first, then by
   path and the shown name; then the warnings (syntax errors, then the folders that couldn't be read: `<path> can't be read (<why>), left
-  out`), then the skipped files. A line that weighs 0 (at two
-  decimals) is left out.
+  out`). A line that weighs 0 (at two
+  decimals) is left out. A file in no language codeweight reads isn't listed, in the text or the JSON: the
+  report is of the code weighed.
 - `commit`'s text with `--verbose`: the total delta (`total +42.5`), then `<delta>  <status>  <path>  <name>` per line, a renamed
   file's path `old -> new`. A commit has no "heaviest": its lines sort by the delta's size, a gain before a loss of
   the same size, then by path and name, so `--top` keeps the largest changes either way. A line whose delta is 0 (at

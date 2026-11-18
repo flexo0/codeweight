@@ -10,38 +10,16 @@ in `docs/`, a file per subject (see `docs/README.md`).
 
 ## Example
 
-codeweight run on its own sources: the total, then the heaviest functions (the methods of a class or an `impl` named
-`Type.method`); files it doesn't read are listed as skipped.
+codeweight run on its own sources, and on what a commit added or took away:
 
 ```
 $ codeweight scan src
 4600.25
-$ codeweight scan src -v --top 5
-total 4600.25
-555.75  src/engine.rs  Weigher.weigh
- 270.5  src/config.rs  Config.from_value
- 205.5  src/source.rs  from_commit
-161.25  src/source.rs  from_paths
-123.25  src/report.rs  rows_of
-skipped: src/default.toml (not a language codeweight reads)
+$ codeweight commit b88842c
++1150.5
 ```
 
-What a commit added or took away, the largest changes first:
-
-```
-$ codeweight commit b88842c -v --top 5
-total +1150.5
-+105.75  heavier  src/source.rs  from_paths
- +84.25  heavier  src/engine.rs  Weigher.weigh
-    +80  added    src/lang/typescript.rs  scope
-    +54  added    src/source.rs  Base.of
-  +53.5  heavier  src/config.rs  Config.from_value
-skipped: CLAUDE.md (not a language codeweight reads)
-skipped: Cargo.lock (not a language codeweight reads)
-skipped: Cargo.toml (not a language codeweight reads)
-skipped: README.md (not a language codeweight reads)
-skipped: docs/design.md (not a language codeweight reads)
-```
+`-v` lists the functions behind the number, heaviest first (see "Usage").
 
 ## Install
 
@@ -75,7 +53,7 @@ marked `#[cfg(test)]`, `#[test]` or a runner's `#[tokio::test]` (any `#[...::tes
 and its functions), and a whole file marked `#![cfg(test)]`. Each weighs at its full weight, whatever
 `test_factor` (which is `commit`'s). `commit` prints its net delta alone, signed (`+42.5`, `-17`, `0`). For each
 command, `--verbose` (`-v`) prints the whole report instead, as `--top` and `--by` do; with the total alone, a file's
-syntax errors and a folder that can't be read are a warning on stderr and the skipped files aren't listed.
+syntax errors and a folder that can't be read are a warning on stderr.
 
 The text report (`-v`) starts with the total. After it come the functions and classes, heaviest first, then by path and
 name, each as `<weight>  <path>  <name>`; with `--by file`, the files. A class's line (`Name (class)`) has its code
@@ -95,7 +73,7 @@ outside the current one). `scan` leaves the test files (`test_globs`) and a Rust
 weighs only them. Files are weighed in parallel; the output is the same on every run.
 
 A file that doesn't parse cleanly is still weighed, as tree-sitter recovered it, with a warning. A file in a language
-codeweight doesn't read is skipped and listed, never an error. A folder under the one scanned that can't be read (a
+codeweight doesn't read is left out, never an error. A folder under the one scanned that can't be read (a
 root-owned docker volume, say) is left out with a warning and the rest weighed; a folder given that can't be read is
 an error.
 
@@ -114,7 +92,7 @@ A file's delta is its weight after minus before: an added file's is all positive
 functions and classes are matched by their qualified name within the file (a renamed file's old and new), each one
 `added`, `removed`, `heavier` or `lighter`. The changed files are weighed as a walk of the repo's root weighs them:
 the `[files]` excludes and hidden paths are left out, a test file and a Rust file's tests are times `test_factor`
-(at 0 a test file is left out), a file codeweight doesn't read is skipped and listed.
+(at 0 a test file is left out), a file codeweight doesn't read is left out.
 
 With `-v`, the text report starts with the total delta (`total +42.5`, `total -17`). After it comes one line per function and
 class (or per file with `--by file`), `<delta>  <status>  <path>  <name>`, a renamed file's path as `old -> new`; the
@@ -136,7 +114,6 @@ side's, a removed one's the before side's).
 - `warnings`: the files with syntax errors, `{path, kind: "syntax_errors", side}`, `side` `null` for `scan` and `scanTests`;
   then, for `scan` and `scanTests`, the paths under a folder given that couldn't be read and were left out,
   `{path, kind: "unreadable", side: null}`.
-- `skipped`: the paths of the files in no language codeweight reads.
 
 For `commit`, also `from` (the full hash compared from, `null` for the root commit's empty tree) and `to`; each row
 has, instead of `weight`, `before`, `after` (0 on the side it isn't), `delta` and `status` (`"added"`, `"removed"`,
@@ -153,8 +130,7 @@ has, instead of `weight`, `before`, `after` (0 on the side it isn't), `delta` an
     {"path": "a.py", "old_path": null, "kind": "function", "name": "f", "line": 1,
      "before": 4.5, "after": 10.5, "delta": 6.0, "status": "heavier"}
   ],
-  "warnings": [],
-  "skipped": ["README.md"]
+  "warnings": []
 }
 ```
 

@@ -17,7 +17,7 @@ Built (`git`, `source::from_commit`, `report`):
 3. Their text on both sides, all through one `git cat-file --batch`, written from a thread of its own while the
    output is read, so neither pipe can fill and block both.
 4. Per file `delta = weight(after) − weight(before)`: an added file all positive, a deleted one all negative; an
-   unsupported one skipped and listed.
+   unsupported one left out.
 5. Per function and class, and the file's code outside them, matched by kind and qualified name (`Class.method`,
    `module.func`) within the file, a renamed file's old and new: added, removed, heavier, lighter. A function moved
    to another file is removed from one and added to the other.

@@ -1,5 +1,5 @@
 //! The reports of a scan (the weights) and of a commit (the deltas), as text or JSON: the total, then the files or
-//! the functions and classes, then the warnings and the skipped files; or the total alone.
+//! the functions and classes, then the warnings; or the total alone.
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -208,11 +208,10 @@ fn sorted(mut rows: Vec<Row>, key: fn(&Row) -> f64, top: Option<usize>) -> Vec<R
 }
 
 /// A scan's report as text: the total, then a line per row (`<weight>  <path>  <name>`), then the warnings (syntax
-/// errors, unreadable paths) and the skipped files.
+/// errors, unreadable paths).
 pub fn scan_text(
     files: &[Weighted],
     unreadable: &[Unreadable],
-    skipped: &[PathBuf],
     by: By,
     top: Option<usize>,
 ) -> String {
@@ -226,7 +225,6 @@ pub fn scan_text(
         let _ = writeln!(out, "{}", line.trim_end());
     }
     out.push_str(&scan_warnings(files, unreadable));
-    skipped_text(&mut out, skipped);
     out
 }
 
@@ -260,7 +258,6 @@ pub fn scan_warnings(files: &[Weighted], unreadable: &[Unreadable]) -> String {
 pub fn scan_json(
     files: &[Weighted],
     unreadable: &[Unreadable],
-    skipped: &[PathBuf],
     by: By,
     top: Option<usize>,
 ) -> String {
@@ -293,7 +290,6 @@ pub fn scan_json(
         by,
         rows,
         warnings,
-        skipped: skipped.iter().map(|p| p.display().to_string()).collect(),
     })
 }
 
@@ -310,8 +306,8 @@ fn scan_rows(files: &[Weighted], by: By, top: Option<usize>) -> Vec<Row> {
 }
 
 /// A commit's report as text: the total delta, then a line per row (`<delta>  <status>  <path>  <name>`), the
-/// largest changes first, then the warnings and the skipped files.
-pub fn commit_text(changes: &[Changed], skipped: &[PathBuf], by: By, top: Option<usize>) -> String {
+/// largest changes first, then the warnings.
+pub fn commit_text(changes: &[Changed], by: By, top: Option<usize>) -> String {
     let rows = commit_rows(changes, by, top);
     let deltas: Vec<String> = rows.iter().map(|r| signed(r.delta())).collect();
     let width = deltas.iter().map(String::len).max().unwrap_or(0);
@@ -330,7 +326,6 @@ pub fn commit_text(changes: &[Changed], skipped: &[PathBuf], by: By, top: Option
         let _ = writeln!(out, "{}", line.trim_end());
     }
     out.push_str(&commit_warnings_text(changes));
-    skipped_text(&mut out, skipped);
     out
 }
 
@@ -355,7 +350,6 @@ pub fn commit_warnings_text(changes: &[Changed]) -> String {
 /// A commit's report as JSON (its fields are described in the README).
 pub fn commit_json(
     changes: &[Changed],
-    skipped: &[PathBuf],
     revisions: &Revisions,
     by: By,
     top: Option<usize>,
@@ -402,7 +396,6 @@ pub fn commit_json(
         by,
         rows,
         warnings,
-        skipped: skipped.iter().map(|p| p.display().to_string()).collect(),
     })
 }
 
@@ -446,16 +439,6 @@ fn commit_warnings(
     })
 }
 
-fn skipped_text(out: &mut String, skipped: &[PathBuf]) {
-    for path in skipped {
-        let _ = writeln!(
-            out,
-            "skipped: {} (not a language codeweight reads)",
-            path.display()
-        );
-    }
-}
-
 /// The JSON report: a scan's has no `from` and `to`.
 #[derive(Serialize)]
 struct Report<'a> {
@@ -467,7 +450,6 @@ struct Report<'a> {
     by: By,
     rows: Vec<JsonRow>,
     warnings: Vec<Warning>,
-    skipped: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -642,7 +624,7 @@ mod tests {
     fn a_commit_s_entries_are_matched_by_name_the_largest_change_first() {
         // f +2; g removed -4, h added +4 (a gain before a loss of the same size); gone.py's x -3 and file code -2.
         assert_eq!(
-            commit_text(&changes(), &[], By::Function, None),
+            commit_text(&changes(), By::Function, None),
             "total -3\n\
              +4  added    old.py -> a.py  h\n\
              -4  removed  old.py -> a.py  g\n\
@@ -651,7 +633,7 @@ mod tests {
              -2  removed  gone.py  (file)\n"
         );
         assert_eq!(
-            commit_text(&changes(), &[], By::File, Some(1)),
+            commit_text(&changes(), By::File, Some(1)),
             "total -3\n-5  removed  gone.py\n"
         );
     }
@@ -660,7 +642,6 @@ mod tests {
     fn a_commit_s_json_has_every_field() {
         let json = commit_json(
             &changes(),
-            &[PathBuf::from("notes.md")],
             &Revisions {
                 from: None,
                 to: "abc",
@@ -680,8 +661,7 @@ mod tests {
                     "path": "a.py", "old_path": "old.py", "kind": "function", "name": "h", "line": 3,
                     "before": 0.0, "after": 4.0, "delta": 4.0, "status": "added"
                 }],
-                "warnings": [],
-                "skipped": ["notes.md"]
+                "warnings": []
             })
         );
     }
@@ -705,7 +685,7 @@ mod tests {
              warning: data can't be read (permission denied), left out\n"
         );
         let value: serde_json::Value =
-            serde_json::from_str(&scan_json(&files, &unreadable, &[], By::Function, None)).unwrap();
+            serde_json::from_str(&scan_json(&files, &unreadable, By::Function, None)).unwrap();
         assert_eq!(
             value,
             serde_json::json!({
@@ -718,12 +698,11 @@ mod tests {
                 "warnings": [
                     {"path": "a.py", "kind": "syntax_errors", "side": null},
                     {"path": "data", "kind": "unreadable", "side": null}
-                ],
-                "skipped": []
+                ]
             })
         );
         let by_file: serde_json::Value =
-            serde_json::from_str(&scan_json(&files, &[], &[], By::File, None)).unwrap();
+            serde_json::from_str(&scan_json(&files, &[], By::File, None)).unwrap();
         assert_eq!(
             by_file["rows"],
             serde_json::json!([{"path": "a.py", "weight": 2.33}])

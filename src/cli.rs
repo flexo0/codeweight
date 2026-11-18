@@ -53,7 +53,7 @@ enum Command {
         /// A file or a folder, absolute or relative
         #[arg(required = true)]
         paths: Vec<PathBuf>,
-        /// The whole report: the total, the functions (or files), the warnings and the skipped files
+        /// The whole report: the total, the functions (or files), and the warnings
         #[arg(short, long)]
         verbose: bool,
     },
@@ -63,7 +63,7 @@ enum Command {
         /// A file or a folder, absolute or relative
         #[arg(required = true)]
         paths: Vec<PathBuf>,
-        /// The whole report: the total, the functions (or files), the warnings and the skipped files
+        /// The whole report: the total, the functions (or files), and the warnings
         #[arg(short, long)]
         verbose: bool,
     },
@@ -74,7 +74,7 @@ enum Command {
         /// Any path inside the repo
         #[arg(short = 'C', default_value = ".")]
         repo: PathBuf,
-        /// The whole report: the total, the functions (or files), the warnings and the skipped files
+        /// The whole report: the total, the functions (or files), and the warnings
         #[arg(short, long)]
         verbose: bool,
     },
@@ -126,14 +126,14 @@ fn scan(cli: &Cli, paths: &[PathBuf], verbose: bool, tests: bool) -> Result<()> 
         "{}",
         match cli.format {
             Format::Text if report => {
-                report::scan_text(&files, &input.unreadable, &input.skipped, cli.by(), cli.top)
+                report::scan_text(&files, &input.unreadable, cli.by(), cli.top)
             }
             Format::Text => {
                 eprint!("{}", report::scan_warnings(&files, &input.unreadable));
                 report::scan_number(&files)
             }
             Format::Json => {
-                report::scan_json(&files, &input.unreadable, &input.skipped, cli.by(), cli.top)
+                report::scan_json(&files, &input.unreadable, cli.by(), cli.top)
             }
         }
     );
@@ -143,7 +143,7 @@ fn scan(cli: &Cli, paths: &[PathBuf], verbose: bool, tests: bool) -> Result<()> 
 fn commit(cli: &Cli, rev: &str, repo: &Path, verbose: bool) -> Result<()> {
     let config = load_config(cli, Some(repo))?;
     let range = git::resolve(repo, rev)?;
-    let input = source::from_commit(repo, &range, &config.files)?;
+    let changes = source::from_commit(repo, &range, &config.files)?;
     let weighers = Weighers::new(&config);
     let side = |blob: Option<source::Blob>| -> Result<Option<(PathBuf, Weighed)>> {
         blob.map(|b| {
@@ -152,8 +152,7 @@ fn commit(cli: &Cli, rev: &str, repo: &Path, verbose: bool) -> Result<()> {
         })
         .transpose()
     };
-    let changes = input
-        .changes
+    let changes = changes
         .into_par_iter()
         .map(|change| {
             let before = side(change.before)?;
@@ -175,7 +174,7 @@ fn commit(cli: &Cli, rev: &str, repo: &Path, verbose: bool) -> Result<()> {
         "{}",
         match cli.format {
             Format::Text if cli.report(verbose) => {
-                report::commit_text(&changes, &input.skipped, cli.by(), cli.top)
+                report::commit_text(&changes, cli.by(), cli.top)
             }
             Format::Text => {
                 eprint!("{}", report::commit_warnings_text(&changes));
@@ -186,7 +185,7 @@ fn commit(cli: &Cli, rev: &str, repo: &Path, verbose: bool) -> Result<()> {
                     from: range.from.as_deref(),
                     to: &range.to,
                 };
-                report::commit_json(&changes, &input.skipped, &revisions, cli.by(), cli.top)
+                report::commit_json(&changes, &revisions, cli.by(), cli.top)
             }
         }
     );
