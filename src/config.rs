@@ -90,7 +90,8 @@ pub enum Model {
 }
 
 /// The `[nesting]` table.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Nesting {
     pub model: Model,
     pub factor: f64,
@@ -109,7 +110,8 @@ impl Nesting {
 }
 
 /// The `[files]` table: which files a folder walk weighs, and which are tests.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Files {
     pub exclude: Vec<String>,
     pub test_globs: Vec<String>,
@@ -176,8 +178,7 @@ impl Config {
 
     fn from_value(table: toml::Table) -> Result<Config> {
         let raw: RawConfig = toml::Value::Table(table).try_into()?;
-        let nesting = raw.nesting;
-        check_non_negative("[nesting] factor", nesting.factor)?;
+        check_non_negative("[nesting] factor", raw.nesting.factor)?;
         for glob in &raw.files.exclude {
             source::glob(glob).with_context(|| format!("[files] exclude `{glob}`"))?;
         }
@@ -241,15 +242,8 @@ impl Config {
         }
 
         Ok(Config {
-            nesting: Nesting {
-                model: nesting.model,
-                factor: nesting.factor,
-                max_depth: nesting.max_depth,
-            },
-            files: Files {
-                exclude: raw.files.exclude,
-                test_globs: raw.files.test_globs,
-            },
+            nesting: raw.nesting,
+            files: raw.files,
             languages,
         })
     }
@@ -288,19 +282,11 @@ pub fn repo_root(path: &Path) -> Option<PathBuf> {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RawConfig {
-    nesting: RawNesting,
+    nesting: Nesting,
     weights: BTreeMap<String, f64>,
     #[serde(default)]
     languages: BTreeMap<String, RawLang>,
-    files: RawFiles,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct RawNesting {
-    model: Model,
-    factor: f64,
-    max_depth: u32,
+    files: Files,
 }
 
 #[derive(Deserialize)]
@@ -310,13 +296,6 @@ struct RawLang {
     weights: BTreeMap<String, f64>,
     #[serde(default)]
     node_kinds: BTreeMap<String, String>,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct RawFiles {
-    exclude: Vec<String>,
-    test_globs: Vec<String>,
 }
 
 fn parse_toml(text: &str) -> Result<toml::Table> {
@@ -411,6 +390,7 @@ mod tests {
     #[test]
     fn an_unknown_key_is_an_error() {
         assert!(error_of("[nesting]\nfactr = 1\n").contains("factr"));
+        assert!(error_of("[files]\nexclud = []\n").contains("exclud"));
         assert!(error_of("[colors]\na = 1\n").contains("colors"));
         assert!(error_of("[languages.java]\nweight = {}\n").contains("weight"));
     }
