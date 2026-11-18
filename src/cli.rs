@@ -5,7 +5,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use rayon::prelude::*;
 
 use crate::config::{self, Config};
@@ -49,77 +49,72 @@ impl Cli {
 #[derive(Subcommand)]
 enum Command {
     /// The weight of files and folders, their tests left out: the total alone
-    Scan {
-        /// A file or a folder, absolute or relative
-        #[arg(required = true)]
-        paths: Vec<PathBuf>,
-        /// The whole report: the total, the functions (or files), and the warnings
-        #[arg(short, long)]
-        verbose: bool,
-    },
+    Scan(ScanArgs),
     /// The weight of the tests in files and folders (the test files, a Rust file's tests): the total alone
-    ScanTests {
-        /// A file or a folder, absolute or relative
-        #[arg(required = true)]
-        paths: Vec<PathBuf>,
-        /// The whole report: the total, the functions (or files), and the warnings
-        #[arg(short, long)]
-        verbose: bool,
-    },
+    ScanTests(ScanArgs),
     /// The net weight delta of a commit or between two revisions, its tests left out: the total alone
-    Commit {
-        /// A revision (against its first parent) or a range A..B
-        rev: String,
-        /// Any path inside the repo
-        #[arg(short = 'C', default_value = ".")]
-        repo: PathBuf,
-        /// The whole report: the total, the functions (or files), and the warnings
-        #[arg(short, long)]
-        verbose: bool,
-    },
+    Commit(CommitArgs),
     /// The net weight delta of a commit's tests or of the tests between two revisions: the total alone
-    CommitTests {
-        /// A revision (against its first parent) or a range A..B
-        rev: String,
-        /// Any path inside the repo
-        #[arg(short = 'C', default_value = ".")]
-        repo: PathBuf,
-        /// The whole report: the total, the functions (or files), and the warnings
-        #[arg(short, long)]
-        verbose: bool,
-    },
+    CommitTests(CommitArgs),
     /// The net weight delta of the uncommitted changes (the untracked files too) against HEAD, their tests left
     /// out: the total alone
-    PreCommit {
-        /// Any path inside the repo
-        #[arg(short = 'C', default_value = ".")]
-        repo: PathBuf,
-        /// Only the staged changes (the index against HEAD, as `git commit` would commit them)
-        #[arg(long)]
-        only_staged: bool,
-        /// The whole report: the total, the functions (or files), and the warnings
-        #[arg(short, long)]
-        verbose: bool,
-    },
+    PreCommit(PreCommitArgs),
     /// The net weight delta of the uncommitted changes' tests (the untracked files too) against HEAD: the total
     /// alone
-    PreCommitTests {
-        /// Any path inside the repo
-        #[arg(short = 'C', default_value = ".")]
-        repo: PathBuf,
-        /// Only the staged changes (the index against HEAD, as `git commit` would commit them)
-        #[arg(long)]
-        only_staged: bool,
-        /// The whole report: the total, the functions (or files), and the warnings
-        #[arg(short, long)]
-        verbose: bool,
-    },
+    PreCommitTests(PreCommitArgs),
     /// Writes the default weights file
     Init {
         /// Where to write it
         #[arg(default_value = config::FILE_NAME)]
         file: PathBuf,
     },
+}
+
+/// The arguments of `scan` and `scan-tests`.
+#[derive(Args)]
+struct ScanArgs {
+    /// A file or a folder, absolute or relative
+    #[arg(required = true)]
+    paths: Vec<PathBuf>,
+    /// The whole report: the total, the functions (or files), and the warnings
+    #[arg(short, long)]
+    verbose: bool,
+}
+
+/// The arguments of `commit` and `commit-tests`.
+#[derive(Args)]
+struct CommitArgs {
+    /// A revision (against its first parent) or a range A..B
+    rev: String,
+    /// Any path inside the repo
+    #[arg(short = 'C', default_value = ".")]
+    repo: PathBuf,
+    /// The whole report: the total, the functions (or files), and the warnings
+    #[arg(short, long)]
+    verbose: bool,
+}
+
+/// The arguments of `pre-commit` and `pre-commit-tests`.
+#[derive(Args)]
+struct PreCommitArgs {
+    /// Any path inside the repo
+    #[arg(short = 'C', default_value = ".")]
+    repo: PathBuf,
+    /// Only the staged changes (the index against HEAD, as `git commit` would commit them)
+    #[arg(long)]
+    only_staged: bool,
+    /// The whole report: the total, the functions (or files), and the warnings
+    #[arg(short, long)]
+    verbose: bool,
+}
+
+impl PreCommitArgs {
+    /// The uncommitted changes these arguments ask for.
+    fn changes(&self) -> Changes<'static> {
+        Changes::Uncommitted {
+            staged: self.only_staged,
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -132,40 +127,12 @@ enum Format {
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
     match &cli.command {
-        Command::Scan { paths, verbose } => scan(&cli, paths, *verbose, false),
-        Command::ScanTests { paths, verbose } => scan(&cli, paths, *verbose, true),
-        Command::Commit { rev, repo, verbose } => {
-            commit(&cli, Changes::Rev(rev), repo, *verbose, false)
-        }
-        Command::CommitTests { rev, repo, verbose } => {
-            commit(&cli, Changes::Rev(rev), repo, *verbose, true)
-        }
-        Command::PreCommit {
-            repo,
-            only_staged,
-            verbose,
-        } => commit(
-            &cli,
-            Changes::Uncommitted {
-                staged: *only_staged,
-            },
-            repo,
-            *verbose,
-            false,
-        ),
-        Command::PreCommitTests {
-            repo,
-            only_staged,
-            verbose,
-        } => commit(
-            &cli,
-            Changes::Uncommitted {
-                staged: *only_staged,
-            },
-            repo,
-            *verbose,
-            true,
-        ),
+        Command::Scan(a) => scan(&cli, &a.paths, a.verbose, false),
+        Command::ScanTests(a) => scan(&cli, &a.paths, a.verbose, true),
+        Command::Commit(a) => commit(&cli, Changes::Rev(&a.rev), &a.repo, a.verbose, false),
+        Command::CommitTests(a) => commit(&cli, Changes::Rev(&a.rev), &a.repo, a.verbose, true),
+        Command::PreCommit(a) => commit(&cli, a.changes(), &a.repo, a.verbose, false),
+        Command::PreCommitTests(a) => commit(&cli, a.changes(), &a.repo, a.verbose, true),
         Command::Init { file } => init(file),
     }
 }
