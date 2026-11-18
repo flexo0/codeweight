@@ -104,7 +104,7 @@ tree levels don't count (`a.b().c()` is not deep). An `else if` is at its `if`'s
 
 ## Building
 
-Rust stable: `cargo build --release`; checks: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`,
+Rust 1.100 (pinned in `rust-toolchain.toml`, so rustup picks it): `cargo build --release`; checks: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`,
 `cargo test`.
 
 ## License

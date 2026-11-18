@@ -21,9 +21,9 @@ made while building goes into it, in the same commit).
 - The engine's tests are small snippets of each language with their weights worked out by hand in the test, under a
   test weights file of their own (round numbers), never the defaults: tuning the defaults must not break them.
 - The `commit` tests make throwaway git repos in a temp dir (`tempfile`); never run against a real repo.
-- Rust stable, edition 2024. Few dependencies: `tree-sitter` and its grammars (`tree-sitter-java`,
-  `tree-sitter-typescript`, `tree-sitter-python`), `clap`, `serde`, `toml`, `serde_json`, `ignore`, `rayon`,
-  `anyhow`; `tempfile` for the tests. A new one needs a reason.
+- Rust 1.100 (`rust-toolchain.toml`, `rust-version` in `Cargo.toml`), edition 2024. Few dependencies: `tree-sitter`
+  and its grammars (`tree-sitter-java`, `tree-sitter-typescript`, `tree-sitter-python`), `clap`, `serde`, `toml`,
+  `serde_json`, `ignore`, `rayon`, `anyhow`; `tempfile` for the tests. A new one needs a reason.
 - External tool: `git` (the commit mode runs it, `git diff-tree` and `git cat-file --batch`; no `git2` / `gix`).
 
 ## Invariants

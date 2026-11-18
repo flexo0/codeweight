@@ -2,6 +2,7 @@
 name = "codeweight"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.100"
 description = "Weighs code: every element by its weight, heavier when nested, for files, folders and a commit's net delta"
 license = "MIT"
 readme = "README.md"
