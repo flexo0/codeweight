@@ -125,12 +125,16 @@ fn scan(cli: &Cli, paths: &[PathBuf], verbose: bool, tests: bool) -> Result<()> 
     print!(
         "{}",
         match cli.format {
-            Format::Text if report => report::scan_text(&files, &input.skipped, cli.by(), cli.top),
+            Format::Text if report => {
+                report::scan_text(&files, &input.unreadable, &input.skipped, cli.by(), cli.top)
+            }
             Format::Text => {
-                eprint!("{}", report::scan_warnings(&files));
+                eprint!("{}", report::scan_warnings(&files, &input.unreadable));
                 report::scan_number(&files)
             }
-            Format::Json => report::scan_json(&files, &input.skipped, cli.by(), cli.top),
+            Format::Json => {
+                report::scan_json(&files, &input.unreadable, &input.skipped, cli.by(), cli.top)
+            }
         }
     );
     Ok(())

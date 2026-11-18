@@ -21,7 +21,9 @@ as a command, no `git2` / `gix`.
   `.gitignore`s (and `.ignore`s, the global gitignore) honoured, hidden files and folders left out, each folder's
   entries in the order of their names, so the walk is the same on every run. A file the excludes match is left
   out, unlisted; a folder whose every path is excluded (an exclude ending in `/**`) isn't walked at all. A file in no
-  language codeweight reads is skipped and listed. The globs (`*` and `?` within a path's part, `**` across parts)
+  language codeweight reads is skipped and listed. A path under a folder given that the walk can't read (a folder
+  it may not list) is left out and listed as unreadable, a warning, so one root-owned folder doesn't make the tree
+  unscannable; a folder given that can't be read is an error, as it leaves nothing to weigh. The globs (`*` and `?` within a path's part, `**` across parts)
   are matched against a file's path from the root of the git repo it is in (the root `config::find` uses), so one
   glob means the same from any folder scanned, and later for `commit`; outside a repo, from the current folder when
   the path is in it, else from the folder given (a file given: its name), never with the folders above, so a project

@@ -10,6 +10,7 @@ use serde::Serialize;
 
 use crate::engine::Weighed;
 use crate::lang::ScopeKind;
+use crate::source::Unreadable;
 
 /// What the report lists.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum, Serialize)]
@@ -207,8 +208,14 @@ fn sorted(mut rows: Vec<Row>, key: fn(&Row) -> f64, top: Option<usize>) -> Vec<R
 }
 
 /// A scan's report as text: the total, then a line per row (`<weight>  <path>  <name>`), then the warnings (syntax
-/// errors) and the skipped files.
-pub fn scan_text(files: &[Weighted], skipped: &[PathBuf], by: By, top: Option<usize>) -> String {
+/// errors, unreadable paths) and the skipped files.
+pub fn scan_text(
+    files: &[Weighted],
+    unreadable: &[Unreadable],
+    skipped: &[PathBuf],
+    by: By,
+    top: Option<usize>,
+) -> String {
     let rows = scan_rows(files, by, top);
     let weights: Vec<String> = rows.iter().map(|r| number(r.after)).collect();
     let width = weights.iter().map(String::len).max().unwrap_or(0);
@@ -218,7 +225,7 @@ pub fn scan_text(files: &[Weighted], skipped: &[PathBuf], by: By, top: Option<us
         let line = format!("{weight:>width$}  {}  {}", row.path, row.label());
         let _ = writeln!(out, "{}", line.trim_end());
     }
-    out.push_str(&scan_warnings(files));
+    out.push_str(&scan_warnings(files, unreadable));
     skipped_text(&mut out, skipped);
     out
 }
@@ -228,8 +235,8 @@ pub fn scan_number(files: &[Weighted]) -> String {
     format!("{}\n", number(scan_total(files)))
 }
 
-/// A scan's warnings (syntax errors), a line each.
-pub fn scan_warnings(files: &[Weighted]) -> String {
+/// A scan's warnings (syntax errors, then the paths that couldn't be read), a line each.
+pub fn scan_warnings(files: &[Weighted], unreadable: &[Unreadable]) -> String {
     let mut out = String::new();
     for file in files.iter().filter(|f| !f.weighed.clean) {
         let _ = writeln!(
@@ -238,11 +245,25 @@ pub fn scan_warnings(files: &[Weighted]) -> String {
             file.path.display()
         );
     }
+    for path in unreadable {
+        let _ = writeln!(
+            out,
+            "warning: {} can't be read ({}), left out",
+            path.path.display(),
+            path.reason
+        );
+    }
     out
 }
 
 /// A scan's report as JSON (its fields are described in the README).
-pub fn scan_json(files: &[Weighted], skipped: &[PathBuf], by: By, top: Option<usize>) -> String {
+pub fn scan_json(
+    files: &[Weighted],
+    unreadable: &[Unreadable],
+    skipped: &[PathBuf],
+    by: By,
+    top: Option<usize>,
+) -> String {
     let rows = scan_rows(files, by, top)
         .into_iter()
         .map(|row| match row.kind {
@@ -263,6 +284,7 @@ pub fn scan_json(files: &[Weighted], skipped: &[PathBuf], by: By, top: Option<us
         .iter()
         .filter(|f| !f.weighed.clean)
         .map(|f| Warning::syntax(&f.path, None))
+        .chain(unreadable.iter().map(|u| Warning::unreadable(&u.path)))
         .collect();
     json(&Report {
         from: None,
@@ -499,6 +521,14 @@ impl Warning {
             side,
         }
     }
+
+    fn unreadable(path: &Path) -> Warning {
+        Warning {
+            path: path.display().to_string(),
+            kind: "unreadable",
+            side: None,
+        }
+    }
 }
 
 fn json(report: &Report) -> String {
@@ -665,8 +695,17 @@ mod tests {
                 ..weighed(1.0 / 3.0, &[(ScopeKind::Class, "C", 2.0)])
             },
         }];
+        let unreadable = [Unreadable {
+            path: "data".into(),
+            reason: "permission denied".into(),
+        }];
+        assert_eq!(
+            scan_warnings(&files, &unreadable),
+            "warning: a.py has syntax errors, weighed as tree-sitter recovered it\n\
+             warning: data can't be read (permission denied), left out\n"
+        );
         let value: serde_json::Value =
-            serde_json::from_str(&scan_json(&files, &[], By::Function, None)).unwrap();
+            serde_json::from_str(&scan_json(&files, &unreadable, &[], By::Function, None)).unwrap();
         assert_eq!(
             value,
             serde_json::json!({
@@ -676,12 +715,15 @@ mod tests {
                     {"path": "a.py", "kind": "class", "name": "C", "line": 1, "weight": 2.0},
                     {"path": "a.py", "kind": "file", "name": null, "line": null, "weight": 0.33}
                 ],
-                "warnings": [{"path": "a.py", "kind": "syntax_errors", "side": null}],
+                "warnings": [
+                    {"path": "a.py", "kind": "syntax_errors", "side": null},
+                    {"path": "data", "kind": "unreadable", "side": null}
+                ],
                 "skipped": []
             })
         );
         let by_file: serde_json::Value =
-            serde_json::from_str(&scan_json(&files, &[], By::File, None)).unwrap();
+            serde_json::from_str(&scan_json(&files, &[], &[], By::File, None)).unwrap();
         assert_eq!(
             by_file["rows"],
             serde_json::json!([{"path": "a.py", "weight": 2.33}])

@@ -39,10 +39,41 @@ fn lossy(bytes: Vec<u8>) -> String {
     }
 }
 
-/// The files to weigh, and those skipped as in no language codeweight reads, both in the order found.
+/// The files to weigh, those skipped as in no language codeweight reads, and the paths under a folder given that
+/// couldn't be read, all in the order found.
 pub struct Input {
     pub items: Vec<Item>,
     pub skipped: Vec<PathBuf>,
+    pub unreadable: Vec<Unreadable>,
+}
+
+/// A path under a folder given that the walk couldn't read (a folder it may not list, most often), left out with
+/// a warning so the rest is weighed.
+pub struct Unreadable {
+    /// As the report shows it, as an item's.
+    pub path: PathBuf,
+    /// Why, as the OS says it (`permission denied`).
+    pub reason: String,
+}
+
+impl Unreadable {
+    /// The path an error of the walk of `folder` is about (`folder` when it names none), and why.
+    fn of(error: &ignore::Error, folder: &Path) -> Unreadable {
+        fn path_of(error: &ignore::Error) -> Option<&Path> {
+            match error {
+                ignore::Error::WithPath { path, .. } => Some(path),
+                ignore::Error::WithDepth { err, .. } => path_of(err),
+                _ => None,
+            }
+        }
+        Unreadable {
+            path: shown(path_of(error).unwrap_or(folder)),
+            reason: match error.io_error() {
+                Some(io) => io.kind().to_string(),
+                None => error.to_string(),
+            },
+        }
+    }
 }
 
 /// One side of a file a commit changed, its text read from git.
@@ -151,12 +182,14 @@ pub fn glob(glob: &str) -> Result<Glob> {
 
 /// The files at `paths`: a file as given, a folder walked (its `.gitignore`s honoured, hidden files and the
 /// excluded ones left out, in the order of the names), the test files among them. A path given twice, or found
-/// under two given folders, is one item.
+/// under two given folders, is one item. A path under a folder given that can't be read is left out and listed as
+/// unreadable; a folder given that can't be read is an error.
 pub fn from_paths(paths: &[PathBuf], files: &Files) -> Result<Input> {
     let matchers = Matchers::new(files)?;
     let mut input = Input {
         items: Vec::new(),
         skipped: Vec::new(),
+        unreadable: Vec::new(),
     };
     let mut seen = HashSet::new();
     for path in paths {
@@ -178,7 +211,19 @@ pub fn from_paths(paths: &[PathBuf], files: &Files) -> Result<Input> {
             })
             .build();
         for entry in walk {
-            let entry = entry.with_context(|| format!("walking {}", path.display()))?;
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(error) if error.depth().is_some_and(|depth| depth > 0) => {
+                    let unreadable = Unreadable::of(&error, path);
+                    if seen.insert(unreadable.path.clone()) {
+                        input.unreadable.push(unreadable);
+                    }
+                    continue;
+                }
+                Err(error) => {
+                    return Err(error).with_context(|| format!("walking {}", path.display()));
+                }
+            };
             if !entry.file_type().is_some_and(|t| t.is_file()) {
                 continue;
             }
@@ -454,6 +499,42 @@ mod tests {
         let file = root.join("gen/a.ts");
         let input = from_paths(&[file.clone(), file], &files(&["**/gen/**"], &[], 1.0)).unwrap();
         assert_eq!(found(&input, root).0, vec!["gen/a.ts".to_string()]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_folder_that_can_t_be_read_is_left_out_and_listed_the_rest_weighed() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write(root, &["a.py", "locked/b.py", "z.py"]);
+        let locked = root.join("locked");
+        let mode = |mode| fs::set_permissions(&locked, fs::Permissions::from_mode(mode)).unwrap();
+        mode(0o000);
+        if fs::read_dir(&locked).is_ok() {
+            // Run as root, which reads it anyway.
+            mode(0o755);
+            return;
+        }
+        // Given twice, it is listed once; the folder given itself can't be read: an error.
+        let walked = from_paths(
+            &[root.to_path_buf(), root.to_path_buf()],
+            &files(&[], &[], 1.0),
+        );
+        let given = from_paths(std::slice::from_ref(&locked), &files(&[], &[], 1.0));
+        mode(0o755);
+        let input = walked.unwrap();
+        assert_eq!(
+            found(&input, root).0,
+            vec!["a.py".to_string(), "z.py".to_string()]
+        );
+        let unreadable: Vec<_> = input
+            .unreadable
+            .iter()
+            .map(|u| (u.path.strip_prefix(root).unwrap(), u.reason.as_str()))
+            .collect();
+        assert_eq!(unreadable, vec![(Path::new("locked"), "permission denied")]);
+        assert!(given.is_err());
     }
 
     #[test]

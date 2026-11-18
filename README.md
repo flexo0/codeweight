@@ -75,7 +75,7 @@ marked `#[cfg(test)]`, `#[test]` or a runner's `#[tokio::test]` (any `#[...::tes
 and its functions), and a whole file marked `#![cfg(test)]`. Each weighs at its full weight, whatever
 `test_factor` (which is `commit`'s). `commit` prints its net delta alone, signed (`+42.5`, `-17`, `0`). For each
 command, `--verbose` (`-v`) prints the whole report instead, as `--top` and `--by` do; with the total alone, a file's
-syntax errors are a warning on stderr and the skipped files aren't listed.
+syntax errors and a folder that can't be read are a warning on stderr and the skipped files aren't listed.
 
 The text report (`-v`) starts with the total. After it come the functions and classes, heaviest first, then by path and
 name, each as `<weight>  <path>  <name>`; with `--by file`, the files. A class's line (`Name (class)`) has its code
@@ -95,7 +95,9 @@ outside the current one). `scan` leaves the test files (`test_globs`) and a Rust
 weighs only them. Files are weighed in parallel; the output is the same on every run.
 
 A file that doesn't parse cleanly is still weighed, as tree-sitter recovered it, with a warning. A file in a language
-codeweight doesn't read is skipped and listed, never an error.
+codeweight doesn't read is skipped and listed, never an error. A folder under the one scanned that can't be read (a
+root-owned docker volume, say) is left out with a warning and the rest weighed; a folder given that can't be read is
+an error.
 
 Exit codes: 0 done, 2 an error (a bad path, revision or weights file, or not in a git repo).
 
@@ -131,7 +133,9 @@ rounded to two decimals, as the text shows it.
   one of `"function"`, `"class"` (its code outside its functions) and `"file"` (a file's code outside any class, its
   `name` and `line` `null`), `name` qualified (`Outer.Inner.method`), `line` the first line, from 1 (for `commit`, the after
 side's, a removed one's the before side's).
-- `warnings`: the files with syntax errors, `{path, kind: "syntax_errors", side}`, `side` `null` for `scan` and `scanTests`.
+- `warnings`: the files with syntax errors, `{path, kind: "syntax_errors", side}`, `side` `null` for `scan` and `scanTests`;
+  then, for `scan` and `scanTests`, the paths under a folder given that couldn't be read and were left out,
+  `{path, kind: "unreadable", side: null}`.
 - `skipped`: the paths of the files in no language codeweight reads.
 
 For `commit`, also `from` (the full hash compared from, `null` for the root commit's empty tree) and `to`; each row
