@@ -11,13 +11,15 @@ in `docs/`, a file per subject (see `docs/README.md`).
 
 ## Example
 
-codeweight run on its own sources, and on what a commit added or took away:
+codeweight run on its own sources, and on what a commit added or took away, its code and its tests apart:
 
 ```
 $ codeweight scan src
 4600.25
 $ codeweight commit b88842c
-+1150.5
++797.75
+$ codeweight commit-tests b88842c
++352.75
 ```
 
 `-v` lists the functions behind the number, heaviest first (see "Usage").
@@ -40,9 +42,13 @@ codeweight: link or copy the folder into the agent's skills, e.g. from a clone
 
 ```
 codeweight scan <path>... [-v]            the weight of files and folders, their tests left out; several allowed
-codeweight scanTests <path>... [-v]       the weight of their tests alone
-codeweight commit [<rev>|<A>..<B>] [-C <repo>] [-v]   the net weight delta of a commit, between two revisions,
-                                          or of the uncommitted changes (no revision)
+codeweight scan-tests <path>... [-v]      the weight of their tests alone
+codeweight commit <rev>|<A>..<B> [-C <repo>] [-v]        the net weight delta of a commit or between two
+                                                         revisions, its tests left out
+codeweight commit-tests <rev>|<A>..<B> [-C <repo>] [-v]  the same, of the tests alone
+codeweight pre-commit [-C <repo>] [-v]                   the net weight delta of the uncommitted changes, their
+                                                         tests left out
+codeweight pre-commit-tests [-C <repo>] [-v]             the same, of the tests alone
 codeweight init [<file>]                  writes the default weights file (default ./codeweight.toml), never over an existing one
 ```
 
@@ -50,16 +56,18 @@ Every command takes:
 
 - `--config <file>`: the weights file (see below for where it is looked up without one);
 - `--format text|json`: the report's format, text by default (the JSON is described below);
-- `--top <N>`: only the report's first N lines (the heaviest; for `commit`, the largest changes);
+- `--top <N>`: only the report's first N lines (the heaviest; for a delta, the largest changes);
 - `--by file|function`: what the report lists, the functions by default.
 
-`scan` prints its total alone, a number (`4698.25`): the weight of the code, its tests left out. `scanTests` (or
-`scan-tests`) prints the weight of the tests alone: the test files (`test_globs`), and in a Rust file the items
+`scan` prints its total alone, a number (`4698.25`): the weight of the code, its tests left out. `scan-tests`
+prints the weight of the tests alone: the test files (`test_globs`), and in a Rust file the items
 marked `#[cfg(test)]`, `#[test]` or a runner's `#[tokio::test]` (any `#[...::test]`), all in them (a `mod tests`
-and its functions), and a whole file marked `#![cfg(test)]`. Each weighs at its full weight, whatever
-`test_factor` (which is `commit`'s). `commit` prints its net delta alone, signed (`+42.5`, `-17`, `0`). For each
-command, `--verbose` (`-v`) prints the whole report instead, as `--top` and `--by` do; with the total alone, a file's
-syntax errors and a folder that can't be read are a warning on stderr.
+and its functions), and a whole file marked `#![cfg(test)]`. `commit` and `pre-commit` print their net delta alone,
+signed (`+42.5`, `-17`, `0`), of the code, its tests left out; `commit-tests` and `pre-commit-tests` the delta of
+the tests alone. The code and the tests are always two numbers, never one sum, each at its full weight: a change to
+both has its code in one and its tests in the other. For each command, `--verbose` (`-v`) prints the whole report
+instead, as `--top` and `--by` do; with the total alone, a file's syntax errors and a folder that can't be read are a
+warning on stderr.
 
 The text report (`-v`) starts with the total. After it come the functions and classes, heaviest first, then by path and
 name, each as `<weight>  <path>  <name>`; with `--by file`, the files. A class's line (`Name (class)`) has its code
@@ -75,7 +83,7 @@ decimals.
 A folder is walked for the files in it: its `.gitignore` is honoured, hidden files and the `[files]` excludes are
 left out (a file named on the command line is weighed even if excluded). The globs are matched against a file's path
 from the root of its git repo (outside a repo, from the current folder, or from the folder given when the path is
-outside the current one). `scan` leaves the test files (`test_globs`) and a Rust file's tests out, `scanTests`
+outside the current one). `scan` leaves the test files (`test_globs`) and a Rust file's tests out, `scan-tests`
 weighs only them. Files are weighed in parallel; the output is the same on every run.
 
 A file that doesn't parse cleanly is still weighed, as tree-sitter recovered it, with a warning. A file in a language
@@ -85,7 +93,7 @@ an error.
 
 Exit codes: 0 done, 2 an error (a bad path, revision or weights file, or not in a git repo).
 
-### `commit`
+### `commit`, `pre-commit`
 
 `codeweight commit <rev>` weighs what a commit changed: its files before and after, against its first parent (a
 merge's too), the root commit against the empty tree; in a shallow clone, a commit whose parent wasn't fetched is
@@ -94,7 +102,7 @@ directly, so a change made and undone between them nets to zero (an empty side i
 `<rev>` is any git revision (a hash, `HEAD~2`, a tag); `-C <path>` is any path inside the repo (default `.`). It runs
 `git` (`git diff-tree -r -M`, so a renamed file is one file, and one `git cat-file --batch` for the texts).
 
-`codeweight commit` with no revision weighs the uncommitted changes, before you commit them: `HEAD` against the
+`codeweight pre-commit` weighs the uncommitted changes, before you commit them: `HEAD` against the
 working tree, staged or not, the untracked files too and the ignored ones left out, as `git add -A && git commit`
 would commit them (in a repo with no commit yet, against the empty tree). Your index is left as it is: the working
 tree is added to a copy of it. git writes the changed files' blobs to the repo's objects, which nothing refers to,
@@ -103,8 +111,9 @@ and `git gc` drops them later.
 A file's delta is its weight after minus before: an added file's is all positive, a deleted one's all negative. Its
 functions and classes are matched by their qualified name within the file (a renamed file's old and new), each one
 `added`, `removed`, `heavier` or `lighter`. The changed files are weighed as a walk of the repo's root weighs them:
-the `[files]` excludes and hidden paths are left out, a test file and a Rust file's tests are times `test_factor`
-(at 0 a test file is left out), a file codeweight doesn't read is left out.
+the `[files]` excludes and hidden paths are left out, and so is a file codeweight doesn't read. `commit` and
+`pre-commit` leave the test files and a Rust file's tests out; `commit-tests` and `pre-commit-tests` weigh only them,
+each as `scan-tests` does.
 
 With `-v`, the text report starts with the total delta (`total +42.5`, `total -17`). After it comes one line per function and
 class (or per file with `--by file`), `<delta>  <status>  <path>  <name>`, a renamed file's path as `old -> new`; the
@@ -123,12 +132,12 @@ rounded to two decimals, as the text shows it.
   one of `"function"`, `"class"` (its code outside its functions) and `"file"` (a file's code outside any class, its
   `name` and `line` `null`), `name` qualified (`Outer.Inner.method`), `line` the first line, from 1 (for `commit`, the after
 side's, a removed one's the before side's).
-- `warnings`: the files with syntax errors, `{path, kind: "syntax_errors", side}`, `side` `null` for `scan` and `scanTests`;
-  then, for `scan` and `scanTests`, the paths under a folder given that couldn't be read and were left out,
+- `warnings`: the files with syntax errors, `{path, kind: "syntax_errors", side}`, `side` `null` for `scan` and `scan-tests`;
+  then, for `scan` and `scan-tests`, the paths under a folder given that couldn't be read and were left out,
   `{path, kind: "unreadable", side: null}`.
 
 For `commit`, also `from` (the full hash compared from, `null` for the root commit's empty tree) and `to` (the full
-hash compared to, `null` for the uncommitted changes); each row has, instead of `weight`, `before`, `after` (0 on the
+hash compared to, `null` for `pre-commit`'s uncommitted changes); each row has, instead of `weight`, `before`, `after` (0 on the
 side it isn't), `delta` and `status` (`"added"`, `"removed"`, `"heavier"` or `"lighter"`), and `old_path` (the path
 before a rename, else `null`); a warning's `side` is `"before"` or `"after"`.
 
@@ -189,7 +198,6 @@ test_globs = [
     "**/*.test.ts", "**/*.spec.ts", "**/*.test.tsx", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py",
     "**/*.test.js", "**/*.spec.js", "**/*.test.jsx", "**/*.spec.jsx",
 ]
-test_factor = 1.0       # a test's weight times this in a commit's delta; 0 leaves the test files out
 ```
 
 The defaults were tuned on real Java, TypeScript and Python code (and re-checked on Rust) so that the heaviest functions are the hardest

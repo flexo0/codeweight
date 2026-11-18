@@ -9,7 +9,7 @@ Built (`git`, `source::from_commit`, `report`):
    to fetch more history. `A..B` is the two revisions, an empty side `HEAD` as in git;
    `A...B` (against the merge base) is an error, not silently read as `A..B`. A revision starting with `-` is an
    error, so it can't pass for an option.
-   No revision (`git::uncommitted`): `HEAD` (the empty tree in a repo with no commit) against a tree of the working
+   `pre-commit` / `pre-commit-tests` (`git::uncommitted`): `HEAD` (the empty tree in a repo with no commit) against a tree of the working
    tree, made by `git add -A` into a copy of the index (`GIT_INDEX_FILE`, in a temp folder of its own) and
    `git write-tree`. So the untracked files are in it and the ignored ones aren't, renames are found between a
    tracked file and an untracked one, the index's stat cache spares hashing the unchanged files, and the rest of
@@ -30,7 +30,12 @@ Built (`git`, `source::from_commit`, `report`):
    to another file is removed from one and added to the other.
 6. The report: the total delta first (`+42.5`, `-17`), then the files' or the functions' deltas ([cli.md](cli.md)).
 
+The code and the tests are two deltas, never one: `commit` / `pre-commit` weigh a change's code, its test files and
+a Rust file's tests left out, `commit-tests` / `pre-commit-tests` its tests alone, each side kept and weighed as `scan`
+/ `scan-tests` would (`source::from_commit`'s `tests`, `Weighed::only`). A sum of the two, or a factor that weighs
+the tests less in it, would let a change to one hide in the other's number.
+
 The `commit` tests make throwaway repos (`tempfile`, git's global and system config off): an add, a delete, a
-rename, a merge, the root commit, a range, the excludes and test factor, a bad revision, a shallow clone's
+rename, a merge, the root commit, a range, the excludes, the code and the tests apart, a bad revision, a shallow clone's
 boundary; the uncommitted changes (staged, unstaged, untracked, ignored, the index unchanged after), a rename into
 an untracked file, a repo with no commit.

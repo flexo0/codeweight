@@ -96,8 +96,8 @@ which are Java's as they stand.
   (`tokio::test`), the attribute among the attributes and comments right before it, is test code with all in it
   (a `mod tests`, its functions); a file marked `#![cfg(test)]` is all test code. Its entries are test entries
   (a test and a non-test one of one name are two, so `#[cfg(test)] fn f` and `#[cfg(not(test))] fn f` stay
-  apart), its code outside any class the file's test code; `scan` leaves it out, `scanTests` weighs it alone,
-  `commit` weighs it times `test_factor` as a test file. Left as it is: a marked item that is no class or function
+  apart), its code outside any class the file's test code; `scan` leaves it out, `scan-tests` weighs it alone,
+  `commit` / `pre-commit` leave it out, `commit-tests` / `pre-commit-tests` weigh its delta alone. Left as it is: a marked item that is no class or function
   inside a class or function (`#[cfg(test)] const` in an `impl`) weighs in its class's or function's code; a
   `mod tests;` whose file is `tests.rs` marks that file only in its parent, so `tests.rs` is code unless a test
   glob or its own `#![cfg(test)]` says otherwise.

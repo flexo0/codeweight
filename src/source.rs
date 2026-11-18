@@ -91,11 +91,11 @@ pub struct Changed {
     pub after: Option<Blob>,
 }
 
-/// The files `range` changed in the repo at `repo`, as a walk of the repo's root would weigh them on each side:
-/// a side that is hidden (a part of its path starts with `.`), excluded, in no language codeweight reads, or a
-/// test at `test_factor` 0 is left out, and a change with neither side left; the rest (at least one side each) in
-/// git's order.
-pub fn from_commit(repo: &Path, range: &Range, files: &Files) -> Result<Vec<Changed>> {
+/// The files `range` changed in the repo at `repo`, as a walk of the repo's root would weigh them on each side, for
+/// the code or the tests (`tests`), as a scan keeps them: a side that is hidden (a part of its path starts with
+/// `.`), excluded, in no language codeweight reads, or not kept is left out, and a change with neither side left;
+/// the rest (at least one side each) in git's order.
+pub fn from_commit(repo: &Path, range: &Range, files: &Files, tests: bool) -> Result<Vec<Changed>> {
     let matchers = Matchers::new(files)?;
     let mut kept = Vec::new();
     for change in git::changes(repo, range)? {
@@ -110,7 +110,7 @@ pub fn from_commit(repo: &Path, range: &Range, files: &Files) -> Result<Vec<Chan
             }
             let lang = lang::for_path(&side.path)?;
             let test = matchers.tests.is_match(&side.path);
-            (!test || files.test_factor != 0.0).then_some((side, lang, test))
+            weighed_for(test, lang, tests).then_some((side, lang, test))
         };
         let before = keep(change.before);
         let after = keep(change.after);
@@ -225,10 +225,8 @@ impl Input {
     /// Only the items a scan of the code weighs (those the test globs don't match), or a scan of the tests (those
     /// they match, and those of a language with tests in its source files, Rust's).
     pub fn keep(&mut self, tests: bool) {
-        self.items.retain(|item| match tests {
-            true => item.test || item.lang.tests.is_some(),
-            false => !item.test,
-        });
+        self.items
+            .retain(|item| weighed_for(item.test, item.lang, tests));
     }
 
     fn add(&mut self, path: &Path, key: &Path, matchers: &Matchers, seen: &mut HashSet<PathBuf>) {
@@ -241,6 +239,15 @@ impl Input {
         };
         let test = matchers.tests.is_match(key);
         self.items.push(Item { path, lang, test });
+    }
+}
+
+/// Whether a file (`test`: the test globs match it) is weighed for the code, or for the tests (`tests`): a test
+/// file is the tests' alone, a file of a language with tests in its source files (Rust's) both's, each its part.
+fn weighed_for(test: bool, lang: &Lang, tests: bool) -> bool {
+    match tests {
+        true => test || lang.tests.is_some(),
+        false => !test,
     }
 }
 
@@ -337,11 +344,10 @@ fn shown(path: &Path) -> PathBuf {
 mod tests {
     use super::*;
 
-    fn files(exclude: &[&str], test_globs: &[&str], test_factor: f64) -> Files {
+    fn files(exclude: &[&str], test_globs: &[&str]) -> Files {
         Files {
             exclude: exclude.iter().map(|g| g.to_string()).collect(),
             test_globs: test_globs.iter().map(|g| g.to_string()).collect(),
-            test_factor,
         }
     }
 
@@ -395,7 +401,6 @@ mod tests {
             &files(
                 &["**/node_modules/**", "**/*.d.ts", "src/gen/*"],
                 &["**/tests/**"],
-                1.0,
             ),
         )
         .unwrap();
@@ -421,7 +426,7 @@ mod tests {
         // `src/gen/**` names a folder from the root, though the folder walked is `src`.
         let input = from_paths(
             &[root.join("src"), root.join("src/test/t.ts")],
-            &files(&["src/gen/**"], &["src/test/**"], 1.0),
+            &files(&["src/gen/**"], &["src/test/**"]),
         )
         .unwrap();
         assert_eq!(
@@ -440,7 +445,7 @@ mod tests {
         write(&root, &["a.py", "tests/b.py"]);
         let input = from_paths(
             &[root.clone(), root.join("a.py")],
-            &files(&["**/build/**"], &["**/tests/**"], 1.0),
+            &files(&["**/build/**"], &["**/tests/**"]),
         )
         .unwrap();
         assert_eq!(
@@ -456,7 +461,7 @@ mod tests {
         write(root, &["a.py", "b.rs", "test_a.py"]);
         let scan = |tests| {
             let mut input =
-                from_paths(&[root.to_path_buf()], &files(&[], &["**/test_*.py"], 1.0)).unwrap();
+                from_paths(&[root.to_path_buf()], &files(&[], &["**/test_*.py"])).unwrap();
             input.keep(tests);
             found(&input, root)
         };
@@ -473,7 +478,7 @@ mod tests {
         let root = dir.path();
         write(root, &["gen/a.ts"]);
         let file = root.join("gen/a.ts");
-        let input = from_paths(&[file.clone(), file], &files(&["**/gen/**"], &[], 1.0)).unwrap();
+        let input = from_paths(&[file.clone(), file], &files(&["**/gen/**"], &[])).unwrap();
         assert_eq!(found(&input, root), vec!["gen/a.ts".to_string()]);
     }
 
@@ -493,11 +498,8 @@ mod tests {
             return;
         }
         // Given twice, it is listed once; the folder given itself can't be read: an error.
-        let walked = from_paths(
-            &[root.to_path_buf(), root.to_path_buf()],
-            &files(&[], &[], 1.0),
-        );
-        let given = from_paths(std::slice::from_ref(&locked), &files(&[], &[], 1.0));
+        let walked = from_paths(&[root.to_path_buf(), root.to_path_buf()], &files(&[], &[]));
+        let given = from_paths(std::slice::from_ref(&locked), &files(&[], &[]));
         mode(0o755);
         let input = walked.unwrap();
         assert_eq!(

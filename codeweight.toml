@@ -41,4 +41,3 @@ test_globs = [
     "**/*.test.ts", "**/*.spec.ts", "**/*.test.tsx", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py",
     "**/*.test.js", "**/*.spec.js", "**/*.test.jsx", "**/*.spec.jsx",
 ]
-test_factor = 1.0       # a test's weight times this in a commit's delta; 0 leaves the test files out

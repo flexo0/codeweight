@@ -108,12 +108,11 @@ impl Nesting {
     }
 }
 
-/// The `[files]` table: which files a folder walk weighs, which are tests, and how much a commit counts them.
+/// The `[files]` table: which files a folder walk weighs, and which are tests.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Files {
     pub exclude: Vec<String>,
     pub test_globs: Vec<String>,
-    pub test_factor: f64,
 }
 
 /// A language's weights: `[weights]` with its `[languages.<name>.weights]` over them, and its node kinds remapped.
@@ -179,7 +178,6 @@ impl Config {
         let raw: RawConfig = toml::Value::Table(table).try_into()?;
         let nesting = raw.nesting;
         check_non_negative("[nesting] factor", nesting.factor)?;
-        check_non_negative("[files] test_factor", raw.files.test_factor)?;
         for glob in &raw.files.exclude {
             source::glob(glob).with_context(|| format!("[files] exclude `{glob}`"))?;
         }
@@ -251,7 +249,6 @@ impl Config {
             files: Files {
                 exclude: raw.files.exclude,
                 test_globs: raw.files.test_globs,
-                test_factor: raw.files.test_factor,
             },
             languages,
         })
@@ -320,7 +317,6 @@ struct RawLang {
 struct RawFiles {
     exclude: Vec<String>,
     test_globs: Vec<String>,
-    test_factor: f64,
 }
 
 fn parse_toml(text: &str) -> Result<toml::Table> {
@@ -516,7 +512,7 @@ mod tests {
     fn a_file_on_its_own_must_set_every_category() {
         let error = Config::from_str_alone(
             "[nesting]\nmodel = \"linear\"\nfactor = 1\nmax_depth = 3\n[weights]\nstatement = 1\n\
-             [files]\nexclude = []\ntest_globs = []\ntest_factor = 1\n",
+             [files]\nexclude = []\ntest_globs = []\n",
         )
         .unwrap_err();
         assert!(format!("{error:#}").contains("no weight for `call`"));

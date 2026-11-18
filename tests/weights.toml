@@ -24,4 +24,3 @@ access    = 0
 [files]
 exclude = []
 test_globs = []
-test_factor = 1

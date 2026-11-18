@@ -28,13 +28,14 @@ as a command, no `git2` / `gix`.
   glob means the same from any folder scanned, and later for `commit`; outside a repo, from the current folder when
   the path is in it, else from the folder given (a file given: its name), never with the folders above, so a project
   under a `build` or `tests` folder is neither excluded nor taken for tests whatever the path's spelling. A
-  file the test globs match is a test file: `scan` leaves it out, `scanTests` keeps it and the files of a language
+  file the test globs match is a test file: `scan` leaves it out, `scan-tests` keeps it and the files of a language
   with tests inside its source files (Rust's), each weighed for its tests alone. A path is shown as given,
   or the folder given joined with the path in it, without a leading `./`; a path given twice, or under two folders
   given, is weighed once.
 - `source` for `commit` (`from_commit`): a changed file's each side is kept as a walk of the repo's root would keep
   it: its path (from the root, as `git diff-tree` gives it) not hidden (no part starting with `.`), not excluded, in
-  a language codeweight reads, not a test at `test_factor` 0; a side that isn't a regular file (a symlink, a
+  a language codeweight reads, and kept for what is weighed as a scan keeps a file (`commit` / `pre-commit` the
+  code, `commit-tests` / `pre-commit-tests` the tests, never both in one number); a side that isn't a regular file (a symlink, a
   submodule) is none. A side's language is its own path's, so a rename `a.js -> a.ts` is an added file. A change with
   no side kept is left out, unlisted. Then
   the kept sides' blobs, each once, all through one `git cat-file --batch`; all of a commit's texts are in memory

@@ -2,9 +2,13 @@
 
 ```
 codeweight scan <path>... [-v]            a file or a folder, absolute or relative; several allowed; tests left out
-codeweight scanTests <path>... [-v]       the same, of the tests alone
-codeweight commit [<rev>|<A>..<B>] [-C <repo>] [-v]   the net weight delta of a commit, between two revisions,
-                                          or of the uncommitted changes (no revision)
+codeweight scan-tests <path>... [-v]      the same, of the tests alone
+codeweight commit <rev>|<A>..<B> [-C <repo>] [-v]        the net weight delta of a commit or between two
+                                                         revisions, its tests left out
+codeweight commit-tests <rev>|<A>..<B> [-C <repo>] [-v]  the same, of the tests alone
+codeweight pre-commit [-C <repo>] [-v]                   the net weight delta of the uncommitted changes, their
+                                                         tests left out
+codeweight pre-commit-tests [-C <repo>] [-v]             the same, of the tests alone
 codeweight init [<file>]                  writes the default weights file (default ./codeweight.toml)
 ```
 
@@ -15,19 +19,23 @@ and `--by file|function` (what the report lists).
   absolute (default `.`); `git -C` finds the repo from it, and the weights file is looked up at its root.
 - A single `<rev>` is compared against its first parent (a merge commit too); the root commit against the empty tree.
 - A range `A..B` diffs the two trees directly, so a change made and undone inside it nets to zero.
-- No revision: the uncommitted changes, `HEAD` against the working tree, untracked files too (the commit
-  `git add -A && git commit` would make), so the weight of a commit can be seen before it is made.
+- `pre-commit`: the uncommitted changes, `HEAD` against the working tree, untracked files too
+  (the commit `git add -A && git commit` would make), so the weight of a commit can be seen before it is made.
+- `commit` and `pre-commit` weigh the code, its tests left out; `commit-tests` and `pre-commit-tests` the tests
+  alone, each side kept as `scan` and `scan-tests` keep a file.
 - Exit codes: 0 done, 2 an error (a bad path, revision or weights file). `main` prints the error with its context
   chain (`error: ...`) to stderr; clap's own usage errors exit 2 too.
 
-Built (`cli`, `report`): every command and option. `init` never overwrites a file (it is created new, else an
+Built (`cli`, `report`): every command and option. A command of several words is kebab-case (`scan-tests`,
+`pre-commit`), as git's and cargo's are and as the options are. `init` never overwrites a file (it is created new, else an
 error). `--by` defaults to `function`; `--top` keeps the report's first N lines, whichever `--by` lists (so "the N
 heaviest functions", or files).
 
 - `scan` prints its total alone, a number, so a script or a person reads one value, and `commit` its net delta alone,
-  signed (`+42.5`); `--verbose` (`-v`), `--top` or `--by` print the whole report (a list was asked for). `scan` weighs the code without its tests, `scanTests`
-  (alias `scan-tests`) the tests alone: two numbers, not one mixed by `test_factor`, so neither hides the other.
-  Each weighs at its full weight; `test_factor` is `commit`'s alone (a delta is one number for a change to both).
+  signed (`+42.5`); `--verbose` (`-v`), `--top` or `--by` print the whole report (a list was asked for). `scan` weighs the code without its tests, `scan-tests`
+  the tests alone, and so `commit` / `pre-commit` and `commit-tests` / `pre-commit-tests` for a
+  delta: the code and the tests are always two numbers, never summed into one, so neither hides the other. Each
+  weighs at its full weight; there is no factor that mixes them.
   The tests are the test files (by path) and the test code inside a source file (Rust's, see [languages.md](languages.md)). With the
   total alone, the warnings (syntax errors, unreadable folders) go to stderr. The JSON is the whole report,
   `--verbose` or not: a machine reads the fields it wants.
@@ -45,7 +53,7 @@ heaviest functions", or files).
   order, `--top` and `--by` acting alike, so the two formats can't disagree (one row list and one sort feed both).
   A row by file is `{path, weight}`, by function `{path, kind, name, line, weight}`, `kind` `function`, `class` or
   `file`; a commit's row has `before`, `after`, `delta`, `status` and `old_path` instead of `weight`, and the object
-  `from` / `to` (full hashes, `from` null for the empty tree, `to` null for the uncommitted changes). Every field is
+  `from` / `to` (full hashes, `from` null for the empty tree, `to` null for `pre-commit`'s uncommitted changes). Every field is
   always there, null where it has no value; the numbers rounded to two decimals as the text's, so a float's last bits never show. `total` is the whole
   total, not the rows'. Warnings are `{path, kind: "syntax_errors", side}`, `side` a commit's `before` / `after`, and a scan's
   `{path, kind: "unreadable", side: null}`.

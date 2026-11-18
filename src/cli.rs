@@ -58,7 +58,6 @@ enum Command {
         verbose: bool,
     },
     /// The weight of the tests in files and folders (the test files, a Rust file's tests): the total alone
-    #[command(name = "scanTests", alias = "scan-tests")]
     ScanTests {
         /// A file or a folder, absolute or relative
         #[arg(required = true)]
@@ -67,11 +66,41 @@ enum Command {
         #[arg(short, long)]
         verbose: bool,
     },
-    /// The net weight delta of a commit, between two revisions, or of the uncommitted changes: the total alone
+    /// The net weight delta of a commit or between two revisions, its tests left out: the total alone
     Commit {
-        /// A revision (against its first parent) or a range A..B; none, the uncommitted changes against HEAD (the
-        /// untracked files too)
-        rev: Option<String>,
+        /// A revision (against its first parent) or a range A..B
+        rev: String,
+        /// Any path inside the repo
+        #[arg(short = 'C', default_value = ".")]
+        repo: PathBuf,
+        /// The whole report: the total, the functions (or files), and the warnings
+        #[arg(short, long)]
+        verbose: bool,
+    },
+    /// The net weight delta of a commit's tests or of the tests between two revisions: the total alone
+    CommitTests {
+        /// A revision (against its first parent) or a range A..B
+        rev: String,
+        /// Any path inside the repo
+        #[arg(short = 'C', default_value = ".")]
+        repo: PathBuf,
+        /// The whole report: the total, the functions (or files), and the warnings
+        #[arg(short, long)]
+        verbose: bool,
+    },
+    /// The net weight delta of the uncommitted changes (the untracked files too) against HEAD, their tests left
+    /// out: the total alone
+    PreCommit {
+        /// Any path inside the repo
+        #[arg(short = 'C', default_value = ".")]
+        repo: PathBuf,
+        /// The whole report: the total, the functions (or files), and the warnings
+        #[arg(short, long)]
+        verbose: bool,
+    },
+    /// The net weight delta of the uncommitted changes' tests (the untracked files too) against HEAD: the total
+    /// alone
+    PreCommitTests {
         /// Any path inside the repo
         #[arg(short = 'C', default_value = ".")]
         repo: PathBuf,
@@ -99,7 +128,12 @@ pub fn run() -> Result<()> {
     match &cli.command {
         Command::Scan { paths, verbose } => scan(&cli, paths, *verbose, false),
         Command::ScanTests { paths, verbose } => scan(&cli, paths, *verbose, true),
-        Command::Commit { rev, repo, verbose } => commit(&cli, rev.as_deref(), repo, *verbose),
+        Command::Commit { rev, repo, verbose } => commit(&cli, Some(rev), repo, *verbose, false),
+        Command::CommitTests { rev, repo, verbose } => {
+            commit(&cli, Some(rev), repo, *verbose, true)
+        }
+        Command::PreCommit { repo, verbose } => commit(&cli, None, repo, *verbose, false),
+        Command::PreCommitTests { repo, verbose } => commit(&cli, None, repo, *verbose, true),
         Command::Init { file } => init(file),
     }
 }
@@ -141,19 +175,20 @@ fn scan(cli: &Cli, paths: &[PathBuf], verbose: bool, tests: bool) -> Result<()> 
     Ok(())
 }
 
-/// Weighs the net delta of `rev` (a commit or a range), or of the uncommitted changes (none).
-fn commit(cli: &Cli, rev: Option<&str>, repo: &Path, verbose: bool) -> Result<()> {
+/// Weighs the net delta of `rev` (a commit or a range), or of the uncommitted changes (none): of the code, or of
+/// its tests (`tests`), each at its full weight.
+fn commit(cli: &Cli, rev: Option<&str>, repo: &Path, verbose: bool, tests: bool) -> Result<()> {
     let config = load_config(cli, Some(repo))?;
     let range = match rev {
         Some(rev) => git::resolve(repo, rev)?,
         None => git::uncommitted(repo)?,
     };
-    let changes = source::from_commit(repo, &range, &config.files)?;
+    let changes = source::from_commit(repo, &range, &config.files, tests)?;
     let weighers = Weighers::new(&config);
     let side = |blob: Option<source::Blob>| -> Result<Option<(PathBuf, Weighed)>> {
         blob.map(|b| {
             let weighed = weighers.weigh(b.lang, &b.text, b.test, &b.path)?;
-            Ok((b.path, weighed.tests_times(config.files.test_factor)))
+            Ok((b.path, weighed.only(tests)))
         })
         .transpose()
     };

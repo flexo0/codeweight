@@ -146,7 +146,7 @@ fn scan_walks_a_folder_its_excludes_and_tests_left_out_and_scan_tests_weighs_the
         ("src/a.py", "def f():\n    g()\n"),
         // h is function 2 and its call 0.5; the file's declaration statement 1.
         ("src/b.ts", "export const h = () => g();\n"),
-        // A test: t is 3.5, at its full weight whatever the test factor.
+        // A test: t is 3.5.
         ("tests/test_a.py", "def t():\n    g()\n"),
         // c is 3.5, its test u 3.5 (a class 5 and a function 2 of the tests, each with a statement and a call).
         (
@@ -160,7 +160,6 @@ fn scan_walks_a_folder_its_excludes_and_tests_left_out_and_scan_tests_weighs_the
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, text).unwrap();
     }
-    fs::write(root.join("codeweight.toml"), "[files]\ntest_factor = 0.5\n").unwrap();
 
     let output = codeweight(root, &["scan", "."]);
     assert!(output.status.success(), "{}", stderr(&output));
@@ -182,7 +181,7 @@ fn scan_walks_a_folder_its_excludes_and_tests_left_out_and_scan_tests_weighs_the
         "total 10.5\n3.5  src/a.py\n3.5  src/b.ts\n3.5  src/c.rs\n"
     );
 
-    let tests = codeweight(root, &["scanTests", "."]);
+    let tests = codeweight(root, &["scan-tests", "."]);
     assert!(tests.status.success(), "{}", stderr(&tests));
     assert_eq!(stdout(&tests), "12\n");
     let tests = codeweight(root, &["scan-tests", ".", "-v"]);
@@ -253,8 +252,17 @@ impl Repo {
     /// `codeweight commit -v` (the whole report) under the engine's test weights (statement 1, call 2, function
     /// 100), its stdout.
     fn weigh(&self, args: &[&str]) -> String {
+        self.run("commit", args)
+    }
+
+    /// `codeweight pre-commit -v`, the uncommitted changes, as `weigh`.
+    fn pre_commit(&self, args: &[&str]) -> String {
+        self.run("pre-commit", args)
+    }
+
+    fn run(&self, command: &str, args: &[&str]) -> String {
         let weights = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/weights.toml");
-        let mut all = vec!["commit", "-v"];
+        let mut all = vec![command, "-v"];
         all.extend_from_slice(args);
         all.extend_from_slice(&["--config", weights]);
         let output = codeweight(self.path(), &all);
@@ -354,42 +362,65 @@ fn commit_weighs_a_range_tree_to_tree_so_an_undone_change_nets_zero() {
 }
 
 #[test]
-fn commit_leaves_out_the_excludes_and_weighs_tests_times_the_test_factor() {
+fn commit_leaves_out_the_excludes_and_its_tests_and_commit_tests_weighs_the_tests() {
     let repo = Repo::new();
     repo.commit(&[
         ("build/gen.py", Some(F)),
         (".hidden/h.py", Some(F)),
         ("tests/test_a.py", Some(F)),
         ("a.py", Some(F)),
+        (
+            "c.rs",
+            Some(
+                "fn c() { g(); }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn u() { c(); }\n}\n",
+            ),
+        ),
     ]);
     fs::write(
-        repo.path().join("half.toml"),
-        "[files]\ntest_factor = 0.5\nexclude = [\"build/**\"]\n",
+        repo.path().join("own.toml"),
+        "[files]\nexclude = [\"build/**\"]\n",
     )
     .unwrap();
-    // Under the defaults: f is 3.5 (function 2, statement 1, call 0.5), the test's half of it.
-    let output = codeweight(
-        repo.path(),
-        &["commit", "HEAD", "-v", "--config", "half.toml"],
-    );
-    assert!(output.status.success(), "{}", stderr(&output));
+    let run = |args: &[&str]| {
+        let mut all = args.to_vec();
+        all.extend_from_slice(&["-v", "--config", "own.toml"]);
+        let output = codeweight(repo.path(), &all);
+        assert!(output.status.success(), "{}", stderr(&output));
+        stdout(&output)
+    };
+    // Under the defaults: f, c and u are 3.5 (function 2, statement 1, call 0.5), the class of the tests 5.
     assert_eq!(
-        stdout(&output),
-        "total +5.25\n\
-         \x20+3.5  added    a.py  f\n\
-         +1.75  added    tests/test_a.py  f\n"
+        run(&["commit", "HEAD"]),
+        "total +7\n\
+         +3.5  added    a.py  f\n\
+         +3.5  added    c.rs  c\n"
+    );
+    assert_eq!(
+        run(&["commit-tests", "HEAD"]),
+        "total +12\n\
+         \x20 +5  added    c.rs  tests (class)\n\
+         +3.5  added    c.rs  tests.u\n\
+         +3.5  added    tests/test_a.py  f\n"
+    );
+
+    // The uncommitted changes: a test heavier by a statement and a call.
+    fs::write(repo.path().join("tests/test_a.py"), FG).unwrap();
+    assert_eq!(run(&["pre-commit"]), "total 0\n");
+    assert_eq!(
+        run(&["pre-commit-tests"]),
+        "total +1.5\n+1.5  heavier  tests/test_a.py  f\n"
     );
 }
 
 #[test]
-fn commit_without_a_revision_weighs_the_uncommitted_changes_and_leaves_the_index_alone() {
+fn pre_commit_weighs_the_uncommitted_changes_and_leaves_the_index_alone() {
     let repo = Repo::new();
     repo.commit(&[
         ("a.py", Some(F)),
         ("gone.py", Some("def x():\n    pass\n")),
         (".gitignore", Some("ignored.py\n")),
     ]);
-    assert_eq!(repo.weigh(&[]), "total 0\n");
+    assert_eq!(repo.pre_commit(&[]), "total 0\n");
 
     // One change staged, the others not, one file untracked, one ignored.
     fs::write(repo.path().join("staged.py"), F).unwrap();
@@ -406,7 +437,7 @@ fn commit_without_a_revision_weighs_the_uncommitted_changes_and_leaves_the_index
     };
     let before = state();
     assert_eq!(
-        repo.weigh(&[]),
+        repo.pre_commit(&[]),
         "total +109\n\
          +103  added    staged.py  f\n\
          +103  added    untracked.py  f\n\
@@ -415,7 +446,8 @@ fn commit_without_a_revision_weighs_the_uncommitted_changes_and_leaves_the_index
     );
     assert_eq!(state(), before);
 
-    let json: serde_json::Value = serde_json::from_str(&repo.weigh(&["--format", "json"])).unwrap();
+    let json: serde_json::Value =
+        serde_json::from_str(&repo.pre_commit(&["--format", "json"])).unwrap();
     assert_eq!(
         json["from"],
         serde_json::json!(repo.git(&["rev-parse", "HEAD"]))
@@ -425,7 +457,7 @@ fn commit_without_a_revision_weighs_the_uncommitted_changes_and_leaves_the_index
 }
 
 #[test]
-fn commit_without_a_revision_sees_a_rename_into_an_untracked_file_and_a_repo_with_no_commit() {
+fn pre_commit_sees_a_rename_into_an_untracked_file_and_a_repo_with_no_commit() {
     let repo = Repo::new();
     let renamed = format!("{FH}{}", "\n\n# a comment\n".repeat(20));
     repo.commit(&[("old.py", Some(&renamed))]);
@@ -436,16 +468,19 @@ fn commit_without_a_revision_sees_a_rename_into_an_untracked_file_and_a_repo_wit
     )
     .unwrap();
     assert_eq!(
-        repo.weigh(&[]),
+        repo.pre_commit(&[]),
         "total +3\n+3  heavier  old.py -> new.py  h\n"
     );
 
     // No commit yet: against the empty tree.
     let fresh = Repo::new();
     fs::write(fresh.path().join("a.py"), F).unwrap();
-    assert_eq!(fresh.weigh(&[]), "total +103\n+103  added    a.py  f\n");
+    assert_eq!(
+        fresh.pre_commit(&[]),
+        "total +103\n+103  added    a.py  f\n"
+    );
     let json: serde_json::Value =
-        serde_json::from_str(&fresh.weigh(&["--format", "json"])).unwrap();
+        serde_json::from_str(&fresh.pre_commit(&["--format", "json"])).unwrap();
     assert_eq!(json["from"], serde_json::Value::Null);
     assert_eq!(json["to"], serde_json::Value::Null);
 }

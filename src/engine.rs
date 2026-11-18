@@ -61,11 +61,6 @@ impl Weighed {
         weighed
     }
 
-    /// Its test code's weights times `factor` (a commit's, times the test factor).
-    pub fn tests_times(self, factor: f64) -> Weighed {
-        self.times(1.0, factor)
-    }
-
     fn times(mut self, code: f64, tests: f64) -> Weighed {
         self.file *= code;
         self.file_tests *= tests;

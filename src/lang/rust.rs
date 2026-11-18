@@ -488,14 +488,12 @@ mod tests {
         assert_eq!(code.total, 103.0 + 100.0);
         assert_eq!(function(&code, "f"), 203.0);
         assert_eq!(code.file, 0.0);
-        let tests = weighed.clone().only(true);
+        let tests = weighed.only(true);
         assert_eq!(tests.total, 1.0 + 1000.0 + 103.0 + 100.0);
         assert_eq!(class(&tests, "tests"), 1000.0);
         assert_eq!(function(&tests, "tests.t"), 103.0);
         assert_eq!(function(&tests, "r"), 100.0);
         assert_eq!(tests.outside(), 1.0);
-        let halved = weighed.tests_times(0.5);
-        assert_eq!(halved.total, 203.0 + 1204.0 / 2.0);
     }
 
     #[test]
