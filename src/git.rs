@@ -53,9 +53,7 @@ pub fn resolve(repo: &Path, spec: &str) -> Result<Range> {
     let object = run(repo, &["cat-file", "commit", &to])?;
     let from = first_parent(&object).map(str::to_string);
     if let Some(parent) = &from {
-        let there = Command::new("git")
-            .arg("-C")
-            .arg(repo)
+        let there = git(repo)
             .args(["cat-file", "-e", &format!("{parent}^{{commit}}")])
             .stderr(Stdio::null())
             .status()
@@ -250,9 +248,7 @@ fn path_of(bytes: &[u8]) -> PathBuf {
 
 /// The contents of `blobs`, all through one `git cat-file --batch`.
 pub fn blobs(repo: &Path, blobs: &[&str]) -> Result<HashMap<String, Vec<u8>>> {
-    let mut child = Command::new("git")
-        .arg("-C")
-        .arg(repo)
+    let mut child = git(repo)
         .args(["cat-file", "--batch"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
