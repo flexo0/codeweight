@@ -70,7 +70,7 @@ mod tests {
         let weighed = weigh(
             "\"use strict\";                              // a directive: 0
              export const handler = async (req) => {     // file: statement 1; handler: function 100
-               const done = () => finish();              // a lambda: statement 1, lambda 50; call 2 × 2
+               const done = () => finish();              // a lambda: statement 1, lambda 50; call, its statement 3 × 2
                return done();                            // the last statement: 1, call 2
              };
              function* gen() { yield 1; }                // gen: 100, statement 1
@@ -85,7 +85,7 @@ mod tests {
              const K = class { k() {} };                 // file: statement 1; K: 1000; K.k: 100
              module.exports = { handler };               // file: statement 1",
         );
-        assert_eq!(function(&weighed, "handler"), 100.0 + 55.0 + 3.0);
+        assert_eq!(function(&weighed, "handler"), 100.0 + 57.0 + 3.0);
         assert_eq!(function(&weighed, "gen"), 101.0);
         assert_eq!(class(&weighed, "A"), 1003.0);
         assert_eq!(function(&weighed, "A.onClick"), 103.0);
@@ -105,14 +105,14 @@ mod tests {
                  <>                                      // a fragment: call 2
                    <h1>{title}</h1>                      // call 2
                    {ok && <B />}                         // bool_op 5, call 2
-                   {items.map((i) => <Li key={i} />)}    // call 2, lambda 50; call 2 × 2 at 1
+                   {items.map((i) => <Li key={i} />)}    // call 2, lambda 50; call and statement 3 × 2 at 1
                  </>
                );
              }",
         );
         assert_eq!(
             function(&weighed, "App"),
-            100.0 + 1.0 + 2.0 + 2.0 + 7.0 + 56.0
+            100.0 + 1.0 + 2.0 + 2.0 + 7.0 + 58.0
         );
     }
 

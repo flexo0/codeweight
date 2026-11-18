@@ -2,7 +2,7 @@
 
 use tree_sitter::Node;
 
-use super::{Lang, Nesting, Operator, Scope, ScopeKind, text};
+use super::{Lang, Nesting, Operator, Scope, ScopeKind, is_field_of, text};
 use crate::config::Category::{self, *};
 
 pub static JAVA: Lang = Lang {
@@ -19,7 +19,9 @@ pub static JAVA: Lang = Lang {
     parens: &["parenthesized_expression"],
     operator,
     exempt,
-    also_statement: |_| false,
+    also_statement: |node| {
+        node.kind() != "block" && is_field_of(node, &["lambda_expression"], "body")
+    },
     scope,
     tests: None,
 };
@@ -392,7 +394,8 @@ mod tests {
         let weighed = weigh(
             "class A {
                void f() {
-                 run(() -> g());                 // statement 1, call 2, lambda 50 at 0; g() 2 × 2 at 1
+                 run(() -> g());                 // statement 1, call 2, lambda 50 at 0; g() and its
+                                                 // statement (an expression body) 3 × 2 at 1
                  new Thread(new Runnable() {     // statement 1, calls 2 + 2
                    public void run() {           // in the anonymous class, in f: function 100 × 2 at 1
                      h();                        // 3 × 3 at 2
@@ -401,10 +404,10 @@ mod tests {
                }
              }",
         );
-        assert_eq!(function(&weighed, "A.f"), 100.0 + 57.0 + 5.0);
+        assert_eq!(function(&weighed, "A.f"), 100.0 + 59.0 + 5.0);
         assert_eq!(function(&weighed, "A.f.new Runnable.run"), 200.0 + 9.0);
         assert_eq!(class(&weighed, "A.f.new Runnable"), 0.0);
-        assert_eq!(weighed.total, 1000.0 + 162.0 + 209.0);
+        assert_eq!(weighed.total, 1000.0 + 164.0 + 209.0);
     }
 
     #[test]
@@ -545,6 +548,25 @@ mod tests {
             function(&weighed, "A.f"),
             100.0 + 10.0 * (1.0 + 2.0 + 4.0 + 8.0 + 8.0) + 3.0 * 8.0
         );
+    }
+
+    #[test]
+    fn a_flat_category_weighs_the_same_at_any_depth() {
+        let weights = WEIGHTS.replace("flat = []", "flat = [\"call\"]");
+        let weighed = weigh_under(&weights, DEEP);
+        assert_eq!(
+            function(&weighed, "A.f"),
+            100.0 + 10.0 * (1.0 + 2.0 + 3.0 + 4.0 + 4.0) + 1.0 * 4.0 + 2.0
+        );
+    }
+
+    #[test]
+    fn an_expression_body_weighs_as_a_block_returning_it() {
+        let expression = weigh("class A { void f() { run(x -> g(x)); } }");
+        let block = weigh("class A { void f() { run(x -> { return g(x); }); } }");
+        // statement 1, call 2, lambda 50 at 0; the body's statement 1 and call 2 at 1, × 2
+        assert_eq!(function(&expression, "A.f"), 100.0 + 53.0 + 6.0);
+        assert_eq!(function(&block, "A.f"), function(&expression, "A.f"));
     }
 
     #[test]

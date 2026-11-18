@@ -220,12 +220,12 @@ impl<'c> Weigher<'c> {
                     }
                 }),
             };
-            let mut base = category.map_or(0.0, |c| self.weights.weight(c));
-            if (self.lang.also_statement)(node) {
-                base += self.weights.weight(Category::Statement);
-            }
-            if base > 0.0 {
-                let weight = base * self.nesting.factor_at(frame.depth);
+            let weight = category
+                .into_iter()
+                .chain((self.lang.also_statement)(node).then_some(Category::Statement))
+                .map(|c| self.weights.weight(c) * self.nesting.factor_of(c, frame.depth))
+                .sum::<f64>();
+            if weight > 0.0 {
                 match entry {
                     Some(at) => entries[at].weight += weight,
                     None if test => file_tests += weight,

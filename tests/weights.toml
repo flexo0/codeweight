@@ -5,6 +5,7 @@
 model = "linear"   # nest(depth) = 1 + depth
 factor = 1
 max_depth = 3
+flat = []          # every category nests, so a hand-worked sum is weight × nest(depth); `flat` has its own tests
 
 [weights]
 statement = 1

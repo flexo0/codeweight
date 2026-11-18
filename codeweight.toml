@@ -2,7 +2,7 @@
 # every key of them, but weighs a branch 3 and a loop 2 (the defaults: 2 and 3). A file of your own is merged over the
 # defaults, so it needs only what it changes.
 #
-# weight(node) = weights[category(node)] * nest(min(depth, max_depth))
+# weight(node) = weights[category(node)] * nest(min(depth, max_depth)), nest 1 for a category of [nesting] flat
 # depth: the number of nesting constructs around the node (a branch, a loop, a try / catch / finally, a case,
 # a lambda, a function or class declared inside a function); a construct's head (condition, loop header, catch
 # parameter, case label) stays at its own depth, only its body is deeper.
@@ -11,6 +11,7 @@
 model = "linear"        # linear: 1 + factor * depth; exponential: factor ^ depth
 factor = 1.0
 max_depth = 10          # depth is capped here, so one deep method can't explode the total
+flat = ["call", "bool_op", "operator", "access"]  # weigh the same at any depth: a statement's parts
 
 [weights]               # the base weight of each category, for every language
 statement = 1

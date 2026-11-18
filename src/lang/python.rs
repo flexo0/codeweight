@@ -19,7 +19,7 @@ pub static PYTHON: Lang = Lang {
     parens: &["parenthesized_expression"],
     operator,
     exempt,
-    also_statement: |_| false,
+    also_statement,
     scope,
     tests: None,
 };
@@ -85,6 +85,22 @@ const NESTING: &[Nesting] = &[
     comprehension("dictionary_comprehension"),
     comprehension("generator_expression"),
 ];
+
+/// A lambda's body and a comprehension's element (a dict comprehension's pair): an expression body, its value,
+/// which weighs a statement as the `return` of it, or the loop's statement making it, would.
+fn also_statement(node: Node) -> bool {
+    is_field_of(
+        node,
+        &[
+            "lambda",
+            "list_comprehension",
+            "set_comprehension",
+            "dictionary_comprehension",
+            "generator_expression",
+        ],
+        "body",
+    )
+}
 
 /// `and` / `or`, a binary or unary operator (`not` too), a comparison (a chained one, `a < b < c`, is one run), a
 /// compound assignment.
@@ -204,7 +220,8 @@ def f(xs):
         h()                          # 6 at 1
     while a or b:                    # loop 20, bool_op 5
         break                        # jump 3 × 2
-    ys = [g(y) for y in xs if y]     # statement 1; its for: loop 20; the element's call 2 × 2, its if: branch 10 × 2
+    ys = [g(y) for y in xs if y]     # statement 1; its for: loop 20; the element's call and
+                                     # statement 3 × 2, its if: branch 10 × 2
     try:                             # try 30
         g()                          # 6
     except E as e:                   # catch 40
@@ -222,7 +239,7 @@ def f(xs):
         );
         assert_eq!(
             function(&weighed, "f"),
-            100.0 + 32.0 + 31.0 + 45.0 + 88.0 + 38.0 + 18.0 + 10.0
+            100.0 + 32.0 + 31.0 + 45.0 + 90.0 + 38.0 + 18.0 + 10.0
         );
     }
 
@@ -243,7 +260,7 @@ class A:                             # class 1000; a bare decorator 0
             if y:                    # its body nests: branch 10 × 2 at 1
                 return 1             # an early return: jump 3 × 3 at 2
             return 2                 # its last statement: 1 × 2 at 1
-        f = lambda v: v + g()        # A.m: statement 1, lambda 50; call 2 × 2 at 1
+        f = lambda v: v + g()        # A.m: statement 1, lambda 50; call, statement 3 × 2 at 1
         return f                     # its last statement: 1
 
     def stub(self): ...              # A.stub: 100; a bare ... weighs nothing
@@ -251,7 +268,7 @@ class A:                             # class 1000; a bare decorator 0
         );
         assert_eq!(weighed.file, 3.0);
         assert_eq!(class(&weighed, "A"), 1003.0);
-        assert_eq!(function(&weighed, "A.m"), 100.0 + 1.0 + 54.0 + 1.0);
+        assert_eq!(function(&weighed, "A.m"), 100.0 + 1.0 + 56.0 + 1.0);
         assert_eq!(function(&weighed, "A.m.inner"), 100.0 + 20.0 + 9.0 + 2.0);
         assert_eq!(function(&weighed, "A.stub"), 100.0);
         assert_eq!(weighed.entries.len(), 4);

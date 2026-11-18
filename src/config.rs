@@ -17,7 +17,8 @@ pub const DEFAULTS: &str = include_str!("default.toml");
 pub const FILE_NAME: &str = "codeweight.toml";
 
 /// What an element of code is, for its base weight.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Category {
     Statement,
     Call,
@@ -96,9 +97,21 @@ pub struct Nesting {
     pub model: Model,
     pub factor: f64,
     pub max_depth: u32,
+    /// The categories that weigh the same at any depth: the parts of a statement, whose statement already weighs
+    /// its depth.
+    pub flat: Vec<Category>,
 }
 
 impl Nesting {
+    /// The multiplier of a `category`'s base weight at `depth`: 1 for a flat one.
+    pub fn factor_of(&self, category: Category, depth: u32) -> f64 {
+        if self.flat.contains(&category) {
+            1.0
+        } else {
+            self.factor_at(depth)
+        }
+    }
+
     /// The multiplier of a node's base weight at `depth`, capped at `max_depth`.
     pub fn factor_at(&self, depth: u32) -> f64 {
         let depth = depth.min(self.max_depth);
@@ -486,12 +499,13 @@ mod tests {
         assert!(error_of("[weights]\nloop = -1\n").contains("0 or above"));
         assert!(error_of("[weights]\nloop = \"3\"\n").contains("invalid type"));
         assert!(error_of("[nesting]\nmodel = \"cubic\"\n").contains("cubic"));
+        assert!(error_of("[nesting]\nflat = [\"calls\"]\n").contains("calls"));
     }
 
     #[test]
     fn a_file_on_its_own_must_set_every_category() {
         let error = Config::from_str_alone(
-            "[nesting]\nmodel = \"linear\"\nfactor = 1\nmax_depth = 3\n[weights]\nstatement = 1\n\
+            "[nesting]\nmodel = \"linear\"\nfactor = 1\nmax_depth = 3\nflat = []\n[weights]\nstatement = 1\n\
              [files]\nexclude = []\ntest_globs = []\n",
         )
         .unwrap_err();
@@ -504,14 +518,18 @@ mod tests {
             model: Model::Linear,
             factor: 0.5,
             max_depth: 2,
+            flat: vec![Category::Call],
         };
         assert_eq!(linear.factor_at(0), 1.0);
         assert_eq!(linear.factor_at(1), 1.5);
         assert_eq!(linear.factor_at(5), 2.0);
+        assert_eq!(linear.factor_of(Category::Statement, 1), 1.5);
+        assert_eq!(linear.factor_of(Category::Call, 1), 1.0);
         let exponential = Nesting {
             model: Model::Exponential,
             factor: 2.0,
             max_depth: 3,
+            flat: vec![],
         };
         assert_eq!(exponential.factor_at(0), 1.0);
         assert_eq!(exponential.factor_at(2), 4.0);

@@ -41,7 +41,9 @@ pub(super) const BASE: Lang = Lang {
     parens: &["parenthesized_expression"],
     operator,
     exempt,
-    also_statement: |_| false,
+    also_statement: |node| {
+        node.kind() != "statement_block" && is_field_of(node, &["arrow_function"], "body")
+    },
     scope,
     tests: None,
 };
@@ -312,25 +314,25 @@ mod tests {
     fn an_arrow_bound_to_a_name_at_the_file_s_or_a_class_s_level_is_a_function() {
         let weighed = weigh(
             "export const handler = async (req: R) => {   // file: statement 1; handler: function 100
-               const done = () => finish();              // in a function, a lambda: statement 1, lambda 50; call 2 × 2
+               const done = () => finish();              // in a function, a lambda: statement 1, lambda 50; call, statement 3 × 2
                if (req.ok) return done();                // branch 10; an early return: jump 3 × 2; call 2 × 2
                return null;                              // the last statement: 1
              };
-             const twice = (x: number) => x * 2;         // file: statement 1; twice: function 100
-             items.forEach((i) => use(i));               // file: statement 1, call 2, lambda 50; call 2 × 2
+             const twice = (x: number) => x * 2;         // file: statement 1; twice: function 100, statement 1
+             items.forEach((i) => use(i));               // file: statement 1, call 2, lambda 50; call, statement 3 × 2
              class A {                                   // class 1000
                onClick = () => { this.go(); };           // A: statement 1; A.onClick: 100, its body not deeper: 3
                #p = function () { return 1; };           // A: statement 1; A.#p: 100 + 1
-               m() { const cb = () => 1; }               // A.m: 100, statement 1, lambda 50
+               m() { const cb = () => 1; }               // A.m: 100, statement 1, lambda 50; statement 1 × 2
              }",
         );
-        assert_eq!(function(&weighed, "handler"), 100.0 + 55.0 + 20.0 + 1.0);
-        assert_eq!(function(&weighed, "twice"), 100.0);
-        assert_eq!(weighed.file, 1.0 + 1.0 + 57.0);
+        assert_eq!(function(&weighed, "handler"), 100.0 + 57.0 + 20.0 + 1.0);
+        assert_eq!(function(&weighed, "twice"), 101.0);
+        assert_eq!(weighed.file, 1.0 + 1.0 + 59.0);
         assert_eq!(class(&weighed, "A"), 1002.0);
         assert_eq!(function(&weighed, "A.onClick"), 103.0);
         assert_eq!(function(&weighed, "A.#p"), 101.0);
-        assert_eq!(function(&weighed, "A.m"), 151.0);
+        assert_eq!(function(&weighed, "A.m"), 153.0);
         assert_eq!(weighed.entries.len(), 6);
     }
 
@@ -340,7 +342,7 @@ mod tests {
             "\"use strict\";                              // a directive: 0
              namespace N {                               // N: class 1000 (its statement 0)
                export function f() {}                    // N.f: 100
-               export const h = () => 1;                 // N: statement 1; N.h: 100
+               export const h = () => 1;                 // N: statement 1; N.h: 100, statement 1
              }
              interface I { m(): void; p: number; }       // I: 1000, the property 1; I.m: 100
              function o(a: string): void;                // o: 100, three times
@@ -355,7 +357,7 @@ mod tests {
         );
         assert_eq!(class(&weighed, "N"), 1001.0);
         assert_eq!(function(&weighed, "N.f"), 100.0);
-        assert_eq!(function(&weighed, "N.h"), 100.0);
+        assert_eq!(function(&weighed, "N.h"), 101.0);
         assert_eq!(class(&weighed, "I"), 1001.0);
         assert_eq!(function(&weighed, "I.m"), 100.0);
         assert_eq!(function(&weighed, "o"), 300.0);
@@ -373,12 +375,12 @@ mod tests {
             "@Component({ selector: \"x\" })    // the export's: the file's call 2
              export class C {                  // 1000
                @Input() name = 1;              // C: statement 1, call 2
-               @HostListener(\"click\", () => 1) // beside the method: C's call 2, lambda 50
+               @HostListener(\"click\", () => 1) // beside the method: C's call 2, lambda 50, statement 1 × 2
                onClick(@Inject(T) t) {}        // C.onClick: 100, the parameter's call 2
              }",
         );
         assert_eq!(weighed.file, 2.0);
-        assert_eq!(class(&weighed, "C"), 1000.0 + 3.0 + 52.0);
+        assert_eq!(class(&weighed, "C"), 1000.0 + 3.0 + 54.0);
         assert_eq!(function(&weighed, "C.onClick"), 102.0);
     }
 
@@ -391,14 +393,14 @@ mod tests {
                  <>                                      // a fragment: call 2
                    <h1>{title}</h1>                      // call 2
                    {ok && <B />}                         // bool_op 5, call 2
-                   {items.map((i) => <Li key={i} />)}    // call 2, lambda 50; call 2 × 2 at 1
+                   {items.map((i) => <Li key={i} />)}    // call 2, lambda 50; call and statement 3 × 2 at 1
                  </>
                );
              }",
         );
         assert_eq!(
             function(&weighed, "App"),
-            100.0 + 1.0 + 2.0 + 2.0 + 7.0 + 56.0
+            100.0 + 1.0 + 2.0 + 2.0 + 7.0 + 58.0
         );
     }
 

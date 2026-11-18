@@ -40,6 +40,7 @@ Built (`config`, `config::find`):
 model = "linear"        # linear: 1 + factor * depth; exponential: factor ^ depth
 factor = 1.0
 max_depth = 10          # depth is capped here, so one deep method can't explode the total
+flat = ["call", "bool_op", "operator", "access"]  # weigh the same at any depth: a statement's parts
 
 [weights]               # the base weight of each category, for every language
 statement = 1

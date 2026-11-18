@@ -144,7 +144,7 @@ fn scan_walks_a_folder_its_excludes_and_tests_left_out_and_scan_tests_weighs_the
     for (file, text) in [
         // Under the defaults: f is function 2, statement 1, call 0.5.
         ("src/a.py", "def f():\n    g()\n"),
-        // h is function 2 and its call 0.5; the file's declaration statement 1.
+        // h is function 2, its call 0.5 and its body's statement 1; the file's declaration statement 1.
         ("src/b.ts", "export const h = () => g();\n"),
         // A test: t is 3.5.
         ("tests/test_a.py", "def t():\n    g()\n"),
@@ -163,22 +163,22 @@ fn scan_walks_a_folder_its_excludes_and_tests_left_out_and_scan_tests_weighs_the
 
     let output = codeweight(root, &["scan", "."]);
     assert!(output.status.success(), "{}", stderr(&output));
-    assert_eq!(stdout(&output), "10.5\n");
+    assert_eq!(stdout(&output), "11.5\n");
 
     let verbose = codeweight(root, &["scan", ".", "--verbose"]);
     assert_eq!(
         stdout(&verbose),
-        "total 10.5\n\
+        "total 11.5\n\
          3.5  src/a.py  f\n\
+         3.5  src/b.ts  h\n\
          3.5  src/c.rs  c\n\
-         2.5  src/b.ts  h\n\
          \x20 1  src/b.ts  (file)\n"
     );
 
     let by_file = codeweight(root, &["scan", "src", "tests", "--by", "file"]);
     assert_eq!(
         stdout(&by_file),
-        "total 10.5\n3.5  src/a.py\n3.5  src/b.ts\n3.5  src/c.rs\n"
+        "total 11.5\n4.5  src/b.ts\n3.5  src/a.py\n3.5  src/c.rs\n"
     );
 
     let tests = codeweight(root, &["scan-tests", "."]);

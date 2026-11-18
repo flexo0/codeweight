@@ -171,6 +171,7 @@ you set reaches every language):
 model = "linear"        # linear: 1 + factor * depth; exponential: factor ^ depth
 factor = 1.0
 max_depth = 10          # depth is capped here, so one deep method can't explode the total
+flat = ["call", "bool_op", "operator", "access"]  # weigh the same at any depth: a statement's parts
 
 [weights]               # the base weight of each category, for every language
 statement = 1
@@ -207,7 +208,10 @@ test_globs = [
 
 The defaults were tuned on real Java, TypeScript and Python code (and re-checked on Rust) so that the heaviest functions are the hardest
 ones: a call weighs half a statement (a long chain of getters or a flat run of setters is long, not hard), and each
-level of nesting adds a whole base weight (`factor = 1.0`), so nested control flow outweighs flat code. An
+level of nesting adds a whole base weight (`factor = 1.0`), so nested control flow outweighs flat code. Nesting
+multiplies the structure only (statements, branches, loops, jumps, lambdas, ...): a statement's parts, its calls,
+operators, accesses and `&&` / `||` (`[nesting] flat`), weigh the same at any depth, since their statement already
+weighs its depth; a long statement in a loop is long, not harder for the loop. An
 operator and a field access weigh a quarter: `a = (b + c) * d` weighs more than `a = b`, `obj.a.b` more than
 `obj.a`, but an expression's detail stays below its control flow. A function's own weight is a lambda's, 2: a getter
 weighs 3, its signature not most of it, and a class of getters and setters stays below one of logic. A `try` weighs
@@ -216,7 +220,7 @@ weighs 3, its signature not most of it, and a class of getters and setters stays
 ### The weight
 
 ```
-weight(node) = weights[category(node)] × nest(min(depth, max_depth))
+weight(node) = weights[category(node)] × nest(min(depth, max_depth))    nest = 1 for a category of [nesting] flat
 ```
 
 `depth` is the number of nesting constructs around a node: a branch, a loop, a `try` / `catch` / `finally`, a
@@ -233,7 +237,7 @@ node kind is a tree-sitter one, as the language's grammar names it.
 
 | Category | Java | TypeScript, TSX, JavaScript | Python | Rust | Go |
 |---|---|---|---|---|---|
-| `statement` | an expression statement, a local variable, a field, a `return` that ends its function or lambda, `yield`, `assert`, `synchronized`, an enum constant | an expression statement, `const` / `let` / `var`, a class field, an interface's property, a `type` alias, a `return` that ends its function | an expression statement (an assignment too; not a docstring or a bare `...`), `assert`, `del`, a `type` alias, a `return` that ends its function | an expression statement, `let`, `const`, `static`, a `type` alias, a field, an enum variant, a block's tail expression (its value, no `;`), a `return` that ends its function or closure | an expression statement, an assignment, `:=`, each `var` / `const` spec, a send, `defer`, `go`, a type alias, a field, `i++` / `x += 1` (an `operator` too; not as a `for` clause's update), a `return` that ends its function or literal |
+| `statement` | an expression statement, a local variable, a field, a `return` that ends its function or lambda, a lambda's expression body (`x -> f(x)`, as `{ return f(x); }`), `yield`, `assert`, `synchronized`, an enum constant | an expression statement, `const` / `let` / `var`, a class field, an interface's property, a `type` alias, a `return` that ends its function, an arrow's expression body (`x => f(x)`) | an expression statement (an assignment too; not a docstring or a bare `...`), `assert`, `del`, a `type` alias, a `return` that ends its function, a lambda's body, a comprehension's element | an expression statement, `let`, `const`, `static`, a `type` alias, a field, an enum variant, a block's tail expression (its value, no `;`), a closure's expression body, a `match` arm's value that is no block, a `return` that ends its function or closure | an expression statement, an assignment, `:=`, each `var` / `const` spec, a send, `defer`, `go`, a type alias, a field, `i++` / `x += 1` (an `operator` too; not as a `for` clause's update), a `return` that ends its function or literal |
 | `call` | a method call, `new`, `this(...)` / `super(...)` | a call, `new`; in TSX and JavaScript each JSX element | a call | a call, a macro invocation (its arguments aren't parsed) | a call |
 | `branch` | `if`, a ternary `?:`, each `switch` case | `if`, a ternary `?:`, each `switch` case | `if`, `elif`, `x if c else y`, each `match` case, a comprehension's `if` | `if` (`if let` too), each `match` arm | `if`, each `switch`, type switch or `select` case |
 | `loop` | `for`, for-each, `while`, `do` | `for`, `for ... in` / `of`, `while`, `do` | `for`, `while`, a comprehension's `for` | `for`, `while`, `loop` | `for` |

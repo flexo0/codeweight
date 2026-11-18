@@ -1,7 +1,7 @@
 # The weight
 
 ```
-weight(node) = base[category(node)] × nest(min(depth, max_depth))
+weight(node) = base[category(node)] × nest(min(depth, max_depth)), nest 1 for a category of [nesting] flat
 total        = Σ weight(node) over the nodes that have a category
 ```
 
@@ -11,6 +11,16 @@ total        = Σ weight(node) over the nodes that have a category
   label, try's resources) stays at the construct's depth, so the same condition weighs the same wherever it is. A
   `for`'s condition and update stay at the loop's depth although they run on every pass. A catch or finally clause
   is at its try's depth (it is beside the try's body, not in it), its block one deeper.
+- Depth multiplies the structure, not a statement's parts: the categories of `[nesting] flat` (by default `call`,
+  `bool_op`, `operator`, `access`) weigh their base weight at any depth. The statement around them already weighs
+  its depth, so multiplying its parts too would charge the depth again for each of them, and a long statement in a
+  loop would weigh more for the loop than a short one; it is long, not harder for being nested. (Cognitive
+  Complexity does the same: its nesting increment is for structure, a run of `&&` / `||` +1 flat.)
+- An expression body is a statement, as the `return` of its value would be: a lambda's (`x -> f(x)` weighs as
+  `x -> { return f(x); }`), a Rust arm's value or closure's body that is no block (`=> f(x)` as `=> { f(x) }`), a
+  Python comprehension's element (as the loop's statement making it). It holds a statement's place in a construct's
+  deeper body, so without one its depth would weigh nothing once its parts are flat. A ternary's values are no
+  statements: a ternary is an expression in a statement, which weighs it. The language's `also_statement` hook.
 - `else if` chains and `switch` / `match` cases are siblings of one level, not deeper ones. The switch itself is not
   a nesting construct; each case is (a branch, its statements one deeper). An `if` directly in an if's `alternative`
   stays at that if's depth; an `if` inside an `else { }` block is nested. A ternary chained in a ternary's

@@ -65,3 +65,12 @@ Built: milestones 0-11 (the repo, the CLI and the config, the engine and Java, T
     The test globs gained `*_test.go`, the excludes `vendor` (`go mod vendor`'s copies of the dependencies) and
     the generated Go files that sit by the source, `*.pb.go` (protobuf) and `zz_generated*.go` (Kubernetes'
     generators). The defaults are untuned on Go.
+12. (built) Depth multiplies the structure, not a statement's parts: `[nesting] flat` ([weight.md](weight.md)), by
+    default `call`, `bool_op`, `operator` and `access`, which weigh the same at any depth, as their statement
+    already weighs its depth. An expression body (a lambda's, a Rust arm's value, a Python comprehension's element)
+    became a statement, so its depth still weighs and `x -> f(x)` weighs as `x -> { return f(x); }`. The engine's
+    test weights set `flat = []`, so the hand-worked sums are still `weight × nest(depth)`. Re-checked on
+    codeweight, GraphHopper, jsprit, OptaPlanner, a TS / JS app, a Python and a Rust app: the totals fell 6 to 17%
+    (codeweight's rose 3%, its Rust `match` tables of one-value arms now weighing a statement an arm, as Java's
+    `case X: return "x";`), the functions' order held (Spearman 0.998 to 0.9997, 9 or 10 of the top 10 kept), the
+    deep ones fell most (a nested function of long statements by a third). The factor held at 1.0.

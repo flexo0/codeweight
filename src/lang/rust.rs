@@ -19,7 +19,7 @@ pub static RUST: Lang = Lang {
     parens: &["parenthesized_expression"],
     operator,
     exempt,
-    also_statement: tail,
+    also_statement: |node| tail(node) || value(node),
     scope,
     tests: Some(tests),
 };
@@ -168,6 +168,14 @@ fn tail(node: Node) -> bool {
     })
 }
 
+/// A closure's body or a match arm's value that is an expression, no block or construct ending in one nor a jump
+/// (see `BARE`): its value, as a block's tail is.
+fn value(node: Node) -> bool {
+    !BARE.contains(&node.kind())
+        && (is_field_of(node, &["closure_expression"], "body")
+            || is_field_of(node, &["match_arm"], "value"))
+}
+
 /// A struct, enum, union, trait or module (with a body) by its name; an `impl` block by its type's name, so a type's
 /// struct and its `impl` blocks (`impl Foo`, `impl Trait for Foo`) are one class; a function, a method or a trait's
 /// signature by its name.
@@ -312,18 +320,18 @@ mod tests {
                }
                let n = match xs.len() {           // statement 1, call 2
                  0 => return Err(E),              // branch 10; at 1: an early return, jump 3 × 2, call 2 × 2
-                 1 => xs[0],                      // branch 10
+                 1 => xs[0],                      // branch 10; the value: statement 1 × 2 at 1
                  n if n > 9 => { h(); n }         // branch 10; at 1: statement 1 × 2, call 2 × 2, the tail 1 × 2
-                 _ => 0,                          // branch 10
+                 _ => 0,                          // branch 10, 1 × 2
                };
-               let c = |y: i32| y + n;            // statement 1, lambda 50
+               let c = |y: i32| y + n;            // statement 1, lambda 50; the body: statement 1 × 2
                let d = |y: i32| { k(y); y };      // statement 1, lambda 50; at 1: 6, the tail 1 × 2
                Ok(c(1) + d(2))                    // the tail: statement 1, call 2 × 3
              }",
         );
         assert_eq!(
             function(&weighed, "f"),
-            100.0 + 34.0 + 74.0 + (3.0 + 20.0 + 10.0 + 18.0 + 10.0) + 51.0 + 59.0 + 7.0
+            100.0 + 34.0 + 74.0 + (3.0 + 20.0 + 12.0 + 18.0 + 12.0) + 53.0 + 59.0 + 7.0
         );
     }
 
@@ -432,6 +440,18 @@ mod tests {
             function(&weighed, "A.f"),
             100.0 + 19.0 + 1.0 + 10.0 + 12.0 + 19.0
         );
+    }
+
+    #[test]
+    fn an_arm_s_value_and_a_closure_s_body_weigh_as_a_block_ending_in_them() {
+        let weighed = weigh(
+            "fn e(x: i32) -> i32 { match x { 1 => g(x), _ => k(|y| y) } }
+             fn b(x: i32) -> i32 { match x { 1 => { g(x) } _ => { k(|y| { y }) } } }",
+        );
+        // The match, the body's last, is a statement (no tail); per arm: branch 10, at 1 the value's statement 1
+        // and call 2, × 2; the closure: lambda 50 at 1, × 2, its body's statement 1 at 2, × 3.
+        assert_eq!(function(&weighed, "e"), 100.0 + 16.0 + 16.0 + 100.0 + 3.0);
+        assert_eq!(function(&weighed, "b"), function(&weighed, "e"));
     }
 
     #[test]

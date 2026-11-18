@@ -57,8 +57,10 @@ pub struct Lang {
     /// a `match` case's guard, a call's callee, `this.x`).
     pub exempt: fn(Node, &[u8]) -> bool,
     /// Whether a node weighs a statement beside its own kind's category: Rust's block that ends in a value, an
-    /// expression without its `;` (as the `return` of that value would); Go's `i++` and `x += 1`, statements that
-    /// are their own operator (as Java's `x++;` is a statement and an operator).
+    /// expression without its `;` (as the `return` of that value would); an expression body (a lambda's, a Rust
+    /// arm's value, a Python comprehension's element), which is no statement but holds the place of one, so that
+    /// its depth weighs as a block's statement's would; Go's `i++` and `x += 1`, statements that are their own
+    /// operator (as Java's `x++;` is a statement and an operator).
     pub also_statement: fn(Node) -> bool,
     /// The function or class a node declares, if it does one, and its own name (not qualified). A lambda it names
     /// a function is one: it weighs as a function, and nests as one, not as a lambda.

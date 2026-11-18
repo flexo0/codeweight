@@ -47,7 +47,8 @@ which are Java's as they stand.
 - `for` and `while` are loops, their `else` beside the body, its block deeper. `try` and `with` are `try`, each
   `except` a catch.
 - A comprehension (list, set, dict, generator): each `for` is a loop, each `if` a branch; its element and its `if`s
-  are one deeper, its `for`s (their iterables) at its depth.
+  are one deeper, its `for`s (their iterables) at its depth. Its element (a dict comprehension's pair) is a
+  statement, as the loop's statement making it would be; a lambda's body is one too ([weight.md](weight.md)).
 - `match` is no nesting construct; each `case` is a branch, its body deeper, its guard (`case x if c`) no branch of
   its own (exempt), its condition at the case's depth.
 - `and` / `or` are the logical operators (`not` starts a new run: it is a unary `operator`). `raise` is a jump.
@@ -67,10 +68,11 @@ which are Java's as they stand.
   own: the type's declaration does, so a struct with three `impl` blocks weighs one class, and an `impl` of a type
   declared elsewhere only its contents. A type that is no path (`impl T for [u8]`) is named by its text.
 - A closure is a lambda, even bound to a name (`let f = |x| ...`), its body deeper; an expression body (`|x| x + 1`)
-  is no statement, as a Java lambda's.
+  is a statement, as a Java lambda's ([weight.md](weight.md)).
 - `if` (`if let` too) nests its consequence; its `else` is a clause beside it, as TS's: its block deeper, its `if`
   (`else if`) at the depth. `match` is no nesting construct; each arm is a branch, its pattern and guard at the arm's
-  depth, its value deeper. `for`, `while` (`while let`), `loop` are loops; a label (`'outer:`) weighs nothing.
+  depth, its value deeper and a statement when it is no block (`=> f(x)` weighs as `=> { f(x) }`), nor an
+  expression ending in one (`if`, `match`, a loop) or a jump. `for`, `while` (`while let`), `loop` are loops; a label (`'outer:`) weighs nothing.
 - `&&` / `||` are the logical operators; a let chain (`if let Some(x) = a && x > 0`) is a run of `&&`. `-x` and
   `!x` are unary operators; `*x` and `&x` are none. `access` counts a field (`a.b`, `a.0`) and an index (`a[i]`); a
   method call's callee (`a.f()`) is the call's, a path (`a::b`) no access.
