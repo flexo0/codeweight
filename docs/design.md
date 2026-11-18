@@ -1,7 +1,7 @@
 # codeweight: the design
 
-Built: milestones 0-8 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
-`commit`, the reports, the tuned defaults, Rust).
+Built: milestones 0-9 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
+`commit`, the reports, the tuned defaults, Rust, operators and accesses).
 Once a part is built, its section is rewritten as a reference (what it is, why so, what is left).
 
 ## 1. The CLI
