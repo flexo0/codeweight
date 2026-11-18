@@ -6,6 +6,11 @@ rust-version = "1.100"
 description = "Weighs code: every element by its weight, heavier when nested, for files, folders and a commit's net delta"
 license = "MIT"
 readme = "README.md"
+authors = ["Dmitriy Churilov"]
+repository = "https://github.com/flexo0/codeweight"
+homepage = "https://github.com/flexo0/codeweight"
+keywords = ["code-metrics", "complexity", "static-analysis", "tree-sitter", "cli"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 anyhow = "1"
