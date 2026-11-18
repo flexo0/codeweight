@@ -20,6 +20,7 @@ pub static GO: Lang = Lang {
     operator,
     exempt,
     also_statement,
+    parameters,
     scope,
     tests: None,
 };
@@ -171,6 +172,33 @@ fn receiver(method: Node) -> Option<Node> {
     let mut cursor = list.walk();
     list.named_children(&mut cursor)
         .find(|c| c.kind() == "parameter_declaration")
+}
+
+/// A function's, a method's, a `func` literal's or an interface method's parameters, each name one (`a, b int` is
+/// two, an unnamed `int` one); not its receiver's, its results' or a function type's.
+fn parameters(node: Node, _: &[u8]) -> usize {
+    let owners = &[
+        "function_declaration",
+        "method_declaration",
+        "func_literal",
+        "method_elem",
+    ];
+    if node.kind() != "parameter_list" || !is_field_of(node, owners, "parameters") {
+        return 0;
+    }
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor)
+        .filter(|c| {
+            matches!(
+                c.kind(),
+                "parameter_declaration" | "variadic_parameter_declaration"
+            )
+        })
+        .map(|c| {
+            let mut names = c.walk();
+            c.children_by_field_name("name", &mut names).count().max(1)
+        })
+        .sum()
 }
 
 /// A type definition by its name; a function by its name; a method by its receiver's type and its name (`T.M` for
@@ -436,5 +464,27 @@ mod tests {
         let weighed = testing::weigh_under(&GO, WEIGHTS, "package p\nfunc (r *T) m() { g( }");
         assert!(!weighed.clean);
         assert!(weighed.total > 0.0);
+    }
+
+    #[test]
+    fn parameters_weigh_by_their_place() {
+        let weighed = testing::weigh_parameters(
+            &GO,
+            "package p
+
+             func f(a, b int, c string) {}                    // f: 100; a name each: 10 + 15 + 20
+             func (s *S) m(x int) (int, error) { return 0, nil } // S.m: 100; the receiver and results none, x 10;
+                                                              // the last return: statement 1
+             func v(xs ...int) {                              // v: 100, 10
+               g := func(y int) {}                            // statement 1, lambda 50, 10
+               _ = g                                          // statement 1
+             }",
+        );
+        assert_eq!(function(&weighed, "f"), 145.0);
+        assert_eq!(function(&weighed, "S.m"), 111.0);
+        assert_eq!(
+            function(&weighed, "v"),
+            100.0 + 10.0 + 1.0 + 50.0 + 10.0 + 1.0
+        );
     }
 }

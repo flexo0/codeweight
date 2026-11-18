@@ -2,7 +2,10 @@
 
 use tree_sitter::Node;
 
-use super::{Lang, Nesting, Operator, Scope, ScopeKind, is_field_of, last_child, only_child, text};
+use super::{
+    Lang, Nesting, Operator, Scope, ScopeKind, count_children, is_field_of, last_child, only_child,
+    text,
+};
 use crate::config::Category::{self, *};
 
 pub static RUST: Lang = Lang {
@@ -20,6 +23,7 @@ pub static RUST: Lang = Lang {
     operator,
     exempt,
     also_statement: |node| tail(node) || value(node),
+    parameters,
     scope,
     tests: Some(tests),
 };
@@ -174,6 +178,19 @@ fn value(node: Node) -> bool {
     !BARE.contains(&node.kind())
         && (is_field_of(node, &["closure_expression"], "body")
             || is_field_of(node, &["match_arm"], "value"))
+}
+
+/// A function's or a closure's parameters, `self` aside; not a function pointer type's (`fn(i32) -> i32`).
+fn parameters(node: Node, _: &[u8]) -> usize {
+    match node.kind() {
+        "parameters" if !node.parent().is_some_and(|p| p.kind() == "function_type") => {
+            count_children(node, |c| {
+                matches!(c.kind(), "parameter" | "variadic_parameter")
+            })
+        }
+        "closure_parameters" => count_children(node, |_| true),
+        _ => 0,
+    }
 }
 
 /// A struct, enum, union, trait or module (with a body) by its name; an `impl` block by its type's name, so a type's
@@ -512,5 +529,25 @@ mod tests {
         let weighed = testing::weigh_under(&RUST, WEIGHTS, "impl A { fn m() { g( } ");
         assert!(!weighed.clean);
         assert!(weighed.total > 0.0);
+    }
+
+    #[test]
+    fn parameters_weigh_by_their_place() {
+        let weighed = testing::weigh_parameters(
+            &RUST,
+            "fn f(a: i32, b: i32, c: i32) {}                  // f: 100; 10 + 15 + 20
+             struct S;                                       // S: 1000
+             impl S { fn m(&self, x: i32) {} }               // S.m: 100; self none, x 10
+             fn p(g: fn(i32, i32) -> i32) {                  // p: 100, 10; a function type's none
+               let c = |x, y: i32| x;                        // statement 1, lambda 50, 10 + 15, the body's 1 × 2
+             }",
+        );
+        assert_eq!(function(&weighed, "f"), 145.0);
+        assert_eq!(class(&weighed, "S"), 1000.0);
+        assert_eq!(function(&weighed, "S.m"), 110.0);
+        assert_eq!(
+            function(&weighed, "p"),
+            100.0 + 10.0 + 1.0 + 50.0 + 25.0 + 2.0
+        );
     }
 }

@@ -77,6 +77,7 @@ pub struct Weigher<'c> {
     lang: &'static Lang,
     weights: &'c LangConfig,
     nesting: &'c config::Nesting,
+    parameters: &'c config::Parameters,
     grammar: tree_sitter::Language,
     /// By node kind id: its category, the language's table with the weights file's `node_kinds` over it.
     categories: Vec<Option<Category>>,
@@ -131,6 +132,7 @@ impl<'c> Weigher<'c> {
             lang,
             weights,
             nesting: &config.nesting,
+            parameters: &config.parameters,
             grammar,
             categories,
             constructs,
@@ -224,7 +226,8 @@ impl<'c> Weigher<'c> {
                 .into_iter()
                 .chain((self.lang.also_statement)(node).then_some(Category::Statement))
                 .map(|c| self.weights.weight(c) * self.nesting.factor_of(c, frame.depth))
-                .sum::<f64>();
+                .sum::<f64>()
+                + self.parameters((self.lang.parameters)(node, source), frame.depth);
             if weight > 0.0 {
                 match entry {
                     Some(at) => entries[at].weight += weight,
@@ -294,6 +297,15 @@ impl<'c> Weigher<'c> {
             entries,
             clean: !root.has_error(),
         })
+    }
+
+    /// The weight of `count` parameters at `depth`, each by its place.
+    fn parameters(&self, count: usize, depth: u32) -> f64 {
+        let base = self.weights.weight(Category::Parameter)
+            * self.nesting.factor_of(Category::Parameter, depth);
+        (0..count)
+            .map(|place| base * self.parameters.factor_at(place))
+            .sum()
     }
 
     /// Whether a return is early: not the last statement of its function's or lambda's body (the statement it is

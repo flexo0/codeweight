@@ -2,7 +2,10 @@
 
 use tree_sitter::Node;
 
-use super::{Children, Lang, Nesting, Operator, Scope, ScopeKind, is_field_of, only_child, text};
+use super::{
+    Children, Lang, Nesting, Operator, Scope, ScopeKind, count_children, first_child, is_field_of,
+    only_child, text,
+};
 use crate::config::Category::{self, *};
 
 pub static PYTHON: Lang = Lang {
@@ -20,6 +23,7 @@ pub static PYTHON: Lang = Lang {
     operator,
     exempt,
     also_statement,
+    parameters,
     scope,
     tests: None,
 };
@@ -100,6 +104,27 @@ fn also_statement(node: Node) -> bool {
         ],
         "body",
     )
+}
+
+/// A function's or a lambda's parameters (`*args` and `**kwargs` each one), its first one aside when it is `self` or
+/// `cls` (as `self.x` is no access); a bare `*` or `/` is no parameter, only where the others are.
+fn parameters(node: Node, source: &[u8]) -> usize {
+    if !matches!(node.kind(), "parameters" | "lambda_parameters") {
+        return 0;
+    }
+    let all = count_children(node, |c| {
+        !matches!(c.kind(), "keyword_separator" | "positional_separator")
+    });
+    let receiver = first_child(node).is_some_and(|first| {
+        let name = match first.kind() {
+            "typed_parameter" => first.named_child(0),
+            _ => Some(first),
+        };
+        name.is_some_and(|n| {
+            n.kind() == "identifier" && matches!(&source[n.byte_range()], b"self" | b"cls")
+        })
+    });
+    all - usize::from(receiver)
 }
 
 /// `and` / `or`, a binary or unary operator (`not` too), a comparison (a chained one, `a < b < c`, is one run), a
@@ -333,5 +358,33 @@ class A:                             # class 1000; a bare decorator 0
         let weighed = testing::weigh_under(&PYTHON, WEIGHTS, "def f(:\n    g()\n");
         assert!(!weighed.clean);
         assert!(weighed.total > 0.0);
+    }
+
+    #[test]
+    fn parameters_weigh_by_their_place() {
+        let weighed = testing::weigh_parameters(
+            &PYTHON,
+            r#"
+def f(a, b: int, c=1, *args, d, **kw):  # f: 100; 10 + 15 + 20 + 20 + 20 + 20
+    pass
+def g(a, /, b, *, c):                   # g: 100; the bare / and * none: 10 + 15 + 20
+    pass
+class A:                                # A: 1000
+    def m(self, x):                     # A.m: 100; self none, x 10
+        pass
+    def k(cls):                         # A.k: 100
+        pass
+    def s(self: "A"):                   # A.s: 100
+        pass
+h = lambda x, y: x                      # file: statement 1, lambda 50, 10 + 15, the body's statement 1 × 2
+"#,
+        );
+        assert_eq!(function(&weighed, "f"), 205.0);
+        assert_eq!(function(&weighed, "g"), 145.0);
+        assert_eq!(class(&weighed, "A"), 1000.0);
+        assert_eq!(function(&weighed, "A.m"), 110.0);
+        assert_eq!(function(&weighed, "A.k"), 100.0);
+        assert_eq!(function(&weighed, "A.s"), 100.0);
+        assert_eq!(weighed.file, 78.0);
     }
 }

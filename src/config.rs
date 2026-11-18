@@ -33,10 +33,12 @@ pub enum Category {
     Jump,
     Operator,
     Access,
+    /// A function's or lambda's parameter, weighed by its place (`[parameters]`).
+    Parameter,
 }
 
 impl Category {
-    pub const ALL: [Category; 13] = [
+    pub const ALL: [Category; 14] = [
         Category::Statement,
         Category::Call,
         Category::Branch,
@@ -50,6 +52,7 @@ impl Category {
         Category::Jump,
         Category::Operator,
         Category::Access,
+        Category::Parameter,
     ];
 
     /// Its key in the weights file.
@@ -68,6 +71,7 @@ impl Category {
             Category::Jump => "jump",
             Category::Operator => "operator",
             Category::Access => "access",
+            Category::Parameter => "parameter",
         }
     }
 
@@ -122,6 +126,25 @@ impl Nesting {
     }
 }
 
+/// The `[parameters]` table: how a parameter's weight grows with its place, so a long list weighs more than its
+/// count.
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Parameters {
+    /// What each place adds to the multiplier.
+    pub step: f64,
+    /// The multiplier's cap.
+    pub max: f64,
+}
+
+impl Parameters {
+    /// The multiplier of the `parameter` weight for the parameter at `place`, from 0: `1 + step * place`, capped at
+    /// `max`.
+    pub fn factor_at(&self, place: usize) -> f64 {
+        (1.0 + self.step * place as f64).min(self.max)
+    }
+}
+
 /// The `[files]` table: which files a folder walk weighs, and which are tests.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -148,6 +171,7 @@ impl LangConfig {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Config {
     pub nesting: Nesting,
+    pub parameters: Parameters,
     pub files: Files,
     languages: BTreeMap<&'static str, LangConfig>,
 }
@@ -192,6 +216,8 @@ impl Config {
     fn from_value(table: toml::Table) -> Result<Config> {
         let raw: RawConfig = toml::Value::Table(table).try_into()?;
         check_non_negative("[nesting] factor", raw.nesting.factor)?;
+        check_non_negative("[parameters] step", raw.parameters.step)?;
+        check_non_negative("[parameters] max", raw.parameters.max)?;
         for glob in &raw.files.exclude {
             source::glob(glob).with_context(|| format!("[files] exclude `{glob}`"))?;
         }
@@ -256,6 +282,7 @@ impl Config {
 
         Ok(Config {
             nesting: raw.nesting,
+            parameters: raw.parameters,
             files: raw.files,
             languages,
         })
@@ -296,6 +323,7 @@ pub fn repo_root(path: &Path) -> Option<PathBuf> {
 #[serde(deny_unknown_fields)]
 struct RawConfig {
     nesting: Nesting,
+    parameters: Parameters,
     weights: BTreeMap<String, f64>,
     #[serde(default)]
     languages: BTreeMap<String, RawLang>,
@@ -500,12 +528,13 @@ mod tests {
         assert!(error_of("[weights]\nloop = \"3\"\n").contains("invalid type"));
         assert!(error_of("[nesting]\nmodel = \"cubic\"\n").contains("cubic"));
         assert!(error_of("[nesting]\nflat = [\"calls\"]\n").contains("calls"));
+        assert!(error_of("[parameters]\nstep = -0.1\n").contains("[parameters] step"));
     }
 
     #[test]
     fn a_file_on_its_own_must_set_every_category() {
         let error = Config::from_str_alone(
-            "[nesting]\nmodel = \"linear\"\nfactor = 1\nmax_depth = 3\nflat = []\n[weights]\nstatement = 1\n\
+            "[nesting]\nmodel = \"linear\"\nfactor = 1\nmax_depth = 3\nflat = []\n[parameters]\nstep = 0\nmax = 1\n[weights]\nstatement = 1\n\
              [files]\nexclude = []\ntest_globs = []\n",
         )
         .unwrap_err();
@@ -534,6 +563,19 @@ mod tests {
         assert_eq!(exponential.factor_at(0), 1.0);
         assert_eq!(exponential.factor_at(2), 4.0);
         assert_eq!(exponential.factor_at(9), 8.0);
+    }
+
+    #[test]
+    fn a_parameter_s_factor_grows_with_its_place_to_its_cap() {
+        let parameters = Parameters {
+            step: 0.2,
+            max: 2.0,
+        };
+        let factors: Vec<f64> = (0..8).map(|place| parameters.factor_at(place)).collect();
+        let expected = [1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.0, 2.0];
+        for (factor, expected) in factors.iter().zip(expected) {
+            assert!((factor - expected).abs() < 1e-9, "{factors:?}");
+        }
     }
 
     #[test]

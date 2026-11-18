@@ -3,7 +3,9 @@
 
 use tree_sitter::Node;
 
-use super::{Lang, Nesting, Operator, Scope, ScopeKind, is_field_of, only_child, text};
+use super::{
+    Lang, Nesting, Operator, Scope, ScopeKind, count_children, is_field_of, only_child, text,
+};
 use crate::config::Category::*;
 
 pub static TYPESCRIPT: Lang = Lang {
@@ -44,6 +46,7 @@ pub(super) const BASE: Lang = Lang {
     also_statement: |node| {
         node.kind() != "statement_block" && is_field_of(node, &["arrow_function"], "body")
     },
+    parameters,
     scope,
     tests: None,
 };
@@ -243,6 +246,27 @@ fn at_top(declaration: Node) -> bool {
             .parent()
             .is_some_and(|p| matches!(p.kind(), "internal_module" | "module")),
         _ => false,
+    }
+}
+
+/// A function's, a method's, a signature's or an arrow's parameters, a `this` one (`f(this: Window)`, a type) aside;
+/// not a function type's (`(a: A) => B`); an arrow's lone one (`x => ...`).
+fn parameters(node: Node, _: &[u8]) -> usize {
+    match node.kind() {
+        "formal_parameters" => {
+            let of_type = node
+                .parent()
+                .is_some_and(|p| matches!(p.kind(), "function_type" | "constructor_type"));
+            if of_type {
+                return 0;
+            }
+            count_children(node, |c| {
+                c.child_by_field_name("pattern")
+                    .is_none_or(|p| p.kind() != "this")
+            })
+        }
+        "arrow_function" => usize::from(node.child_by_field_name("parameter").is_some()),
+        _ => 0,
     }
 }
 
@@ -470,5 +494,29 @@ mod tests {
         let weighed = testing::weigh_under(&TYPESCRIPT, WEIGHTS, "class A { m() { g( } ");
         assert!(!weighed.clean);
         assert!(weighed.total > 0.0);
+    }
+
+    #[test]
+    fn parameters_weigh_by_their_place() {
+        let weighed = testing::weigh_parameters(
+            &TYPESCRIPT,
+            "function f(a: number, b?: string, ...c: number[]) {}  // f: 100; 10 + 15 + 20
+             function t(this: Window, a: number) {}              // t: 100; `this` none, a 10
+             type F = (a: number, b: number) => void;            // file: statement 1; a function type's none
+             class C {                                           // C: 1000
+               constructor(private x: number, y = 1) {}          // C.constructor: 100; 10 + 15
+               m({ a, b }: P) {}                                 // C.m: 100; one parameter, 10
+             }
+             const g = (x) => x;                                 // file: statement 1; g: 100, 10, statement 1
+             items.map(x => x);                                  // file: statement 1, call 2, lambda 50, 10,
+                                                                 // the body's statement 1 × 2",
+        );
+        assert_eq!(function(&weighed, "f"), 145.0);
+        assert_eq!(function(&weighed, "t"), 110.0);
+        assert_eq!(class(&weighed, "C"), 1000.0);
+        assert_eq!(function(&weighed, "C.constructor"), 125.0);
+        assert_eq!(function(&weighed, "C.m"), 110.0);
+        assert_eq!(function(&weighed, "g"), 111.0);
+        assert_eq!(weighed.file, 1.0 + 1.0 + 65.0);
     }
 }

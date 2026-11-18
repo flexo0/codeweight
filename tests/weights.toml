@@ -21,6 +21,11 @@ bool_op   = 5
 jump      = 3
 operator  = 0      # 0 but in the snippets about them (`lang::testing::weigh_expressions`), so the others leave them out
 access    = 0
+parameter = 0      # 0 but in the snippets about them (`lang::testing::weigh_parameters`)
+
+[parameters]
+step = 0.5         # with parameter 10: 10, 15, 20, then 20 each
+max = 2
 
 [files]
 exclude = []

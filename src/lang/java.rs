@@ -2,7 +2,7 @@
 
 use tree_sitter::Node;
 
-use super::{Lang, Nesting, Operator, Scope, ScopeKind, is_field_of, text};
+use super::{Lang, Nesting, Operator, Scope, ScopeKind, count_children, is_field_of, text};
 use crate::config::Category::{self, *};
 
 pub static JAVA: Lang = Lang {
@@ -22,6 +22,7 @@ pub static JAVA: Lang = Lang {
     also_statement: |node| {
         node.kind() != "block" && is_field_of(node, &["lambda_expression"], "body")
     },
+    parameters,
     scope,
     tests: None,
 };
@@ -147,6 +148,20 @@ fn scope(node: Node, source: &[u8]) -> Option<Scope> {
     };
     let name = text(node.child_by_field_name("name")?, source);
     Some(Scope { kind, name })
+}
+
+/// A method's, a constructor's or a lambda's parameters (a record's components too, its canonical constructor's),
+/// a receiver (`Foo this`) aside; a lambda's lone one (`x -> ...`) and its inferred ones (`(a, b) -> ...`).
+fn parameters(node: Node, _: &[u8]) -> usize {
+    match node.kind() {
+        "formal_parameters" => count_children(node, |c| c.kind() != "receiver_parameter"),
+        "inferred_parameters" => count_children(node, |_| true),
+        "lambda_expression" => usize::from(
+            node.child_by_field_name("parameters")
+                .is_some_and(|p| p.kind() == "identifier"),
+        ),
+        _ => 0,
+    }
 }
 
 /// Snippets weighed under the test weights (see `lang::testing`), each sum worked out by hand.
@@ -597,5 +612,34 @@ mod tests {
         assert!(!weighed.clean);
         assert!(weighed.entries.iter().any(|e| e.name == "A"));
         assert!(weighed.total > 0.0);
+    }
+
+    #[test]
+    fn parameters_weigh_by_their_place() {
+        let weighed = testing::weigh_parameters(
+            &JAVA,
+            "class A {
+               void none() {}                                  // function 100
+               void f(int a, String b, long c, double d) {}    // 100; 10 + 15 + 20 + 20
+               void r(A this, int a) {}                        // 100; the receiver none, a 10
+               void v(String... xs) {}                         // 100 + 10
+               void l() {                                      // 100
+                 run((a, b) -> a);                             // statement 1, call 2, lambda 50, 10 + 15,
+                                                               // the body's statement 1 × 2
+                 run(x -> x);                                  // 55, 10
+                 run((int y) -> y);                            // 55, 10
+               }
+             }
+             record R(int x, int y) {}                         // class 1000; its components 10 + 15",
+        );
+        assert_eq!(function(&weighed, "A.none"), 100.0);
+        assert_eq!(function(&weighed, "A.f"), 165.0);
+        assert_eq!(function(&weighed, "A.r"), 110.0);
+        assert_eq!(function(&weighed, "A.v"), 110.0);
+        assert_eq!(
+            function(&weighed, "A.l"),
+            100.0 + 55.0 * 3.0 + 25.0 + 10.0 + 10.0
+        );
+        assert_eq!(class(&weighed, "R"), 1025.0);
     }
 }

@@ -74,3 +74,12 @@ Built: milestones 0-11 (the repo, the CLI and the config, the engine and Java, T
     (codeweight's rose 3%, its Rust `match` tables of one-value arms now weighing a statement an arm, as Java's
     `case X: return "x";`), the functions' order held (Spearman 0.998 to 0.9997, 9 or 10 of the top 10 kept), the
     deep ones fell most (a nested function of long statements by a third). The factor held at 1.0.
+13. (built) Parameters: `parameter`, a category weighed by its place (`[parameters]`, [weight.md](weight.md)), 0.5
+    for the first, 0.1 more for each next, 1.0 from the sixth on; each language's `parameters` hook counts a
+    declaration's parameters, a receiver and a function type's aside. A call's arguments stay free: what is in
+    them weighs, and a long argument list mirrors a long parameter list, which weighs once, where it is declared.
+    The engine's test weights set it 0 but in the snippets about it (`lang::testing::weigh_parameters`).
+    Checked on codeweight, GraphHopper, jsprit, OptaPlanner, a TS / JS app, a Python and a Rust app: parameters
+    are 2 to 5% of a total (the Java ones most, as a class's own weight is 4 to 6%), the top 10 held in every one
+    (Spearman 0.966 to 0.999, the small functions reordering most), those rising most are constructors and helpers
+    of long lists (`IntEncodedValueImpl`'s, `DroolsVariableFactory.createVariable`).

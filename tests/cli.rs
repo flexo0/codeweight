@@ -199,9 +199,9 @@ fn scan_weighs_go_its_test_files_and_vendor_and_generated_files_left_out() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     for (file, text) in [
-        // Under the defaults: the method S.m is function 2, statement 1, call 0.5.
+        // Under the defaults: the method S.m is function 2, statement 1, call 0.5 (its receiver no parameter).
         ("pkg/a.go", "package pkg\n\nfunc (s *S) m() { g() }\n"),
-        // A test file: TestM is 3.5.
+        // A test file: TestM is 3.5 and its parameter 0.5.
         (
             "pkg/a_test.go",
             "package pkg\n\nfunc TestM(t *testing.T) { g() }\n",
@@ -219,7 +219,7 @@ fn scan_weighs_go_its_test_files_and_vendor_and_generated_files_left_out() {
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(stdout(&output), "total 3.5\n3.5  pkg/a.go  S.m\n");
     let tests = codeweight(root, &["scan-tests", ".", "-v"]);
-    assert_eq!(stdout(&tests), "total 3.5\n3.5  pkg/a_test.go  TestM\n");
+    assert_eq!(stdout(&tests), "total 4\n4  pkg/a_test.go  TestM\n");
 }
 
 /// A throwaway git repo, isolated from the user's and the system's git config.

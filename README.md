@@ -171,7 +171,12 @@ you set reaches every language):
 model = "linear"        # linear: 1 + factor * depth; exponential: factor ^ depth
 factor = 1.0
 max_depth = 10          # depth is capped here, so one deep method can't explode the total
-flat = ["call", "bool_op", "operator", "access"]  # weigh the same at any depth: a statement's parts
+# weigh the same at any depth: a statement's or a declaration's parts, which it already weighs the depth of
+flat = ["call", "bool_op", "operator", "access", "parameter"]
+
+[parameters]            # the parameter at place k (from 0) weighs parameter * min(1 + step * k, max)
+step = 0.2              # 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, then 1.0 each: a long list weighs more than its count
+max = 2.0
 
 [weights]               # the base weight of each category, for every language
 statement = 1
@@ -187,6 +192,7 @@ bool_op   = 1
 jump      = 1
 operator  = 0.25
 access    = 0.25
+parameter = 0.5
 
 [languages.java.weights]            # yours only: a language's overrides of [weights]
 lambda = 3
@@ -213,7 +219,9 @@ multiplies the structure only (statements, branches, loops, jumps, lambdas, ...)
 operators, accesses and `&&` / `||` (`[nesting] flat`), weigh the same at any depth, since their statement already
 weighs its depth; a long statement in a loop is long, not harder for the loop. An
 operator and a field access weigh a quarter: `a = (b + c) * d` weighs more than `a = b`, `obj.a.b` more than
-`obj.a`, but an expression's detail stays below its control flow. A function's own weight is a lambda's, 2: a getter
+`obj.a`, but an expression's detail stays below its control flow. A parameter weighs 0.5 to 1 by its place (the
+first 0.5, each next 0.1 more, from the sixth on 1): three weigh 1.8, seven 5.5, so a long list weighs more than its
+count, but a signature stays below its body. A function's own weight is a lambda's, 2: a getter
 weighs 3, its signature not most of it, and a class of getters and setters stays below one of logic. A `try` weighs
 1 (its body's nesting is its weight), a `catch` 2 (the other path, as a branch).
 
@@ -250,6 +258,7 @@ node kind is a tree-sitter one, as the language's grammar names it.
 | `jump` | `break`, `continue`, `throw`, an early `return` | `break`, `continue`, `throw`, an early `return` | `break`, `continue`, `raise`, an early `return` | `break`, `continue`, `?`, an early `return` | `break`, `continue`, `goto`, `fallthrough`, an early `return` |
 | `operator` | each run of like arithmetic, comparison (`instanceof` too), bitwise or unary operators, a compound assignment, `++` / `--` | the same (`in`, `typeof`, `void`, `delete` too) | the same (`not`, `in`, `is` too) | the same (not `*x`, `&x`) | the same (`&^` too; not `*p`, `&x`, `<-ch`) |
 | `access` | a field access, an array index | a member (`a.b`, `a?.b`), a subscript | an attribute, a subscript | a field (`a.b`, `a.0`), an index | a selector (`a.b`), an index, a slice (`a[i:j]`) |
+| `parameter` | a method's, constructor's or lambda's parameter (a record's component too), not a receiver (`A this`) | a function's, method's, signature's or arrow's parameter, not a `this` one nor a function type's | a function's or lambda's parameter (`*args`, `**kwargs` too), not the first `self` / `cls` nor a bare `*` / `/` | a function's or closure's parameter, not `self` nor a `fn(...)` type's | each name of a function's, method's, literal's or interface method's parameters (an unnamed one once), not the receiver, the results nor a function type's |
 
 JavaScript's elements are TypeScript's but for the type ones (an interface, an enum, a namespace, a signature, an
 interface's property, a `type` alias); a `using` declaration is a statement, as `let`.

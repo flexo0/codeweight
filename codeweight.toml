@@ -11,7 +11,12 @@
 model = "linear"        # linear: 1 + factor * depth; exponential: factor ^ depth
 factor = 1.0
 max_depth = 10          # depth is capped here, so one deep method can't explode the total
-flat = ["call", "bool_op", "operator", "access"]  # weigh the same at any depth: a statement's parts
+# weigh the same at any depth: a statement's or a declaration's parts, which it already weighs the depth of
+flat = ["call", "bool_op", "operator", "access", "parameter"]
+
+[parameters]            # the parameter at place k (from 0) weighs parameter * min(1 + step * k, max)
+step = 0.2              # 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, then 1.0 each: a long list weighs more than its count
+max = 2.0
 
 [weights]               # the base weight of each category, for every language
 statement = 1
@@ -27,6 +32,7 @@ bool_op   = 1           # each run of like && / || operators: a && b && c is 1, 
 jump      = 1           # break, continue, an early return, throw
 operator  = 0.25        # each run of like operators: a + b - c is 1, (a + b) * c is 2; x += 1, i++, -x, !x
 access    = 0.25        # each field access or index: a.b.c is 2, a[i] is 1; not a call's callee, nor this.x
+parameter = 0.5         # a function's or lambda's parameter, the first; not self / this / a receiver
 
 # A file of your own may also override [weights] for one language, and map a node kind to a category. The defaults
 # hold none of these, so a [weights] key you set reaches every language.

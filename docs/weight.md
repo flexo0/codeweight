@@ -50,6 +50,13 @@ total        = Σ weight(node) over the nodes that have a category
   (Go's `r.x` in `func (r *T) M()`) is none, as a bare `x` (Java's implicit `this`) is none; `this.a.b` is 1. A
   qualified name in a type or an import is no access: the grammars parse those as other kinds (`scoped_identifier`,
   `nested_type_identifier`, `dotted_name`), and a Python annotation's, which is an expression, is exempt. Both are the language's `exempt` hook.
+- `parameter`: a function's or lambda's parameter weighs by its place, from 0: `parameter × min(1 + step × place,
+  max)` (`[parameters]`), so with the defaults 0.5, 0.6, ..., 1.0 from the sixth on. A long list weighs more than
+  its count, as each next parameter is one more to keep in mind and to pass in order. A receiver is none (Java's
+  `A this`, TS's `this: T`, Python's first `self` / `cls`, Rust's `self`, Go's receiver), as an access to it is none,
+  and neither is a function type's (`(a: A) => B`, `fn(i32)`, Go's `func(int)`), which declares no function. Each
+  language's `parameters` hook counts them; the weight is the declaration's, at its depth (flat by default). A call's
+  arguments weigh nothing of their own: what is in them weighs.
 - `jump`: `break`, `continue`, `throw`, and an early return: a return that isn't the last statement (comments aside)
   of its function's or lambda's body; the last one is a `statement`. So `if (x) return a; return b;` is a jump and a
   statement, and both returns of an `if / else` at the end are jumps.

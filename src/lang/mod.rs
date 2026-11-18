@@ -62,6 +62,9 @@ pub struct Lang {
     /// its depth weighs as a block's statement's would; Go's `i++` and `x += 1`, statements that are their own
     /// operator (as Java's `x++;` is a statement and an operator).
     pub also_statement: fn(Node) -> bool,
+    /// The number of parameters a node declares: a function's or lambda's list of them (a receiver, `self` or
+    /// `this` aside; not a function type's), or a lambda's lone one (`x -> ...`); 0 for any other node.
+    pub parameters: fn(Node, &[u8]) -> usize,
     /// The function or class a node declares, if it does one, and its own name (not qualified). A lambda it names
     /// a function is one: it weighs as a function, and nests as one, not as a lambda.
     pub scope: fn(Node, &[u8]) -> Option<Scope>,
@@ -283,6 +286,20 @@ pub fn last_child(node: Node) -> Option<Node> {
         .last()
 }
 
+/// The number of a node's named children, comments aside, that `counts`.
+pub fn count_children(node: Node, counts: impl Fn(Node) -> bool) -> usize {
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor)
+        .filter(|c| !c.is_extra() && counts(*c))
+        .count()
+}
+
+/// A node's first named child, comments aside, if it has any.
+pub fn first_child(node: Node) -> Option<Node> {
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor).find(|c| !c.is_extra())
+}
+
 /// The text of a node, lossy where it isn't UTF-8.
 pub fn text(node: Node, source: &[u8]) -> String {
     String::from_utf8_lossy(&source[node.byte_range()]).into_owned()
@@ -291,7 +308,8 @@ pub fn text(node: Node, source: &[u8]) -> String {
 /// The languages' snippet tests: weighed under `tests/weights.toml` (statement 1, call 2, branch 10, loop 20, try 30,
 /// catch 40, lambda 50, function 100, class 1000, bool_op 5, jump 3, operator 0, access 0; nest(depth) = 1 + depth,
 /// depth capped at 3), each sum worked out by hand: `weight × nest(depth)` per element. The snippets about
-/// operators and accesses are weighed with those at 7 and 9 (`weigh_expressions`).
+/// operators and accesses are weighed with those at 7 and 9 (`weigh_expressions`), those about parameters with
+/// `parameter` 10 (`weigh_parameters`): 10, 15, 20, then 20 each, by their place.
 #[cfg(test)]
 pub mod testing {
     use super::{Lang, ScopeKind};
@@ -330,6 +348,16 @@ pub mod testing {
             ),
             (7.0, 9.0)
         );
+        assert!(weighed.clean, "syntax errors in {text}");
+        weighed
+    }
+
+    /// A snippet that parses cleanly, weighed under the test weights with `parameter` 10.
+    pub fn weigh_parameters(lang: &'static Lang, text: &str) -> Weighed {
+        let weights = WEIGHTS.replacen("parameter = 0 ", "parameter = 10 ", 1);
+        let config = Config::from_str_alone(&weights).unwrap();
+        assert_eq!(config.lang(lang).weight(Category::Parameter), 10.0);
+        let weighed = weigh_under(lang, &weights, text);
         assert!(weighed.clean, "syntax errors in {text}");
         weighed
     }

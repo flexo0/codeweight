@@ -158,4 +158,15 @@ mod tests {
         assert!(!weighed.clean);
         assert!(weighed.total > 0.0);
     }
+
+    #[test]
+    fn parameters_weigh_by_their_place_as_typescript_s() {
+        let weighed = testing::weigh_parameters(
+            &JAVASCRIPT,
+            "function f(a, b = 1, { c }, ...d) {}   // f: 100; 10 + 15 + 20 + 20
+             items.map(x => x);                    // file: statement 1, call 2, lambda 50, 10, statement 1 × 2",
+        );
+        assert_eq!(function(&weighed, "f"), 165.0);
+        assert_eq!(weighed.file, 65.0);
+    }
 }
