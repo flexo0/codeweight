@@ -13,8 +13,8 @@ max_depth = 10          # depth is capped here, so one deep method can't explode
 [weights]               # the base weight of each category, for every language
 statement = 1
 call      = 0.5         # a call, `new`: a chain of getters is long, not hard
-branch    = 2           # if, ternary, case
-loop      = 3
+branch    = 3           # if, ternary, case
+loop      = 2
 try       = 1           # the body's nesting is its weight; a catch is the other path
 catch     = 2
 lambda    = 2
