@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand, ValueEnum};
+use rayon::prelude::*;
 
 use crate::config::{self, Config};
 use crate::engine::Weigher;
@@ -35,9 +36,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Weighs files
+    /// Weighs files and folders
     Scan {
-        /// A file, absolute or relative
+        /// A file or a folder, absolute or relative
         #[arg(required = true)]
         paths: Vec<PathBuf>,
     },
@@ -84,25 +85,34 @@ fn scan(cli: &Cli, paths: &[PathBuf]) -> Result<()> {
         paths.first().map(PathBuf::as_path),
     )?;
     let config = Config::load(found.as_deref())?;
-    let input = source::from_paths(paths)?;
+    let input = source::from_paths(paths, &config.files)?;
     let weighers: Vec<Weigher> = lang::ALL
         .iter()
         .map(|lang| Weigher::new(lang, &config))
         .collect();
-    let mut files = Vec::new();
-    for item in input.items {
-        let weigher = weighers
-            .iter()
-            .find(|w| w.lang().name == item.lang.name)
-            .context("a file of a language with no weigher")?;
-        let weighed = weigher
-            .weigh(&item.text)
-            .with_context(|| format!("weighing {}", item.path.display()))?;
-        files.push(Weighted {
-            path: item.path,
-            weighed,
-        });
-    }
+    // In parallel, each file read when weighed; `collect` keeps the input's order.
+    let files = input
+        .items
+        .into_par_iter()
+        .map(|item| {
+            let weigher = weighers
+                .iter()
+                .find(|w| std::ptr::eq(w.lang(), item.lang))
+                .context("a file of a language with no weigher")?;
+            let weighed = weigher
+                .weigh(&item.text()?)
+                .with_context(|| format!("weighing {}", item.path.display()))?;
+            let weighed = if item.test {
+                weighed.scaled(config.files.test_factor)
+            } else {
+                weighed
+            };
+            Ok(Weighted {
+                path: item.path,
+                weighed,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
     print!("{}", report::text(&files, &input.skipped, cli.by, cli.top));
     Ok(())
 }

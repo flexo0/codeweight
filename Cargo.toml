@@ -10,10 +10,15 @@ readme = "README.md"
 [dependencies]
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
+globset = "0.4"
+ignore = "0.4"
+rayon = "1"
 serde = { version = "1", features = ["derive"] }
 toml = "1"
 tree-sitter = "0.27"
 tree-sitter-java = "0.23"
+tree-sitter-python = "0.25"
+tree-sitter-typescript = "0.23"
 
 [dev-dependencies]
 tempfile = "3"

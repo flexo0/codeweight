@@ -125,3 +125,53 @@ fn the_weights_file_is_looked_up_in_order() {
     fs::write(elsewhere.join("given.toml"), "[weights]\nfunction = 0\n").unwrap();
     assert_eq!(total(&elsewhere, &["--config", "given.toml"]), "total 7");
 }
+
+#[test]
+fn scan_walks_a_folder_its_excludes_left_out_its_tests_times_the_test_factor() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    for (file, text) in [
+        // Under the defaults: f is function 3, statement 1, call 1.
+        ("src/a.py", "def f():\n    g()\n"),
+        // h is function 3 and its call 1; the file's declaration statement 1.
+        ("src/b.ts", "export const h = () => g();\n"),
+        // t is 5, times the test factor 0.5.
+        ("tests/test_a.py", "def t():\n    g()\n"),
+        ("node_modules/x/y.ts", "g();\n"),
+        ("src/notes.md", "# notes\n"),
+    ] {
+        let path = root.join(file);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    }
+    fs::write(root.join("codeweight.toml"), "[files]\ntest_factor = 0.5\n").unwrap();
+
+    let output = codeweight(root, &["scan", "."]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(
+        stdout(&output),
+        "total 12.5\n\
+         \x20 5  src/a.py  f\n\
+         \x20 4  src/b.ts  h\n\
+         2.5  tests/test_a.py  t\n\
+         \x20 1  src/b.ts  (file)\n\
+         skipped: codeweight.toml (not a language codeweight reads)\n\
+         skipped: src/notes.md (not a language codeweight reads)\n"
+    );
+
+    let by_file = codeweight(root, &["scan", "src", "tests", "--by", "file"]);
+    assert_eq!(
+        stdout(&by_file),
+        "total 12.5\n  5  src/a.py\n  5  src/b.ts\n2.5  tests/test_a.py\n\
+         skipped: src/notes.md (not a language codeweight reads)\n"
+    );
+
+    fs::write(root.join("codeweight.toml"), "[files]\ntest_factor = 0\n").unwrap();
+    let no_tests = codeweight(root, &["scan", "src", "tests", "--by", "file"]);
+    assert_eq!(
+        stdout(&no_tests).lines().next(),
+        Some("total 10"),
+        "{}",
+        stdout(&no_tests)
+    );
+}

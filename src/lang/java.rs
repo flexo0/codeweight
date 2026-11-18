@@ -2,11 +2,12 @@
 
 use tree_sitter::Node;
 
-use super::{Body, Lang, Logical, Nesting, Scope, ScopeKind, text};
+use super::{Children, Lang, Logical, Nesting, Scope, ScopeKind, text};
 use crate::config::Category::{self, *};
 
 pub static JAVA: Lang = Lang {
     name: "java",
+    key: "java",
     extensions: &["java"],
     grammar: || tree_sitter_java::LANGUAGE.into(),
     kinds: KINDS,
@@ -15,6 +16,7 @@ pub static JAVA: Lang = Lang {
     lambdas: &["lambda_expression"],
     parens: &["parenthesized_expression"],
     logical,
+    exempt: |_| false,
     scope,
 };
 
@@ -60,67 +62,67 @@ const KINDS: &[(&str, Category)] = &[
 const NESTING: &[Nesting] = &[
     Nesting {
         kind: "if_statement",
-        body: Body::Only(&["consequence", "alternative"]),
-        chain: Some("alternative"),
+        body: Children::Only(&["consequence", "alternative"]),
+        chain: Some(Children::Only(&["alternative"])),
     },
     Nesting {
         kind: "ternary_expression",
-        body: Body::Only(&["consequence", "alternative"]),
-        chain: Some("alternative"),
+        body: Children::Only(&["consequence", "alternative"]),
+        chain: Some(Children::Only(&["alternative"])),
     },
     Nesting {
         kind: "switch_block_statement_group",
-        body: Body::AllBut(&["switch_label"]),
+        body: Children::AllBut(&["switch_label"]),
         chain: None,
     },
     Nesting {
         kind: "switch_rule",
-        body: Body::AllBut(&["switch_label"]),
+        body: Children::AllBut(&["switch_label"]),
         chain: None,
     },
     Nesting {
         kind: "for_statement",
-        body: Body::Only(&["body"]),
+        body: Children::Only(&["body"]),
         chain: None,
     },
     Nesting {
         kind: "enhanced_for_statement",
-        body: Body::Only(&["body"]),
+        body: Children::Only(&["body"]),
         chain: None,
     },
     Nesting {
         kind: "while_statement",
-        body: Body::Only(&["body"]),
+        body: Children::Only(&["body"]),
         chain: None,
     },
     Nesting {
         kind: "do_statement",
-        body: Body::Only(&["body"]),
+        body: Children::Only(&["body"]),
         chain: None,
     },
     Nesting {
         kind: "try_statement",
-        body: Body::Only(&["body"]),
+        body: Children::Only(&["body"]),
         chain: None,
     },
     Nesting {
         kind: "try_with_resources_statement",
-        body: Body::Only(&["body"]),
+        body: Children::Only(&["body"]),
         chain: None,
     },
     Nesting {
         kind: "catch_clause",
-        body: Body::Only(&["body"]),
+        body: Children::Only(&["body"]),
         chain: None,
     },
     Nesting {
         kind: "finally_clause",
-        body: Body::Only(&["block"]),
+        body: Children::Only(&["block"]),
         chain: None,
     },
     Nesting {
         kind: "lambda_expression",
-        body: Body::Only(&["body"]),
+        body: Children::Only(&["body"]),
         chain: None,
     },
 ];
@@ -170,48 +172,19 @@ fn scope(node: Node, source: &[u8]) -> Option<Scope> {
     Some(Scope { kind, name })
 }
 
-/// Snippets weighed under `tests/weights.toml` (statement 1, call 2, branch 10, loop 20, try 30, catch 40,
-/// lambda 50, function 100, class 1000, bool_op 5, jump 3; nest(depth) = 1 + depth, depth capped at 3), each sum
-/// worked out by hand: `weight × nest(depth)` per element.
+/// Snippets weighed under the test weights (see `lang::testing`), each sum worked out by hand.
 #[cfg(test)]
 mod tests {
     use super::JAVA;
-    use crate::config::Config;
-    use crate::engine::{Weighed, Weigher};
-    use crate::lang::ScopeKind;
-
-    const WEIGHTS: &str = include_str!("../../tests/weights.toml");
+    use crate::engine::Weighed;
+    use crate::lang::testing::{self, WEIGHTS, class, function};
 
     fn weigh_under(weights: &str, text: &str) -> Weighed {
-        let config = Config::from_str_alone(weights).unwrap();
-        let weighed = Weigher::new(&JAVA, &config).weigh(text).unwrap();
-        let sum = weighed.file + weighed.entries.iter().map(|e| e.weight).sum::<f64>();
-        assert_eq!(weighed.total, sum);
-        weighed
+        testing::weigh_under(&JAVA, weights, text)
     }
 
     fn weigh(text: &str) -> Weighed {
-        let weighed = weigh_under(WEIGHTS, text);
-        assert!(weighed.clean);
-        weighed
-    }
-
-    fn weight(weighed: &Weighed, kind: ScopeKind, name: &str) -> f64 {
-        let found: Vec<_> = weighed
-            .entries
-            .iter()
-            .filter(|e| e.kind == kind && e.name == name)
-            .collect();
-        assert_eq!(found.len(), 1, "{kind:?} {name} in {:?}", weighed.entries);
-        found[0].weight
-    }
-
-    fn function(weighed: &Weighed, name: &str) -> f64 {
-        weight(weighed, ScopeKind::Function, name)
-    }
-
-    fn class(weighed: &Weighed, name: &str) -> f64 {
-        weight(weighed, ScopeKind::Class, name)
+        testing::weigh(&JAVA, text)
     }
 
     #[test]

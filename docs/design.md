@@ -1,7 +1,7 @@
 # codeweight: the design
 
-Built: milestones 0-2 (the repo, the CLI and the config, the engine and Java). Once a part is built, its section is
-rewritten as a reference (what it is, why so, what is left).
+Built: milestones 0-4 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders).
+Once a part is built, its section is rewritten as a reference (what it is, why so, what is left).
 
 ## 1. The CLI
 
@@ -21,9 +21,9 @@ and `--by file|function` (what the report lists).
 - Exit codes: 0 done, 2 an error (a bad path, revision or weights file). `main` prints the error with its context
   chain (`error: ...`) to stderr; clap's own usage errors exit 2 too.
 
-Built: `scan` of files, `init`, the four options. `init` never overwrites a file (it is created new, else an error).
-`--by` defaults to `function`. Not built yet, an error for now: `commit` (milestone 5), a folder given to `scan`
-(milestone 4), `--format json` (milestone 6). The text report (`report`) is a stopgap for milestone 6: the total,
+Built: `scan` of files and folders, `init`, the four options. `init` never overwrites a file (it is created new, else
+an error). `--by` defaults to `function`. Not built yet, an error for now: `commit` (milestone 5), `--format json`
+(milestone 6). The text report (`report`) is a stopgap for milestone 6: the total,
 then one line per function or class (`<weight>  <path>  <name>`, a class as `Name (class)`, a file's code outside
 any class as `(file)`, the zero-weight ones left out) or per file with `--by file`, heaviest first, then by path and
 name; `--top` keeps the first N lines. Then the warnings (syntax errors), then the skipped files.
@@ -42,17 +42,22 @@ Built (`config`, `config::find`):
   replaces the default one, not appends to it). The merged tree is then read with `deny_unknown_fields`, so an
   unknown key anywhere is an error.
 - Checked after: every `[weights]` key is a category (and every category has a weight, which only a file on its own,
-  without the defaults under it, can miss); every `[languages.<name>]` is a language codeweight reads (just `java`
-  for now); every `node_kinds` key is a named node kind of that language's grammar and its value a category or
-  `"none"`; every weight and factor is a finite number, 0 or above. The error names the table and the key, and the
-  file.
+  without the defaults under it, can miss); every `[languages.<name>]` is a language codeweight reads (`java`,
+  `typescript`, `python`); every `node_kinds` key is a named node kind of that language's grammar and its value a
+  category or `"none"`; every weight and factor is a finite number, 0 or above; every `[files]` glob compiles. The
+  error names the table and the key, and the file.
+- `typescript` is the table of both `.ts` and `.tsx` files (two grammars, one key): a TS setting reaches TSX too.
+  Its `node_kinds` key may be a kind of either grammar (the `jsx_*` kinds are TSX's only, `type_assertion` TS's
+  only); the grammar without it has no node of that kind, so there it does nothing. A `[languages.tsx]` table is an
+  unknown language; should TSX ever need settings of its own, it can be added over `typescript`'s without changing
+  what an existing file means.
 - A language's weights are `[weights]` with its `[languages.<name>.weights]` over them; its `node_kinds` override
   its own table (see section 4).
 - The defaults hold no `[languages.<name>.weights]` (the example above has one only to show the table): the merge
   never removes a key, so a default per-language weight would beat the same key a user's file sets in `[weights]`,
   and that change would silently do nothing for that language. Should tuning (milestone 7) want one, the merge must
   first drop a default per-language key whose base key the user's file sets.
-- `[files]` is read and checked for its types only; folder walks use it from milestone 4.
+- `[files]` is for what is weighed (section 4, `source`).
 
 ```toml
 [nesting]
@@ -119,6 +124,8 @@ total        = Σ weight(node) over the nodes that have a category
 - Each function's weight is kept apart, its nested functions' not in it; code outside any function belongs to its
   class, or else to its file. A declaration's own weight (`function`, `class`) is its own entry's; a lambda is not a
   function, its code belongs to the function around it.
+- A docstring or a bare `...` (Python), a directive like `"use strict";` (TS) is no statement: an expression
+  statement that is only a string (or Python's `...`) weighs nothing (the language's `exempt` hook).
 - Names: a function or class is named by the classes and functions around it, `Outer.Inner.method`,
   `Outer.method.Local.run`. A Java constructor is `Class.Class`, an anonymous class `new Type` (its type arguments
   dropped: `Outer.method.new Runnable.run`), an enum constant's body the constant's name. Same-named entries of one
@@ -127,6 +134,48 @@ total        = Σ weight(node) over the nodes that have a category
   heavier function, not a new one), and (path, kind, name) is unique, so the sort is total. A class and a method of
   the same name stay apart.
 - A weight is an `f64`; the text report shows at most two decimals.
+
+### TypeScript and TSX
+
+- A function is a function, generator or method declaration, an overload's or an interface's signature
+  (`function f(): void;`, `m(): void;`, `abstract m(): void;`): overloads are one entry, summed, as in Java. A
+  constructor is `Class.constructor`, a getter and its setter one entry. A class, an interface, an enum and a
+  namespace (`namespace N`, `declare module "m"`) are classes; a class expression is named by its own name, else the
+  variable it is bound to, else `class`.
+- An arrow or a function expression is a lambda, but where it is bound to a name at the file's level (or a
+  namespace's) or as a class field's value: `export const f = () => ...` is the function `f`, a field
+  `onClick = () => ...` the function `A.onClick`, weighed as a function and nesting as one (a top-level one's body is
+  not deeper). Inside a function, `const cb = () => ...` stays a lambda in it, as Java's `Runnable r = () -> ...`
+  does: a handler is part of its component. So `function inner() {}` in a function is a nested function of its own
+  but `const inner = () => {}` is not. Only a plain identifier names one (not a destructuring); a wrapped value
+  (`memo(() => ...)`, `(() => ...) as F`) and `export default () => ...` are lambdas.
+- `if` nests its consequence; its `else` is a clause beside it, whose block is deeper but whose `if` (`else if`)
+  stays at the depth. `switch` cases as in Java. `for`, `for ... in / of`, `while`, `do` are loops.
+- `bool_op` counts runs of `&&`, `||` and `??` (a run of `??` is one, as of `&&`).
+- A decorator weighs nothing of its own, as a Java annotation; a call in it (`@Input()`, `@Component({...})`) is a
+  call, where the grammar puts it: a method's or a field's decorator in the class, a parameter's in the method,
+  a class's in the class, but `@d export class` in the file (the export holds it).
+- TSX: a JSX element (`jsx_element`, a fragment too, and `jsx_self_closing_element`) is a call, as it compiles to
+  one; its attributes and `{...}` weigh what is in them. JSX is no nesting construct.
+- A namespace's statement (the grammar wraps `namespace N {}` in an expression statement) weighs nothing.
+
+### Python
+
+- A `def` is a function, a method of the class around it, a nested function of the function around it (its body
+  nests); a lambda is a lambda, even bound to a name. A class is `class`.
+- `if` nests its body; `elif` (a branch) and `else` are its children beside the body, so a chain is siblings, each
+  one's body deeper. `x if c else y` is a branch, its value and alternative deeper, its condition not; a chained one
+  (`a if c else b if d else e`) is a sibling. The grammar gives that expression no fields, so its children are
+  matched by their place (`Children::Nth`).
+- `for` and `while` are loops, their `else` beside the body, its block deeper. `try` and `with` are `try`, each
+  `except` a catch.
+- A comprehension (list, set, dict, generator): each `for` is a loop, each `if` a branch; its element and its `if`s
+  are one deeper, its `for`s (their iterables) at its depth.
+- `match` is no nesting construct; each `case` is a branch, its body deeper, its guard (`case x if c`) no branch of
+  its own (exempt), its condition at the case's depth.
+- `and` / `or` are the logical operators (`not` starts a new run). `raise` is a jump.
+- A decorator weighs nothing of its own; a call in it (`@app.route("/")`) is a call of the class or file around the
+  decorated definition (the grammar puts the decorators beside the definition, not in it).
 
 ## 4. Architecture
 
@@ -142,14 +191,35 @@ total        = Σ weight(node) over the nodes that have a category
 
 Files are weighed in parallel (`rayon`).
 
-Built so far: `cli`, `config`, `lang` (Java), `engine`, and stopgaps of `source` (the files given, read as UTF-8,
-lossy) and `report` (the text above). Dependencies come with the milestone that uses them; so far `tree-sitter`,
-`tree-sitter-java`, `clap`, `serde`, `toml`, `anyhow`, and `tempfile` for the tests.
+Built so far: `cli`, `config`, `lang` (Java, TypeScript, TSX, Python), `engine`, `source` (files and folders), and a
+stopgap of `report` (the text above). Dependencies come with the milestone that uses them; so far `tree-sitter`,
+`tree-sitter-java`, `tree-sitter-typescript`, `tree-sitter-python`, `clap`, `serde`, `toml`, `anyhow`, `ignore`,
+`globset` (the `[files]` globs; `ignore` is built on it, so it costs no build), `rayon`, and `tempfile` for the tests.
 
-- `lang::Lang` is a table of plain data and two hooks: the extensions, the grammar, the node kind → category list,
-  the nesting constructs (each with its body: the children it nests, by field name or node kind, either listed or
-  all but those listed; and its chain field, for `else if`), the return, lambda and parenthesis kinds, `logical`
-  (a node's `&&` / `||`) and `scope` (the function or class a node declares, and its own name). A test checks that
+- `source` (built): a file given is weighed as is, though an exclude matches it; a folder is walked by `ignore`, its
+  `.gitignore`s (and `.ignore`s, the global gitignore) honoured, hidden files and folders left out, each folder's
+  entries in the order of their names, so the walk is the same on every run. A file the excludes match is left
+  out, unlisted; a folder whose every path is excluded (an exclude ending in `/**`) isn't walked at all. A file in no
+  language codeweight reads is skipped and listed. The globs (`*` and `?` within a path's part, `**` across parts)
+  are matched against a file's path from the root of the git repo it is in (the root `config::find` uses), so one
+  glob means the same from any folder scanned, and later for `commit`; outside a repo, from the current folder when
+  the path is in it, else from the folder given (a file given: its name), never with the folders above, so a project
+  under a `build` or `tests` folder is neither excluded nor taken for tests whatever the path's spelling. A
+  file the test globs match is weighed times `test_factor`; at 0 it is left out, unlisted. A path is shown as given,
+  or the folder given joined with the path in it, without a leading `./`; a path given twice, or under two folders
+  given, is weighed once.
+- The files are listed first, then read and weighed in parallel (`rayon`), each read when weighed so the texts are
+  never all in memory; the results are collected in the listed order, and the report sorts them (weight, then path
+  and name), so the output doesn't depend on which thread finished first.
+
+- `lang::Lang` is a table of plain data and three hooks: its name and its weights file key, the extensions, the
+  grammar, the node kind → category list, the nesting constructs (each with its body: the children it nests, by
+  field name or node kind, either listed or all but those listed, or by their place among the named children; and
+  its chain, the children of its own kind that stay at its depth, for `else if`), the return, lambda and parenthesis
+  kinds, `logical` (a node's `&&` / `||` / `??`), `exempt` (a node that weighs nothing though its kind has a
+  category, where the kind can't tell: a docstring, a case's guard) and `scope` (the function or class a node
+  declares, and its own name). A lambda `scope` names a function weighs and nests as a function (TS's named
+  arrows). A test checks that
   every kind and field the tables name is in the grammar, so a typo can't silently weigh nothing.
 - `engine::Weigher` turns a language's tables and its weights into arrays by node kind id once, then walks each
   tree with an explicit stack (a long `a + b + c + ...` chain is a deep tree, too deep for recursion); a node's
@@ -173,8 +243,8 @@ lossy) and `report` (the text above). Dependencies come with the milestone that 
    --check`, `clippy -D warnings`, `test`).
 1. (built) The skeleton: the CLI, the config with its embedded defaults, `init`.
 2. (built) The engine and Java, for `scan <file>`: snippet tests with weights worked out by hand.
-3. TypeScript, TSX and Python.
-4. Folders: the walk, the excludes, the test globs and factor, `rayon`.
+3. (built) TypeScript, TSX and Python.
+4. (built) Folders: the walk, the excludes, the test globs and factor, `rayon`.
 5. `commit`: tests on throwaway repos (an add, a delete, a rename, a merge, the root commit, a range).
 6. The reports: text, JSON, `--top`, `--by`.
 7. Tuning on real code: the default weights adjusted until the heaviest functions found are the hardest ones.

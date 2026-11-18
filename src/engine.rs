@@ -33,6 +33,18 @@ pub struct Entry {
     pub weight: f64,
 }
 
+impl Weighed {
+    /// Every weight times `factor` (a test file's, times the test factor).
+    pub fn scaled(mut self, factor: f64) -> Weighed {
+        self.total *= factor;
+        self.file *= factor;
+        for entry in &mut self.entries {
+            entry.weight *= factor;
+        }
+        self
+    }
+}
+
 /// Weighs texts of one language under one weights file.
 pub struct Weigher<'c> {
     lang: &'static Lang,
@@ -131,7 +143,9 @@ impl<'c> Weigher<'c> {
             let mut entry = frame.entry;
             let mut in_function = frame.in_function;
             let mut nested_scope = false;
-            if let Some(scope) = (self.lang.scope)(node, source) {
+            let scope = (self.lang.scope)(node, source);
+            let declares = scope.as_ref().map(|s| s.kind);
+            if let Some(scope) = scope {
                 let name = match frame.entry {
                     Some(parent) => format!("{}.{}", entries[parent].name, scope.name),
                     None => scope.name,
@@ -155,9 +169,13 @@ impl<'c> Weigher<'c> {
             let logical = (self.lang.logical)(node);
             let category = match logical {
                 Some(op) => (frame.logical != Some(op)).then_some(Category::BoolOp),
+                None if (self.lang.exempt)(node) => None,
                 None => self.categories.get(id).copied().flatten().map(|category| {
                     if flag(&self.returns, id) && self.is_early_return(node, source) {
                         Category::Jump
+                    } else if category == Category::Lambda && declares == Some(ScopeKind::Function)
+                    {
+                        Category::Function
                     } else {
                         category
                     }
@@ -176,30 +194,39 @@ impl<'c> Weigher<'c> {
                 None if flag(&self.parens, id) => frame.logical,
                 None => None,
             };
-            let construct = self.constructs.get(id).copied().flatten();
+            // A node that declares a function or class (a named lambda) nests as one, not as its construct.
+            let construct = match declares {
+                Some(_) => None,
+                None => self.constructs.get(id).copied().flatten(),
+            };
             let scope_body = nested_scope
                 .then(|| node.child_by_field_name("body"))
                 .flatten();
 
             let mut cursor = node.walk();
+            let mut nth = 0;
             if cursor.goto_first_child() {
                 loop {
                     let child = cursor.node();
                     if child.is_named() {
-                        children.push((child, cursor.field_name()));
+                        children.push((child, nth, cursor.field_name()));
+                        // A comment is no place: the places are of the code's own children.
+                        nth += usize::from(!child.is_extra());
                     }
                     if !cursor.goto_next_sibling() {
                         break;
                     }
                 }
             }
-            for (child, field) in children.drain(..).rev() {
+            for (child, nth, field) in children.drain(..).rev() {
                 let deeper = match construct {
                     Some(construct) => {
-                        construct.body.holds(field, child.kind())
-                            && !(construct.chain.is_some()
-                                && construct.chain == field
-                                && child.kind_id() == node.kind_id())
+                        construct.body.hold(nth, field, child.kind())
+                            && !(child.kind_id() == node.kind_id()
+                                && construct
+                                    .chain
+                                    .as_ref()
+                                    .is_some_and(|chain| chain.hold(nth, field, child.kind())))
                     }
                     None if nested_scope => scope_body.is_none_or(|body| body.id() == child.id()),
                     None => false,

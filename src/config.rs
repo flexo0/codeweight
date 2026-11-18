@@ -8,6 +8,7 @@ use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 
 use crate::lang::{self, Lang};
+use crate::source;
 
 /// The built-in defaults, written out by `codeweight init`.
 pub const DEFAULTS: &str = include_str!("default.toml");
@@ -173,6 +174,12 @@ impl Config {
         let nesting = raw.nesting;
         check_non_negative("[nesting] factor", nesting.factor)?;
         check_non_negative("[files] test_factor", raw.files.test_factor)?;
+        for glob in &raw.files.exclude {
+            source::glob(glob).with_context(|| format!("[files] exclude `{glob}`"))?;
+        }
+        for glob in &raw.files.test_globs {
+            source::glob(glob).with_context(|| format!("[files] test_globs `{glob}`"))?;
+        }
 
         let mut base = [0.0; Category::ALL.len()];
         let mut given = [false; Category::ALL.len()];
@@ -187,33 +194,30 @@ impl Config {
         }
 
         for name in raw.languages.keys() {
-            if lang::by_name(name).is_none() {
+            if lang::by_key(name).next().is_none() {
                 bail!(
                     "unknown language `{name}` in [languages], expected one of: {}",
-                    lang::ALL
-                        .iter()
-                        .map(|l| l.name)
-                        .collect::<Vec<_>>()
-                        .join(", ")
+                    lang::keys().join(", ")
                 );
             }
         }
         let mut languages = BTreeMap::new();
         for lang in lang::ALL {
-            let raw_lang = raw.languages.get(lang.name);
+            let raw_lang = raw.languages.get(lang.key);
             let mut weights = base;
             let mut node_kinds = BTreeMap::new();
             if let Some(raw_lang) = raw_lang {
-                let table = format!("[languages.{}.weights]", lang.name);
+                let table = format!("[languages.{}.weights]", lang.key);
                 for (key, value) in &raw_lang.weights {
                     let category = category(&table, key)?;
                     check_non_negative(&format!("{table} {key}"), *value)?;
                     weights[category.index()] = *value;
                 }
-                let table = format!("[languages.{}.node_kinds]", lang.name);
-                let grammar = (lang.grammar)();
+                // A kind of any grammar of the key (TSX's JSX ones are TSX's only); a grammar without it ignores it.
+                let table = format!("[languages.{}.node_kinds]", lang.key);
+                let grammars: Vec<_> = lang::by_key(lang.key).map(|l| (l.grammar)()).collect();
                 for (kind, target) in &raw_lang.node_kinds {
-                    if !lang::is_named_kind(&grammar, kind) {
+                    if !grammars.iter().any(|g| lang::is_named_kind(g, kind)) {
                         bail!("unknown node kind `{kind}` in {table}");
                     }
                     let target = match target.as_str() {
@@ -271,7 +275,7 @@ pub fn find(explicit: Option<&Path>, cwd: &Path, inside: Option<&Path>) -> Resul
 }
 
 /// The root of the git repo `path` is in: the nearest folder up from it that holds `.git`.
-fn repo_root(path: &Path) -> Option<PathBuf> {
+pub fn repo_root(path: &Path) -> Option<PathBuf> {
     let path = path.canonicalize().ok()?;
     path.ancestors()
         .find(|dir| dir.join(".git").exists())
@@ -431,7 +435,42 @@ mod tests {
 
     #[test]
     fn an_unknown_language_is_an_error() {
-        assert!(error_of("[languages.cobol.weights]\nloop = 1\n").contains("unknown language"));
+        let error = error_of("[languages.cobol.weights]\nloop = 1\n");
+        assert!(
+            error.contains(
+                "unknown language `cobol` in [languages], expected one of: java, typescript, python"
+            ),
+            "{error}"
+        );
+        assert!(error_of("[languages.tsx.weights]\nloop = 1\n").contains("unknown language `tsx`"));
+    }
+
+    #[test]
+    fn typescript_s_table_is_tsx_s_too() {
+        use crate::lang::typescript::{TSX, TYPESCRIPT};
+        let config = Config::from_str_over_defaults(
+            "[languages.typescript.weights]\nloop = 9\n\
+             [languages.typescript.node_kinds]\njsx_element = \"none\"\ntype_assertion = \"call\"\n",
+        )
+        .unwrap();
+        assert_eq!(config.lang(&TYPESCRIPT).weight(Category::Loop), 9.0);
+        assert_eq!(config.lang(&TSX).weight(Category::Loop), 9.0);
+        // A kind of one grammar of the two is valid; the other grammar has no node of it.
+        assert_eq!(config.lang(&TSX).node_kinds["jsx_element"], None);
+        assert_eq!(
+            config.lang(&TSX).node_kinds["type_assertion"],
+            Some(Category::Call)
+        );
+        assert!(
+            error_of("[languages.typescript.node_kinds]\njsx_elem = \"call\"\n")
+                .contains("unknown node kind `jsx_elem` in [languages.typescript.node_kinds]")
+        );
+    }
+
+    #[test]
+    fn a_bad_glob_is_an_error() {
+        let error = error_of("[files]\nexclude = [\"a/[b\"]\n");
+        assert!(error.contains("[files] exclude `a/[b`"), "{error}");
     }
 
     #[test]
