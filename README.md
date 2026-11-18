@@ -129,10 +129,10 @@ statement = 1
 call      = 0.5
 branch    = 2
 loop      = 3
-try       = 2
+try       = 1
 catch     = 2
 lambda    = 2
-function  = 3
+function  = 2
 class     = 5
 bool_op   = 1
 jump      = 1
@@ -158,7 +158,9 @@ The defaults were tuned on real Java, TypeScript and Python code (and re-checked
 ones: a call weighs half a statement (a long chain of getters or a flat run of setters is long, not hard), and each
 level of nesting adds a whole base weight (`factor = 1.0`), so nested control flow outweighs flat code. An
 operator and a field access weigh a quarter: `a = (b + c) * d` weighs more than `a = b`, `obj.a.b` more than
-`obj.a`, but an expression's detail stays below its control flow.
+`obj.a`, but an expression's detail stays below its control flow. A function's own weight is a lambda's, 2: a getter
+weighs 3, its signature not most of it, and a class of getters and setters stays below one of logic. A `try` weighs
+1 (its body's nesting is its weight), a `catch` 2 (the other path, as a branch).
 
 ### The weight
 

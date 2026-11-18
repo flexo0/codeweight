@@ -92,10 +92,10 @@ statement = 1
 call      = 0.5         # a chain of getters is long, not hard
 branch    = 2           # if, ternary, case
 loop      = 3
-try       = 2
+try       = 1           # the body's nesting is its weight; a catch is the other path
 catch     = 2
 lambda    = 2
-function  = 3
+function  = 2           # a declaration, as a lambda: a getter is 3, not mostly its signature
 class     = 5
 bool_op   = 1           # each run of like && / || operators: a && b && c is 1, a && b || c is 2
 jump      = 1           # break, continue, an early return, throw
@@ -378,6 +378,23 @@ boundary.
    weights held. The test globs gained `__tests__`, `*.test.tsx` / `*.spec.tsx`, `*Tests.java` and `*_test.py`.
    Left as it is, not a weight's matter: a TS object literal's methods and arrows (a store of handlers) are lambdas
    of the file, so such a file's `(file)` line can be its heaviest.
+   Re-tuned after milestone 9 on GraphHopper's core, jsprit's core and OptaPlanner's core (Java), two React apps
+   (TS, TSX), two Python tools and two Rust repos: each function's weight split by category (a run per category,
+   its weight 1, the others 0; the linear model makes a weight the sum of the parts), so any set of weights could
+   be ranked without a rerun. The function rankings barely move for any one base weight (call 0.35, lambda 1, branch
+   3 with loop 2: at most two functions in or out of a corpus's top 20, the top 200's rank correlation 0.97 to
+   0.999), nor for a linear factor of 0.5 or 1.5; size times nesting ranks them, and only the exponential model
+   reorders the top. Fix commits per file (GraphHopper, OptaPlanner) can't tell the sets apart either: every one
+   correlates with them as lines of code do. So the base weights are mostly the prices in a total and in a commit's
+   delta, and there `function` 3 was the one off: a method's own weight was 17 to 26% of a Java corpus's total,
+   OptaPlanner's above all its statements, as 39 to 47% of the Java methods are getters, setters and delegations
+   whose body weighs 1.5 at most (the median body 2, TS, Python and Rust 13 to 17). Now `function` is 2, a lambda's
+   (both a function): a getter is 3, a getter and its setter no longer a loop of two calls. A `try` is now 1: its
+   body's nesting already weighs it (a Python `with` is one too), and its `catch` is the other path, 2 as a branch.
+   The Java totals fell 6 to 9%, the others 2 to 3%; the files leaving the top 15 are an interface of signatures
+   (`UniConstraintStream`), a config bean (`TerminationConfig`) and a builder of setters, those entering hold logic
+   (`KOptDescriptor`, `EntitySelectorFactory`, `MaxTimeInVehicleConstraint`). Branch 2 and loop 3 held: the swap
+   moves no ranking, and a branch's weight is each switch case's too.
 8. (built) Rust (`.rs`, `tree-sitter-rust`): its table, the engine's look through a statement wrapping a return
    (`wrappers`) and the tail expression as a statement (`tail`); snippet tests. The defaults re-checked on a Rust
    repo, codeweight itself: the heaviest are the engine's tree walk (`Weigher.weigh`, a loop of matches and nested
