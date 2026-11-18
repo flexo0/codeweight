@@ -8,6 +8,51 @@ tree-sitter.
 It reads Java (`.java`), TypeScript (`.ts`, `.mts`, `.cts`), TSX (`.tsx`), Python (`.py`, `.pyi`) and Rust (`.rs`). The design is
 `docs/design.md`.
 
+## Example
+
+codeweight run on its own sources: the total, then the heaviest functions (the methods of a class or an `impl` named
+`Type.method`); files it doesn't read are listed as skipped.
+
+```
+$ codeweight scan src
+4600.25
+$ codeweight scan src -v --top 5
+total 4600.25
+555.75  src/engine.rs  Weigher.weigh
+ 270.5  src/config.rs  Config.from_value
+ 205.5  src/source.rs  from_commit
+161.25  src/source.rs  from_paths
+123.25  src/report.rs  rows_of
+skipped: src/default.toml (not a language codeweight reads)
+```
+
+What a commit added or took away, the largest changes first:
+
+```
+$ codeweight commit b88842c -v --top 5
+total +1150.5
++105.75  heavier  src/source.rs  from_paths
+ +84.25  heavier  src/engine.rs  Weigher.weigh
+    +80  added    src/lang/typescript.rs  scope
+    +54  added    src/source.rs  Base.of
+  +53.5  heavier  src/config.rs  Config.from_value
+skipped: CLAUDE.md (not a language codeweight reads)
+skipped: Cargo.lock (not a language codeweight reads)
+skipped: Cargo.toml (not a language codeweight reads)
+skipped: README.md (not a language codeweight reads)
+skipped: docs/design.md (not a language codeweight reads)
+```
+
+## Install
+
+With Rust 1.100 or later:
+
+```
+cargo install --git https://github.com/flexo0/codeweight
+```
+
+It isn't on crates.io yet; once it is, `cargo install codeweight`. To build from a clone, see "Building" below.
+
 ## Usage
 
 ```
