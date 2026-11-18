@@ -12,17 +12,7 @@ pub static TYPESCRIPT: Lang = Lang {
     extensions: &["ts", "mts", "cts"],
     grammar: || tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
     kinds: kinds!(),
-    nesting: NESTING,
-    returns: &["return_statement"],
-    wrappers: &[],
-    lists: &[],
-    lambdas: LAMBDAS,
-    parens: &["parenthesized_expression"],
-    operator,
-    exempt,
-    also_statement: |_| false,
-    scope,
-    tests: None,
+    ..BASE
 };
 
 pub static TSX: Lang = Lang {
@@ -32,6 +22,17 @@ pub static TSX: Lang = Lang {
     grammar: || tree_sitter_typescript::LANGUAGE_TSX.into(),
     // A JSX element is a call: it compiles to one (`jsx(...)`, `React.createElement(...)`).
     kinds: kinds!(("jsx_element", Call), ("jsx_self_closing_element", Call),),
+    ..BASE
+};
+
+/// What TypeScript, TSX and JavaScript share: their nesting, returns, lambdas and hooks. Each sets its name, key,
+/// extensions, grammar and kinds over it: this one's are placeholders (its grammar TypeScript's).
+pub(super) const BASE: Lang = Lang {
+    name: "",
+    key: "",
+    extensions: &[],
+    grammar: || tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
+    kinds: &[],
     nesting: NESTING,
     returns: &["return_statement"],
     wrappers: &[],
@@ -107,13 +108,13 @@ macro_rules! js_kinds {
 }
 pub(super) use js_kinds;
 
-pub(super) const LAMBDAS: &[&str] = &[
+const LAMBDAS: &[&str] = &[
     "arrow_function",
     "function_expression",
     "generator_function",
 ];
 
-pub(super) const NESTING: &[Nesting] = &[
+const NESTING: &[Nesting] = &[
     Nesting::only("if_statement", &["consequence"]),
     // `else if`: the `if` in an else stays at its depth, an else's block is deeper.
     Nesting::all_but("else_clause", &["if_statement"]),
@@ -134,7 +135,7 @@ pub(super) const NESTING: &[Nesting] = &[
 
 /// A binary or unary operator (`typeof`, `void`, `delete` too), a compound assignment (`&&=`, `||=` and `??=` are
 /// logical), `++` / `--`.
-pub(super) fn operator(node: Node) -> Option<Operator> {
+fn operator(node: Node) -> Option<Operator> {
     let token = || node.child_by_field_name("operator").map(|op| op.kind());
     match node.kind() {
         "binary_expression" => Operator::of(token()?),
@@ -148,7 +149,7 @@ pub(super) fn operator(node: Node) -> Option<Operator> {
 /// A directive (`"use strict";`), and a namespace's statement (the grammar wraps a namespace in one; the namespace
 /// is a declaration, like a class): an expression statement that is only a string or a namespace. A member that is
 /// a call's callee (`a.f()`, `new a.B()`, a JSX element's `<a.B>`: the call weighs) or of `this` / `super`.
-pub(super) fn exempt(node: Node, _: &[u8]) -> bool {
+fn exempt(node: Node, _: &[u8]) -> bool {
     match node.kind() {
         "expression_statement" => {
             only_child(node).is_some_and(|c| matches!(c.kind(), "string" | "internal_module"))
@@ -177,7 +178,7 @@ pub(super) fn exempt(node: Node, _: &[u8]) -> bool {
 /// to, else `class`); a function, method or signature by its name; an arrow or function expression bound to a
 /// name at the file's or a namespace's level, or a class field's value, by that name. Any other arrow or function
 /// expression is a lambda.
-pub(super) fn scope(node: Node, source: &[u8]) -> Option<Scope> {
+fn scope(node: Node, source: &[u8]) -> Option<Scope> {
     let name = |node: Node| node.child_by_field_name("name").map(|n| text(n, source));
     let (kind, name) = match node.kind() {
         "class_declaration"

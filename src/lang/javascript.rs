@@ -3,7 +3,7 @@
 //! (`[languages.javascript]`).
 
 use super::Lang;
-use super::typescript::{LAMBDAS, NESTING, exempt, js_kinds, operator, scope};
+use super::typescript::{BASE, js_kinds};
 use crate::config::Category::*;
 
 pub static JAVASCRIPT: Lang = Lang {
@@ -19,17 +19,7 @@ pub static JAVASCRIPT: Lang = Lang {
         ("jsx_element", Call),
         ("jsx_self_closing_element", Call),
     ),
-    nesting: NESTING,
-    returns: &["return_statement"],
-    wrappers: &[],
-    lists: &[],
-    lambdas: LAMBDAS,
-    parens: &["parenthesized_expression"],
-    operator,
-    exempt,
-    also_statement: |_| false,
-    scope,
-    tests: None,
+    ..BASE
 };
 
 /// Snippets weighed under the test weights (see `lang::testing`), each sum worked out by hand.
