@@ -6,9 +6,10 @@ codeweight scan-tests <path>... [-v]      the same, of the tests alone
 codeweight commit <rev>|<A>..<B> [-C <repo>] [-v]        the net weight delta of a commit or between two
                                                          revisions, its tests left out
 codeweight commit-tests <rev>|<A>..<B> [-C <repo>] [-v]  the same, of the tests alone
-codeweight pre-commit [-C <repo>] [-v]                   the net weight delta of the uncommitted changes, their
-                                                         tests left out
-codeweight pre-commit-tests [-C <repo>] [-v]             the same, of the tests alone
+codeweight pre-commit [-C <repo>] [--only-staged] [-v]   the net weight delta of the uncommitted changes (or
+                                                         the staged ones alone), their tests left out
+codeweight pre-commit-tests [-C <repo>] [--only-staged] [-v]
+                                                         the same, of the tests alone
 codeweight init [<file>]                  writes the default weights file (default ./codeweight.toml)
 ```
 
@@ -21,6 +22,8 @@ and `--by file|function` (what the report lists).
 - A range `A..B` diffs the two trees directly, so a change made and undone inside it nets to zero.
 - `pre-commit`: the uncommitted changes, `HEAD` against the working tree, untracked files too
   (the commit `git add -A && git commit` would make), so the weight of a commit can be seen before it is made.
+  `--only-staged` (of `pre-commit` and `pre-commit-tests`): `HEAD` against the index, the commit `git commit` would
+  make, for a commit staged part by part (`git add -p`) or with other changes left in the working tree.
 - `commit` and `pre-commit` weigh the code, its tests left out; `commit-tests` and `pre-commit-tests` the tests
   alone, each side kept as `scan` and `scan-tests` keep a file.
 - Exit codes: 0 done, 2 an error (a bad path, revision or weights file). `main` prints the error with its context

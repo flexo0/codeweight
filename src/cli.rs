@@ -94,6 +94,9 @@ enum Command {
         /// Any path inside the repo
         #[arg(short = 'C', default_value = ".")]
         repo: PathBuf,
+        /// Only the staged changes (the index against HEAD, as `git commit` would commit them)
+        #[arg(long)]
+        only_staged: bool,
         /// The whole report: the total, the functions (or files), and the warnings
         #[arg(short, long)]
         verbose: bool,
@@ -104,6 +107,9 @@ enum Command {
         /// Any path inside the repo
         #[arg(short = 'C', default_value = ".")]
         repo: PathBuf,
+        /// Only the staged changes (the index against HEAD, as `git commit` would commit them)
+        #[arg(long)]
+        only_staged: bool,
         /// The whole report: the total, the functions (or files), and the warnings
         #[arg(short, long)]
         verbose: bool,
@@ -128,12 +134,38 @@ pub fn run() -> Result<()> {
     match &cli.command {
         Command::Scan { paths, verbose } => scan(&cli, paths, *verbose, false),
         Command::ScanTests { paths, verbose } => scan(&cli, paths, *verbose, true),
-        Command::Commit { rev, repo, verbose } => commit(&cli, Some(rev), repo, *verbose, false),
-        Command::CommitTests { rev, repo, verbose } => {
-            commit(&cli, Some(rev), repo, *verbose, true)
+        Command::Commit { rev, repo, verbose } => {
+            commit(&cli, Changes::Rev(rev), repo, *verbose, false)
         }
-        Command::PreCommit { repo, verbose } => commit(&cli, None, repo, *verbose, false),
-        Command::PreCommitTests { repo, verbose } => commit(&cli, None, repo, *verbose, true),
+        Command::CommitTests { rev, repo, verbose } => {
+            commit(&cli, Changes::Rev(rev), repo, *verbose, true)
+        }
+        Command::PreCommit {
+            repo,
+            only_staged,
+            verbose,
+        } => commit(
+            &cli,
+            Changes::Uncommitted {
+                staged: *only_staged,
+            },
+            repo,
+            *verbose,
+            false,
+        ),
+        Command::PreCommitTests {
+            repo,
+            only_staged,
+            verbose,
+        } => commit(
+            &cli,
+            Changes::Uncommitted {
+                staged: *only_staged,
+            },
+            repo,
+            *verbose,
+            true,
+        ),
         Command::Init { file } => init(file),
     }
 }
@@ -175,14 +207,25 @@ fn scan(cli: &Cli, paths: &[PathBuf], verbose: bool, tests: bool) -> Result<()> 
     Ok(())
 }
 
-/// Weighs the net delta of `rev` (a commit or a range), or of the uncommitted changes (none): of the code, or of
-/// its tests (`tests`), each at its full weight.
-fn commit(cli: &Cli, rev: Option<&str>, repo: &Path, verbose: bool, tests: bool) -> Result<()> {
+/// The changes a delta is of.
+#[derive(Clone, Copy)]
+enum Changes<'a> {
+    /// A commit or a range.
+    Rev(&'a str),
+    /// The uncommitted changes, all of them or the staged ones only.
+    Uncommitted { staged: bool },
+}
+
+/// Weighs the net delta of a commit, a range or the uncommitted changes: of the code, or of its tests (`tests`),
+/// each at its full weight.
+fn commit(cli: &Cli, changes: Changes, repo: &Path, verbose: bool, tests: bool) -> Result<()> {
     let config = load_config(cli, Some(repo))?;
-    let range = match rev {
-        Some(rev) => git::resolve(repo, rev)?,
-        None => git::uncommitted(repo)?,
+    let range = match changes {
+        Changes::Rev(rev) => git::resolve(repo, rev)?,
+        Changes::Uncommitted { staged } => git::uncommitted(repo, staged)?,
     };
+    // The uncommitted changes' tree is no commit of the repo's.
+    let to = matches!(changes, Changes::Rev(_)).then_some(range.to.as_str());
     let changes = source::from_commit(repo, &range, &config.files, tests)?;
     let weighers = Weighers::new(&config);
     let side = |blob: Option<source::Blob>| -> Result<Option<(PathBuf, Weighed)>> {
@@ -223,8 +266,7 @@ fn commit(cli: &Cli, rev: Option<&str>, repo: &Path, verbose: bool, tests: bool)
             Format::Json => {
                 let revisions = Revisions {
                     from: range.from.as_deref(),
-                    // The uncommitted changes' tree is no commit of the repo's.
-                    to: rev.map(|_| range.to.as_str()),
+                    to,
                 };
                 report::commit_json(&changes, &revisions, cli.by(), cli.top)
             }

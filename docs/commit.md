@@ -14,7 +14,9 @@ Built (`git`, `source::from_commit`, `report`):
    `git write-tree`. So the untracked files are in it and the ignored ones aren't, renames are found between a
    tracked file and an untracked one, the index's stat cache spares hashing the unchanged files, and the rest of
    the pipeline is the one a commit goes through. The user's index is never touched; the blobs and trees go to the
-   repo's objects, unreferenced, for `git gc`. The other way, `git diff-index HEAD` with the after side read from
+   repo's objects, unreferenced, for `git gc`. `--only-staged` skips the `git add -A`: the tree is the index's own,
+   written from its copy (`git write-tree` may update an index's cached trees, so not from the repo's own), the
+   empty tree where the repo has no index yet. The other way, `git diff-index HEAD` with the after side read from
    the disk, would have been a second path for the texts and the untracked files listed apart, without renames.
 2. The changed files: `git diff-tree -r -M -z --no-commit-id <from> <to>`, the empty tree by its hash
    (`git hash-object -t tree --stdin`) where there's no `from` (`--root` takes a commit, not a tree) (renames detected, so a moved file is not a
@@ -37,5 +39,5 @@ the tests less in it, would let a change to one hide in the other's number.
 
 The `commit` tests make throwaway repos (`tempfile`, git's global and system config off): an add, a delete, a
 rename, a merge, the root commit, a range, the excludes, the code and the tests apart, a bad revision, a shallow clone's
-boundary; the uncommitted changes (staged, unstaged, untracked, ignored, the index unchanged after), a rename into
-an untracked file, a repo with no commit.
+boundary; the uncommitted changes (staged, unstaged, untracked, ignored, the index unchanged after), the staged ones alone, a rename
+into an untracked file, a repo with no commit (and no index).

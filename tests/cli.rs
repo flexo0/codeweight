@@ -473,6 +473,12 @@ fn pre_commit_weighs_the_uncommitted_changes_and_leaves_the_index_alone() {
          \x20 +3  heavier  a.py  f\n"
     );
     assert_eq!(state(), before);
+    // The staged change alone.
+    assert_eq!(
+        repo.pre_commit(&["--only-staged"]),
+        "total +103\n+103  added    staged.py  f\n"
+    );
+    assert_eq!(state(), before);
 
     let json: serde_json::Value =
         serde_json::from_str(&repo.pre_commit(&["--format", "json"])).unwrap();
@@ -505,6 +511,13 @@ fn pre_commit_sees_a_rename_into_an_untracked_file_and_a_repo_with_no_commit() {
     fs::write(fresh.path().join("a.py"), F).unwrap();
     assert_eq!(
         fresh.pre_commit(&[]),
+        "total +103\n+103  added    a.py  f\n"
+    );
+    // Nothing staged yet (no index at all), then the file staged.
+    assert_eq!(fresh.pre_commit(&["--only-staged"]), "total 0\n");
+    fresh.git(&["add", "a.py"]);
+    assert_eq!(
+        fresh.pre_commit(&["--only-staged"]),
         "total +103\n+103  added    a.py  f\n"
     );
     let json: serde_json::Value =

@@ -98,10 +98,11 @@ fn commit(repo: &Path, rev: &str) -> Result<String> {
 }
 
 /// The uncommitted changes, as the commit `git add -A && git commit` would make: `HEAD` (the empty tree before
-/// the first commit) against the working tree, its untracked files too, the ignored ones left out. The working
-/// tree is added to a copy of the index, so the repo's own index isn't touched; its blobs and trees are written
-/// to the repo's objects, unreferenced (`git gc` drops them).
-pub fn uncommitted(repo: &Path) -> Result<Range> {
+/// the first commit) against the working tree, its untracked files too, the ignored ones left out; or, `staged`,
+/// as `git commit` would make it, `HEAD` against the index. The working tree is added to a copy of the index (and
+/// the tree written from the copy), so the repo's own index isn't touched; its blobs and trees are written to the
+/// repo's objects, unreferenced (`git gc` drops them).
+pub fn uncommitted(repo: &Path, staged: bool) -> Result<Range> {
     let index = run(
         repo,
         &["rev-parse", "--path-format=absolute", "--git-path", "index"],
@@ -127,7 +128,9 @@ pub fn uncommitted(repo: &Path) -> Result<Range> {
         command.env("GIT_INDEX_FILE", &copy);
         command
     };
-    run_command(with_copy(), &["add", "-A", "--", ":/"])?;
+    if !staged {
+        run_command(with_copy(), &["add", "-A", "--", ":/"])?;
+    }
     let to = run_command(with_copy(), &["write-tree"])?;
     let to = String::from_utf8(to).context("`git write-tree` output")?;
     Ok(Range {

@@ -20,6 +20,7 @@ weights file, never against a fixed threshold.
 | `codeweight commit-tests <rev>` / `A..B` `[-C <repo>]` | one signed number: the net delta of the tests alone |
 | `codeweight pre-commit [-C <repo>]` | the code's delta of the uncommitted changes: `HEAD` against the working tree, staged or not, untracked files too, ignored ones left out |
 | `codeweight pre-commit-tests [-C <repo>]` | the tests' delta of the uncommitted changes |
+| `codeweight pre-commit --only-staged` (either of the two) | only the staged changes: `HEAD` against the index, what `git commit` would commit |
 | `codeweight commit <rev> -v` (any of the four) | `total +N`, then `<delta>  <status>  <path>  <name>` per changed function (`added`, `removed`, `heavier`, `lighter`) |
 
 The code and the tests are always two numbers, never summed: report them apart.
@@ -35,6 +36,8 @@ report as JSON: `total`, `rows`, `warnings`; a commit's rows have `before`, `aft
 - Did my change make it lighter? Not committed yet: `codeweight pre-commit` and `codeweight pre-commit-tests` (they
   leave the index alone). Committed: `codeweight commit HEAD` and `codeweight commit-tests HEAD`, or `main..HEAD` for
   a branch. `-v` for which functions changed.
+- The commit about to be made, other changes left in the working tree: stage it, then `codeweight pre-commit
+  --only-staged` (and `pre-commit-tests --only-staged`).
 - Parsing the output in a script: `--format json`, read `.total` / `.rows`.
 
 ## Notes
