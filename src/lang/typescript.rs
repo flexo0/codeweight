@@ -3,7 +3,7 @@
 
 use tree_sitter::Node;
 
-use super::{Children, Lang, Nesting, Operator, Scope, ScopeKind, is_field_of, only_child, text};
+use super::{Lang, Nesting, Operator, Scope, ScopeKind, is_field_of, only_child, text};
 use crate::config::Category::*;
 
 pub static TYPESCRIPT: Lang = Lang {
@@ -113,43 +113,23 @@ pub(super) const LAMBDAS: &[&str] = &[
     "generator_function",
 ];
 
-const fn body(kind: &'static str) -> Nesting {
-    Nesting {
-        kind,
-        body: Children::Only(&["body"]),
-        chain: None,
-    }
-}
-
 pub(super) const NESTING: &[Nesting] = &[
-    Nesting {
-        kind: "if_statement",
-        body: Children::Only(&["consequence"]),
-        chain: None,
-    },
+    Nesting::only("if_statement", &["consequence"]),
     // `else if`: the `if` in an else stays at its depth, an else's block is deeper.
-    Nesting {
-        kind: "else_clause",
-        body: Children::AllBut(&["if_statement"]),
-        chain: None,
-    },
-    Nesting {
-        kind: "ternary_expression",
-        body: Children::Only(&["consequence", "alternative"]),
-        chain: Some(Children::Only(&["alternative"])),
-    },
-    body("switch_case"),
-    body("switch_default"),
-    body("for_statement"),
-    body("for_in_statement"),
-    body("while_statement"),
-    body("do_statement"),
-    body("try_statement"),
-    body("catch_clause"),
-    body("finally_clause"),
-    body("arrow_function"),
-    body("function_expression"),
-    body("generator_function"),
+    Nesting::all_but("else_clause", &["if_statement"]),
+    Nesting::chained("ternary_expression"),
+    Nesting::body("switch_case"),
+    Nesting::body("switch_default"),
+    Nesting::body("for_statement"),
+    Nesting::body("for_in_statement"),
+    Nesting::body("while_statement"),
+    Nesting::body("do_statement"),
+    Nesting::body("try_statement"),
+    Nesting::body("catch_clause"),
+    Nesting::body("finally_clause"),
+    Nesting::body("arrow_function"),
+    Nesting::body("function_expression"),
+    Nesting::body("generator_function"),
 ];
 
 /// A binary or unary operator (`typeof`, `void`, `delete` too), a compound assignment (`&&=`, `||=` and `??=` are

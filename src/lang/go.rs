@@ -2,7 +2,7 @@
 
 use tree_sitter::Node;
 
-use super::{Children, Lang, Nesting, Operator, Scope, ScopeKind, is_field_of, only_child, text};
+use super::{Lang, Nesting, Operator, Scope, ScopeKind, is_field_of, only_child, text};
 use crate::config::Category::{self, *};
 
 pub static GO: Lang = Lang {
@@ -61,29 +61,17 @@ const KINDS: &[(&str, Category)] = &[
     ("field_declaration", Statement),
 ];
 
-const fn only(kind: &'static str, body: &'static [&'static str]) -> Nesting {
-    Nesting {
-        kind,
-        body: Children::Only(body),
-        chain: None,
-    }
-}
-
 const NESTING: &[Nesting] = &[
     // `else if`: the `if` in an alternative stays at its depth (as Java's).
-    Nesting {
-        kind: "if_statement",
-        body: Children::Only(&["consequence", "alternative"]),
-        chain: Some(Children::Only(&["alternative"])),
-    },
-    only("for_statement", &["body"]),
+    Nesting::chained("if_statement"),
+    Nesting::body("for_statement"),
     // A `switch` or `select` is no nesting construct; each case is, its values (or its send or receive) at its
     // depth, its statements deeper.
-    only("expression_case", &["statement_list"]),
-    only("type_case", &["statement_list"]),
-    only("communication_case", &["statement_list"]),
-    only("default_case", &["statement_list"]),
-    only("func_literal", &["body"]),
+    Nesting::only("expression_case", &["statement_list"]),
+    Nesting::only("type_case", &["statement_list"]),
+    Nesting::only("communication_case", &["statement_list"]),
+    Nesting::only("default_case", &["statement_list"]),
+    Nesting::body("func_literal"),
 ];
 
 /// The number literals, which a `-` makes a negative number, no operator.

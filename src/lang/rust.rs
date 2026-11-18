@@ -2,7 +2,7 @@
 
 use tree_sitter::Node;
 
-use super::{Children, Lang, Nesting, Operator, Scope, ScopeKind, is_field_of, only_child, text};
+use super::{Lang, Nesting, Operator, Scope, ScopeKind, is_field_of, only_child, text};
 use crate::config::Category::{self, *};
 
 pub static RUST: Lang = Lang {
@@ -59,28 +59,16 @@ const KINDS: &[(&str, Category)] = &[
     ("enum_variant", Statement),
 ];
 
-const fn only(kind: &'static str, body: &'static [&'static str]) -> Nesting {
-    Nesting {
-        kind,
-        body: Children::Only(body),
-        chain: None,
-    }
-}
-
 const NESTING: &[Nesting] = &[
     // `else if`: the `if` in an else stays at its depth, an else's block is deeper (as TypeScript's).
-    only("if_expression", &["consequence"]),
-    Nesting {
-        kind: "else_clause",
-        body: Children::AllBut(&["if_expression"]),
-        chain: None,
-    },
+    Nesting::only("if_expression", &["consequence"]),
+    Nesting::all_but("else_clause", &["if_expression"]),
     // `match` is no nesting construct; each arm is, its pattern and guard at its depth, its value deeper.
-    only("match_arm", &["value"]),
-    only("for_expression", &["body"]),
-    only("while_expression", &["body"]),
-    only("loop_expression", &["body"]),
-    only("closure_expression", &["body"]),
+    Nesting::only("match_arm", &["value"]),
+    Nesting::body("for_expression"),
+    Nesting::body("while_expression"),
+    Nesting::body("loop_expression"),
+    Nesting::body("closure_expression"),
 ];
 
 /// The statements of a block, which a block's last child is when it is no tail expression; and a label.

@@ -2,7 +2,7 @@
 
 use tree_sitter::Node;
 
-use super::{Children, Lang, Nesting, Operator, Scope, ScopeKind, text};
+use super::{Lang, Nesting, Operator, Scope, ScopeKind, text};
 use crate::config::Category::{self, *};
 
 pub static JAVA: Lang = Lang {
@@ -66,71 +66,19 @@ const KINDS: &[(&str, Category)] = &[
 ];
 
 const NESTING: &[Nesting] = &[
-    Nesting {
-        kind: "if_statement",
-        body: Children::Only(&["consequence", "alternative"]),
-        chain: Some(Children::Only(&["alternative"])),
-    },
-    Nesting {
-        kind: "ternary_expression",
-        body: Children::Only(&["consequence", "alternative"]),
-        chain: Some(Children::Only(&["alternative"])),
-    },
-    Nesting {
-        kind: "switch_block_statement_group",
-        body: Children::AllBut(&["switch_label"]),
-        chain: None,
-    },
-    Nesting {
-        kind: "switch_rule",
-        body: Children::AllBut(&["switch_label"]),
-        chain: None,
-    },
-    Nesting {
-        kind: "for_statement",
-        body: Children::Only(&["body"]),
-        chain: None,
-    },
-    Nesting {
-        kind: "enhanced_for_statement",
-        body: Children::Only(&["body"]),
-        chain: None,
-    },
-    Nesting {
-        kind: "while_statement",
-        body: Children::Only(&["body"]),
-        chain: None,
-    },
-    Nesting {
-        kind: "do_statement",
-        body: Children::Only(&["body"]),
-        chain: None,
-    },
-    Nesting {
-        kind: "try_statement",
-        body: Children::Only(&["body"]),
-        chain: None,
-    },
-    Nesting {
-        kind: "try_with_resources_statement",
-        body: Children::Only(&["body"]),
-        chain: None,
-    },
-    Nesting {
-        kind: "catch_clause",
-        body: Children::Only(&["body"]),
-        chain: None,
-    },
-    Nesting {
-        kind: "finally_clause",
-        body: Children::Only(&["block"]),
-        chain: None,
-    },
-    Nesting {
-        kind: "lambda_expression",
-        body: Children::Only(&["body"]),
-        chain: None,
-    },
+    Nesting::chained("if_statement"),
+    Nesting::chained("ternary_expression"),
+    Nesting::all_but("switch_block_statement_group", &["switch_label"]),
+    Nesting::all_but("switch_rule", &["switch_label"]),
+    Nesting::body("for_statement"),
+    Nesting::body("enhanced_for_statement"),
+    Nesting::body("while_statement"),
+    Nesting::body("do_statement"),
+    Nesting::body("try_statement"),
+    Nesting::body("try_with_resources_statement"),
+    Nesting::body("catch_clause"),
+    Nesting::only("finally_clause", &["block"]),
+    Nesting::body("lambda_expression"),
 ];
 
 /// The number literals, which a `-` makes a negative number, no operator.

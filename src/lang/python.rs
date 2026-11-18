@@ -56,42 +56,30 @@ const KINDS: &[(&str, Category)] = &[
     ("exec_statement", Statement),
 ];
 
-const fn only(kind: &'static str, body: &'static [&'static str]) -> Nesting {
-    Nesting {
-        kind,
-        body: Children::Only(body),
-        chain: None,
-    }
-}
-
 /// A comprehension: its element and its `if`s are deeper, its `for`s (their iterables) at its depth.
 const fn comprehension(kind: &'static str) -> Nesting {
-    Nesting {
-        kind,
-        body: Children::AllBut(&["for_in_clause"]),
-        chain: None,
-    }
+    Nesting::all_but(kind, &["for_in_clause"])
 }
 
 const NESTING: &[Nesting] = &[
     // `elif` and `else` are the if's children beside its body, not in it.
-    only("if_statement", &["consequence"]),
-    only("elif_clause", &["consequence"]),
-    only("else_clause", &["body"]),
+    Nesting::only("if_statement", &["consequence"]),
+    Nesting::only("elif_clause", &["consequence"]),
+    Nesting::body("else_clause"),
     // `x if c else y`: no fields, its value and alternative are the first and third children.
     Nesting {
         kind: "conditional_expression",
         body: Children::Nth(&[0, 2]),
         chain: Some(Children::Nth(&[2])),
     },
-    only("case_clause", &["consequence"]),
-    only("for_statement", &["body"]),
-    only("while_statement", &["body"]),
-    only("try_statement", &["body"]),
-    only("except_clause", &["block"]),
-    only("finally_clause", &["block"]),
-    only("with_statement", &["body"]),
-    only("lambda", &["body"]),
+    Nesting::only("case_clause", &["consequence"]),
+    Nesting::body("for_statement"),
+    Nesting::body("while_statement"),
+    Nesting::body("try_statement"),
+    Nesting::only("except_clause", &["block"]),
+    Nesting::only("finally_clause", &["block"]),
+    Nesting::body("with_statement"),
+    Nesting::body("lambda"),
     comprehension("list_comprehension"),
     comprehension("set_comprehension"),
     comprehension("dictionary_comprehension"),

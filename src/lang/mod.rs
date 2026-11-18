@@ -77,6 +77,41 @@ pub struct Nesting {
     pub chain: Option<Children>,
 }
 
+impl Nesting {
+    /// A construct whose children of these field names or node kinds are deeper.
+    pub const fn only(kind: &'static str, body: &'static [&'static str]) -> Nesting {
+        Nesting {
+            kind,
+            body: Children::Only(body),
+            chain: None,
+        }
+    }
+
+    /// A construct whose `body` is deeper: a loop, a `try`, a lambda.
+    pub const fn body(kind: &'static str) -> Nesting {
+        Nesting::only(kind, &["body"])
+    }
+
+    /// A construct whose children are all deeper but those of these field names or node kinds.
+    pub const fn all_but(kind: &'static str, but: &'static [&'static str]) -> Nesting {
+        Nesting {
+            kind,
+            body: Children::AllBut(but),
+            chain: None,
+        }
+    }
+
+    /// An `if` or a ternary whose `consequence` and `alternative` are deeper, its `alternative` at its depth when it
+    /// is of its own kind (`else if`, a chained ternary).
+    pub const fn chained(kind: &'static str) -> Nesting {
+        Nesting {
+            kind,
+            body: Children::Only(&["consequence", "alternative"]),
+            chain: Some(Children::Only(&["alternative"])),
+        }
+    }
+}
+
 /// Some of a node's named children.
 pub enum Children {
     /// Those matched by their field name or their node kind.
