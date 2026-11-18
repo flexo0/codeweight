@@ -1,6 +1,7 @@
 //! The languages: each one's grammar, file extensions, node kind → category table, nesting constructs and how its
 //! functions and classes are named. The engine reads these tables; it knows no language itself.
 
+pub mod go;
 pub mod java;
 pub mod javascript;
 pub mod python;
@@ -21,6 +22,7 @@ pub const ALL: &[&Lang] = &[
     &javascript::JAVASCRIPT,
     &python::PYTHON,
     &rust::RUST,
+    &go::GO,
 ];
 
 /// A language's tables.
@@ -38,9 +40,13 @@ pub struct Lang {
     pub nesting: &'static [Nesting],
     /// The kinds of a return: an early one (not its function's or lambda's last statement) is a jump.
     pub returns: &'static [&'static str],
-    /// The kinds of a statement that is an expression and its `;` (Rust's `expression_statement`): a return in one
-    /// is at the statement's place, so the last statement of a body is a return so wrapped, not an early one.
+    /// The kinds of a statement around another (Rust's `expression_statement`, an expression and its `;`; Go's
+    /// `labeled_statement`): a return in one is at the statement's place, so the last statement of a body is a
+    /// return so wrapped, not an early one.
     pub wrappers: &'static [&'static str],
+    /// The kinds of a list of statements a grammar puts between a body and its statements (Go's `statement_list`):
+    /// a return that is the last of the list is its body's last statement.
+    pub lists: &'static [&'static str],
     /// The kinds of a lambda, whose last statement isn't an early return either.
     pub lambdas: &'static [&'static str],
     /// The kinds of a parenthesized expression, which a run of like operators goes through.
@@ -50,9 +56,10 @@ pub struct Lang {
     /// Whether a node weighs nothing although its kind has a category: the cases its kind can't tell (a docstring,
     /// a `match` case's guard, a call's callee, `this.x`).
     pub exempt: fn(Node, &[u8]) -> bool,
-    /// Whether a node is a block that ends in a value, an expression without its `;` (Rust's tail expression): it
-    /// weighs a statement, beside its own kind's category, as the `return` of that value would.
-    pub tail: fn(Node) -> bool,
+    /// Whether a node weighs a statement beside its own kind's category: Rust's block that ends in a value, an
+    /// expression without its `;` (as the `return` of that value would); Go's `i++` and `x += 1`, statements that
+    /// are their own operator (as Java's `x++;` is a statement and an operator).
+    pub also_statement: fn(Node) -> bool,
     /// The function or class a node declares, if it does one, and its own name (not qualified). A lambda it names
     /// a function is one: it weighs as a function, and nests as one, not as a lambda.
     pub scope: fn(Node, &[u8]) -> Option<Scope>,
@@ -318,6 +325,7 @@ mod tests {
                 .chain(lang.nesting.iter().map(|n| n.kind))
                 .chain(lang.returns.iter().copied())
                 .chain(lang.wrappers.iter().copied())
+                .chain(lang.lists.iter().copied())
                 .chain(lang.lambdas.iter().copied())
                 .chain(lang.parens.iter().copied());
             for kind in kinds {
@@ -355,6 +363,7 @@ mod tests {
             Some("python")
         );
         assert_eq!(for_path(Path::new("a/b.rs")).map(|l| l.name), Some("rust"));
+        assert_eq!(for_path(Path::new("a/b.go")).map(|l| l.name), Some("go"));
         assert!(for_path(Path::new("a/b.txt")).is_none());
         assert!(for_path(Path::new("Makefile")).is_none());
     }

@@ -13,7 +13,7 @@ Built (`config`, `config::find`):
   unknown key anywhere is an error.
 - Checked after: every `[weights]` key is a category (and every category has a weight, which only a file on its own,
   without the defaults under it, can miss); every `[languages.<name>]` is a language codeweight reads (`java`,
-  `typescript`, `javascript`, `python`, `rust`); every `node_kinds` key is a named node kind of that language's grammar and its value a
+  `typescript`, `javascript`, `python`, `rust`, `go`); every `node_kinds` key is a named node kind of that language's grammar and its value a
   category or `"none"`; every weight and factor is a finite number, 0 or above; every `[files]` glob compiles. The
   error names the table and the key, and the file.
 - `typescript` is the table of both `.ts` and `.tsx` files (two grammars, one key): a TS setting reaches TSX too.
@@ -63,11 +63,14 @@ lambda = 3
 satisfies_expression = "statement"
 
 [files]
-exclude = ["**/node_modules/**", "**/build/**", "**/target/**", "**/generated/**", "**/*.d.ts", "**/*.min.js"]
+exclude = [
+    "**/node_modules/**", "**/build/**", "**/target/**", "**/generated/**", "**/vendor/**", "**/*.d.ts",
+    "**/*.min.js", "**/*.pb.go", "**/zz_generated*.go",
+]
 test_globs = [
     "**/test/**", "**/tests/**", "**/__tests__/**", "**/*Test.java", "**/*Tests.java",
     "**/*.test.ts", "**/*.spec.ts", "**/*.test.tsx", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py",
-    "**/*.test.js", "**/*.spec.js", "**/*.test.jsx", "**/*.spec.jsx",
+    "**/*.test.js", "**/*.spec.js", "**/*.test.jsx", "**/*.spec.jsx", "**/*_test.go",
 ]
 ```
 

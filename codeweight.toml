@@ -35,9 +35,12 @@ access    = 0.25        # each field access or index: a.b.c is 2, a[i] is 1; not
 # synchronized_statement = "try"
 
 [files]
-exclude = ["**/node_modules/**", "**/build/**", "**/target/**", "**/generated/**", "**/*.d.ts", "**/*.min.js"]
+exclude = [
+    "**/node_modules/**", "**/build/**", "**/target/**", "**/generated/**", "**/vendor/**", "**/*.d.ts",
+    "**/*.min.js", "**/*.pb.go", "**/zz_generated*.go",
+]
 test_globs = [
     "**/test/**", "**/tests/**", "**/__tests__/**", "**/*Test.java", "**/*Tests.java",
     "**/*.test.ts", "**/*.spec.ts", "**/*.test.tsx", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py",
-    "**/*.test.js", "**/*.spec.js", "**/*.test.jsx", "**/*.spec.jsx",
+    "**/*.test.js", "**/*.spec.js", "**/*.test.jsx", "**/*.spec.jsx", "**/*_test.go",
 ]

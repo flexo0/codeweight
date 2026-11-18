@@ -194,6 +194,34 @@ fn scan_walks_a_folder_its_excludes_and_tests_left_out_and_scan_tests_weighs_the
     );
 }
 
+#[test]
+fn scan_weighs_go_its_test_files_and_vendor_and_generated_files_left_out() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    for (file, text) in [
+        // Under the defaults: the method S.m is function 2, statement 1, call 0.5.
+        ("pkg/a.go", "package pkg\n\nfunc (s *S) m() { g() }\n"),
+        // A test file: TestM is 3.5.
+        (
+            "pkg/a_test.go",
+            "package pkg\n\nfunc TestM(t *testing.T) { g() }\n",
+        ),
+        ("vendor/x/y.go", "package x\n\nfunc v() { g() }\n"),
+        // Generated: left out.
+        ("pkg/a.pb.go", "package pkg\n\nfunc p() { g() }\n"),
+    ] {
+        let path = root.join(file);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    }
+
+    let output = codeweight(root, &["scan", ".", "-v"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(stdout(&output), "total 3.5\n3.5  pkg/a.go  S.m\n");
+    let tests = codeweight(root, &["scan-tests", ".", "-v"]);
+    assert_eq!(stdout(&tests), "total 3.5\n3.5  pkg/a_test.go  TestM\n");
+}
+
 /// A throwaway git repo, isolated from the user's and the system's git config.
 struct Repo {
     dir: tempfile::TempDir,

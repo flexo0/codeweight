@@ -14,11 +14,12 @@ pub static RUST: Lang = Lang {
     nesting: NESTING,
     returns: &["return_expression"],
     wrappers: &["expression_statement"],
+    lists: &[],
     lambdas: &["closure_expression"],
     parens: &["parenthesized_expression"],
     operator,
     exempt,
-    tail,
+    also_statement: tail,
     scope,
     tests: Some(tests),
 };

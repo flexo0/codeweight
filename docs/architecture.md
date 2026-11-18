@@ -5,7 +5,7 @@
 | `cli` | the arguments (`clap`), the commands |
 | `config` | loads the weights file, merges it over the defaults, validates it |
 | `source` | an input as `(path, language, text)` items: from disk (`ignore`, the excludes) or git blobs at a revision |
-| `lang` | a module per language (Java, TS and TSX, JavaScript, Python, Rust): grammar, extensions, node kind → category, nesting kinds, function names |
+| `lang` | a module per language (Java, TS and TSX, JavaScript, Python, Rust, Go): grammar, extensions, node kind → category, nesting kinds, function names |
 | `engine` | one tree walked: each node's weight, summed by function, class and file |
 | `git` | the files a commit, a range or the uncommitted changes changed (`git diff-tree -r -M`; the uncommitted ones as a tree, `git add -A` into a copy of the index, `git write-tree`), their text before and after (`git cat-file --batch`) |
 | `report` | the text table and the JSON; for `commit`, the deltas |
@@ -13,7 +13,7 @@
 Files are weighed in parallel (`rayon`).
 
 Built: every module. The dependencies: `tree-sitter`, `tree-sitter-java`, `tree-sitter-typescript`,
-`tree-sitter-javascript`, `tree-sitter-python`, `tree-sitter-rust`, `clap`, `serde`, `serde_json` (the JSON report), `toml`, `anyhow`, `ignore`, `globset` (the
+`tree-sitter-javascript`, `tree-sitter-python`, `tree-sitter-rust`, `tree-sitter-go`, `clap`, `serde`, `serde_json` (the JSON report), `toml`, `anyhow`, `ignore`, `globset` (the
 `[files]` globs; `ignore` is built on it, so it costs no build), `rayon`, and `tempfile` for the tests. `git` is run
 as a command, no `git2` / `gix`.
 
@@ -48,13 +48,15 @@ as a command, no `git2` / `gix`.
   grammar, the node kind → category list, the nesting constructs (each with its body: the children it nests, by
   field name or node kind, either listed or all but those listed, or by their place among the named children; and
   its chain, the children of its own kind that stay at its depth, for `else if`), the return, lambda and parenthesis
-  kinds, the wrappers (the statement kinds a return is looked through for its place: Rust's expression statement),
+  kinds, the wrappers (the statement kinds a return is looked through for its place: Rust's expression statement,
+  Go's labeled one), the lists (a list of statements a grammar puts between a body and its statements, a return the
+  last of it being its body's last: Go's `statement_list`),
   `operator` (a node's operator, by its run: `&&`, `+` / `-`, a comparison, a unary one, ...; a logical one is a
   `bool_op`, any other an `operator`), `exempt` (a node that weighs nothing though its kind has a category, where
-  the kind can't tell: a docstring, a case's guard, a call's callee, `this.x`), `tail` (a node that weighs a statement beside
-  its kind's category: Rust's block ending in a value), `scope` (the function or class a node
-  declares, and its own name) and `tests` (a node that is test code inside a source file, it and all in it:
-  Rust's `#[cfg(test)]` items; none for a language whose tests are files of their own). A lambda `scope` names a function weighs and nests as a function (TS's named
+  the kind can't tell: a docstring, a case's guard, a call's callee, `this.x`), `also_statement` (a node that
+  weighs a statement beside its kind's category: Rust's block ending in a value, Go's `i++` and `x += 1`, statements
+  that are their own operator), `scope` (the function or class a node declares, and its own name) and `tests` (a
+  node that is test code inside a source file, it and all in it: Rust's `#[cfg(test)]` items; none for a language whose tests are files of their own). A lambda `scope` names a function weighs and nests as a function (TS's named
   arrows). A test checks that
   every kind and field the tables name is in the grammar, so a typo can't silently weigh nothing.
 - `engine::Weigher` turns a language's tables and its weights into arrays by node kind id once, then walks each

@@ -84,8 +84,8 @@ which are Java's as they stand.
   around a block, an expression ending in one or a jump (the language's `exempt`): an `if` is a branch, `return x;`
   a statement (or a jump), `break;` a jump, as in Java. The early return looks through it (the language's
   `wrappers`): `return x;` as the last statement of its body is the statement wrapping it, so it is no jump.
-- A block's tail expression (its value, without `;`) is a statement (the language's `tail` hook, which weighs the
-  block a statement beside its own category, at the block's depth, the tail's too), so `fn f() -> i32 { a + b }`
+- A block's tail expression (its value, without `;`) is a statement (the language's `also_statement` hook, which
+  weighs the block a statement beside its own category, at the block's depth, the tail's too), so `fn f() -> i32 { a + b }`
   weighs as Java's `return a + b;`, `{ g() }` as `g();`. A tail jump (`return x`, `break`) weighs as itself, not
   twice. The same holds in any block: an `if`'s, an arm's, a closure's, `unsafe { }`'s.
 - Known gaps: a macro's arguments are a token tree, not parsed, so only the macro call weighs (what is inside
@@ -101,3 +101,44 @@ which are Java's as they stand.
   inside a class or function (`#[cfg(test)] const` in an `impl`) weighs in its class's or function's code; a
   `mod tests;` whose file is `tests.rs` marks that file only in its parent, so `tests.rs` is code unless a test
   glob or its own `#![cfg(test)]` says otherwise.
+
+## Go
+
+- A `func` declaration is a function; a method is named by its receiver's type and its name (`T.M` for
+  `func (r *T) M()` or `func (T) M()`, its pointer and type arguments dropped: `func (l *List[T]) Push` is
+  `List.Push`), as Rust's `impl` names them. A method is no member of a class in the tree (it is declared at the
+  file's level, maybe in another file than its type), so `T.M` is an entry of its own, its class `T` only where `T`
+  is declared.
+- A type definition (`type_spec`) is a class: a struct, an interface, and any other defined type (`type Celsius
+  float64`, `type HandlerFunc func(...)`), as any of them can have methods and `type Color int` is Go's enum; the
+  tree can't tell a struct type from another anyway (`type R bufio.Reader` is one). An alias (`type A = B`) is a
+  statement, as Rust's `type`. A struct's field (an embedded one too) is a statement; a named interface's method
+  (`M() int`) a function, `I.M`, as Rust's trait signature; an embedded interface or a constraint (`~int | string`)
+  weighs nothing. An anonymous struct or interface (`var s struct{...}`, a parameter's `interface{ Close() error }`)
+  is no class: its fields are statements where it is, its methods nothing (no entry: they'd be functions nested in
+  the function around them).
+- A `func` literal is a lambda, even bound to a name (`var handler = func() {...}`, `f := func() {...}`), its body
+  deeper.
+- `if` nests its consequence and its alternative; an `if` in the alternative (`else if`) stays at its depth, as
+  Java's; its initializer (`if err := f(); err != nil`) is at the `if`'s depth, a statement. `for` is the only loop
+  (a three-clause, a `range`, a bare `for {}`). A `switch`, a type switch and a `select` are no nesting constructs;
+  each case (`default` too) is a branch, its values (a select case's send or receive, which weigh nothing, as a
+  label) at its depth, its statements deeper. No `try`: `defer` and `go` are statements, their call a call.
+- `break`, `continue`, `goto`, `fallthrough` and an early `return` are jumps; a label (`L:`) weighs nothing, and a
+  labeled `return` at a body's end is its last statement. The grammar puts a list of statements between a block and
+  its statements (`statement_list`), which the early return looks through (the language's `lists`).
+- Statements: an expression statement, an assignment, `:=`, each `var` / `const` spec (a `const (...)` block of
+  five is five, as Java's enum constants), a send (`ch <- v`), `defer`, `go`, an alias, a field. `i++`, `i--` and a
+  compound assignment (`x += 1`) are statements of their own in the grammar, no expression in one: they weigh a
+  statement and an `operator` (the `also_statement` hook), as Java's `x++;`; in a `for` clause's update
+  (`for i := 0; i < n; i++`) only the operator, as Java's update is no statement. The update is the loop's head:
+  any statement there weighs none (`for ...; i, j = i+1, j-1`). The initializer (`i := 0`) is a statement, as
+  Java's `int i = 0`.
+- `&&` / `||` are the logical operators. `&^` (and not) is a bitwise and, `^x` a unary operator; `*p`, `&x` and a
+  receive (`<-ch`) are none. `access` counts a selector (`a.b`), an index and a slice (`a[i:j]`); a call's callee
+  (`a.f()`, `fmt.Println(...)`) is the call's, and a field of the method's receiver (`r.x` in a method of `r`, in
+  a `func` literal in it too) is none, as Java's `this.x`. A package's name (`os.Args`) can't be told from a
+  variable's, so its selector is an access, as Python's `os.path`. A composite literal (`T{a: 1}`), a type
+  conversion (`[]byte(s)`; `int(x)` parses as a call) and a type assertion (`x.(T)`) weigh nothing of their own,
+  as Rust's struct expression.
+- Tests are files of their own, `*_test.go` (a test glob), so the language has no `tests` hook.

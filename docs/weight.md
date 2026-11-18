@@ -31,14 +31,15 @@ total        = Σ weight(node) over the nodes that have a category
   comparison `a < b < c` is one), `&`, `|`, `^`, and the unary ones (`-x`, `!x`, `not x`, `~x`, TS's `typeof`, `++`
   and `--`). A compound assignment (`x += 1`) is its operator, so `x += b + c` is one run, as `x = x + b + c`; a
   plain `=` is none, the statement already weighs it. A negative number (`-1`) is a literal, no operator. A Rust
-  dereference (`*x`) and a borrow (`&x`) are none. `&&=`, `||=`, `??=` are logical: `bool_op`.
+  dereference (`*x`) and a borrow (`&x`) are none, and so are Go's (`*p`, `&x`) and its receive (`<-ch`). `&&=`,
+  `||=`, `??=` are logical: `bool_op`.
 - `access`: one per field access or index, so `obj.a` is 1, `obj.a.b` and `a[i][j]` are 2. A call's callee is the
   call's, no access: `obj.f()` is a call, `obj.a.f()` a call and an access (`obj.a`), as Java's grammar has it (its
   method call holds its object, no field access around the name); TS's `new a.B()` and a JSX element's `<a.B />`
-  the same. An access to `this` / `super` (Java, TS), `self` / `cls` (Python) or `self` (Rust) is none, as a bare
-  `x` (Java's implicit `this`) is none; `this.a.b` is 1. A qualified name in a type or an import is no access: the
-  grammars parse those as other kinds (`scoped_identifier`, `nested_type_identifier`, `dotted_name`), and a Python
-  annotation's, which is an expression, is exempt. Both are the language's `exempt` hook.
+  the same. An access to `this` / `super` (Java, TS), `self` / `cls` (Python), `self` (Rust) or a method's receiver
+  (Go's `r.x` in `func (r *T) M()`) is none, as a bare `x` (Java's implicit `this`) is none; `this.a.b` is 1. A
+  qualified name in a type or an import is no access: the grammars parse those as other kinds (`scoped_identifier`,
+  `nested_type_identifier`, `dotted_name`), and a Python annotation's, which is an expression, is exempt. Both are the language's `exempt` hook.
 - `jump`: `break`, `continue`, `throw`, and an early return: a return that isn't the last statement (comments aside)
   of its function's or lambda's body; the last one is a `statement`. So `if (x) return a; return b;` is a jump and a
   statement, and both returns of an `if / else` at the end are jumps.

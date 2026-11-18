@@ -8,10 +8,10 @@ Guidance for coding agents working in this repository.
 function, a class, ...) has a weight, set in a weights file; an element nested in branches, loops, lambdas and nested
 functions weighs more. The weight of a file, a folder or a function is the sum of its elements' weights; the weight of
 a git commit (or a range, or the uncommitted changes) is its net delta, after minus before, positive or negative. It
-reads Java, TypeScript (TS, TSX), JavaScript, Python and Rust, parsed by tree-sitter.
+reads Java, TypeScript (TS, TSX), JavaScript, Python, Rust and Go, parsed by tree-sitter.
 
-Milestones 0-10 are built (the CLI, the config, the engine, Java, TypeScript, TSX, Python, folders, `commit`, the
-text and JSON reports, the tuned defaults, Rust, operators and accesses, JavaScript); the design is `docs/`, a file per subject
+Milestones 0-11 are built (the CLI, the config, the engine, Java, TypeScript, TSX, Python, folders, `commit`, the
+text and JSON reports, the tuned defaults, Rust, operators and accesses, JavaScript, Go); the design is `docs/`, a file per subject
 (its index `docs/README.md`), the milestones `docs/milestones.md`. Keep those docs in step with what is built (a
 decision made while building goes into its subject's file, in the same commit).
 
@@ -24,7 +24,7 @@ decision made while building goes into its subject's file, in the same commit).
 - The `commit` tests make throwaway git repos in a temp dir (`tempfile`); never run against a real repo.
 - Rust 1.100 (`rust-toolchain.toml`, `rust-version` in `Cargo.toml`), edition 2024. Few dependencies: `tree-sitter`
   and its grammars (`tree-sitter-java`, `tree-sitter-typescript`, `tree-sitter-javascript`, `tree-sitter-python`,
-  `tree-sitter-rust`), `clap`, `serde`, `toml`, `serde_json`, `ignore` and its `globset` (the `[files]` globs), `rayon`,
+  `tree-sitter-rust`, `tree-sitter-go`), `clap`, `serde`, `toml`, `serde_json`, `ignore` and its `globset` (the `[files]` globs), `rayon`,
   `anyhow`; `tempfile` for the tests. A new one needs a reason.
 - External tool: `git` (the commit mode runs it, `git diff-tree` and `git cat-file --batch`, for the uncommitted
   changes `git add -A` into a copy of the index and `git write-tree`; no `git2` / `gix`).

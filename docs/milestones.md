@@ -1,7 +1,7 @@
 # Milestones
 
-Built: milestones 0-10 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
-`commit`, the reports, the tuned defaults, Rust, operators and accesses, JavaScript).
+Built: milestones 0-11 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
+`commit`, the reports, the tuned defaults, Rust, operators and accesses, JavaScript, Go).
 
 0. (built) The repo: `Cargo.toml`, `README.md` (usage, the weights file), the MIT license, GitHub Actions (`cargo fmt
    --check`, `clippy -D warnings`, `test`).
@@ -58,3 +58,10 @@ Built: milestones 0-10 (the repo, the CLI and the config, the engine and Java, T
     TypeScript's table but for the type kinds, its nesting and hooks; its own weights-file key, `javascript`
     ([config.md](config.md)); snippet tests. The test globs gained `*.test.js` / `*.spec.js` and their `.jsx`, the
     excludes `*.min.js` (a minified bundle is built, not written). The defaults are TS's, untuned on JS.
+11. (built) Go (`.go`, `tree-sitter-go` 0.25 on `tree-sitter` 0.27): its table, nesting and hooks
+    ([languages.md](languages.md)), its weights-file key `go`; snippet tests. The engine gained a language
+    table, the lists (Go's `statement_list`, between a block and its statements, which the early return looks
+    through), and the `tail` hook became `also_statement`, Rust's tail and Go's `i++` / `x += 1` behind it.
+    The test globs gained `*_test.go`, the excludes `vendor` (`go mod vendor`'s copies of the dependencies) and
+    the generated Go files that sit by the source, `*.pb.go` (protobuf) and `zz_generated*.go` (Kubernetes'
+    generators). The defaults are untuned on Go.

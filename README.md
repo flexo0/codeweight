@@ -6,7 +6,7 @@ weighs more. A file's weight is the sum of its elements' weights, and so is a fu
 tree-sitter.
 
 It reads Java (`.java`), TypeScript (`.ts`, `.mts`, `.cts`), TSX (`.tsx`), JavaScript (`.js`, `.jsx`, `.mjs`, `.cjs`),
-Python (`.py`, `.pyi`) and Rust (`.rs`). The design is
+Python (`.py`, `.pyi`), Rust (`.rs`) and Go (`.go`). The design is
 in `docs/`, a file per subject (see `docs/README.md`).
 
 ## Example
@@ -77,8 +77,8 @@ a Java class's constructors (`A.A`). A Java anonymous class is `new Type`; a Typ
 `A.constructor`. A TypeScript (or JavaScript) arrow or function expression bound to a name at the file's level or as
 a class field (`export const f = () => ...`, `onClick = () => ...`) is a function of that name; anywhere else (inside
 a function too) it is a lambda, its code the function's around it. A Rust method is named by its `impl` block's type
-(`Foo.method`), so a type's struct and all its `impl` blocks in a file are one class. A weight has at most two
-decimals.
+(`Foo.method`), so a type's struct and all its `impl` blocks in a file are one class; a Go method by its receiver's
+type (`T.M` for `func (r *T) M()`). A weight has at most two decimals.
 
 A folder is walked for the files in it: its `.gitignore` is honoured, hidden files and the `[files]` excludes are
 left out (a file named on the command line is weighed even if excluded). The globs are matched against a file's path
@@ -192,11 +192,14 @@ lambda = 3
 synchronized_statement = "try"
 
 [files]                 # what a folder walk weighs (globs: * and ? within a path's part, ** across parts)
-exclude = ["**/node_modules/**", "**/build/**", "**/target/**", "**/generated/**", "**/*.d.ts", "**/*.min.js"]
+exclude = [
+    "**/node_modules/**", "**/build/**", "**/target/**", "**/generated/**", "**/vendor/**", "**/*.d.ts",
+    "**/*.min.js", "**/*.pb.go", "**/zz_generated*.go",
+]
 test_globs = [
     "**/test/**", "**/tests/**", "**/__tests__/**", "**/*Test.java", "**/*Tests.java",
     "**/*.test.ts", "**/*.spec.ts", "**/*.test.tsx", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py",
-    "**/*.test.js", "**/*.spec.js", "**/*.test.jsx", "**/*.spec.jsx",
+    "**/*.test.js", "**/*.spec.js", "**/*.test.jsx", "**/*.spec.jsx", "**/*_test.go",
 ]
 ```
 
@@ -221,26 +224,26 @@ tree levels don't count (`a.b().c()` is not deep). An `else if` (Python's `elif`
 are the cases of a `switch` or a `match`.
 
 The languages' keys are `java`, `typescript` (for `.ts` and `.tsx` alike: its `node_kinds` may name a kind of either
-grammar, the `jsx_*` ones being TSX's), `javascript` (its own, not `typescript`'s), `python` and `rust`. A node kind
-is a tree-sitter one, as the language's grammar names it.
+grammar, the `jsx_*` ones being TSX's), `javascript` (its own, not `typescript`'s), `python`, `rust` and `go`. A
+node kind is a tree-sitter one, as the language's grammar names it.
 
 ### The categories
 
-| Category | Java | TypeScript, TSX, JavaScript | Python | Rust |
-|---|---|---|---|---|
-| `statement` | an expression statement, a local variable, a field, a `return` that ends its function or lambda, `yield`, `assert`, `synchronized`, an enum constant | an expression statement, `const` / `let` / `var`, a class field, an interface's property, a `type` alias, a `return` that ends its function | an expression statement (an assignment too; not a docstring or a bare `...`), `assert`, `del`, a `type` alias, a `return` that ends its function | an expression statement, `let`, `const`, `static`, a `type` alias, a field, an enum variant, a block's tail expression (its value, no `;`), a `return` that ends its function or closure |
-| `call` | a method call, `new`, `this(...)` / `super(...)` | a call, `new`; in TSX and JavaScript each JSX element | a call | a call, a macro invocation (its arguments aren't parsed) |
-| `branch` | `if`, a ternary `?:`, each `switch` case | `if`, a ternary `?:`, each `switch` case | `if`, `elif`, `x if c else y`, each `match` case, a comprehension's `if` | `if` (`if let` too), each `match` arm |
-| `loop` | `for`, for-each, `while`, `do` | `for`, `for ... in` / `of`, `while`, `do` | `for`, `while`, a comprehension's `for` | `for`, `while`, `loop` |
-| `try` | `try`, try-with-resources | `try` | `try`, `with` | — |
-| `catch` | a `catch` clause | a `catch` clause | an `except` clause | — |
-| `lambda` | a lambda | an arrow or function expression not bound to a name at the file's level or as a field | a `lambda` | a closure |
-| `function` | a method or constructor | a function, method, signature, an arrow bound to a name at the file's level or as a field | a `def` | a `fn`, a trait's signature |
-| `class` | a class, interface, enum, record or annotation type | a class, interface, enum, namespace | a `class` | a struct, enum, union, trait, `mod`; an `impl` is its type's class, weighing nothing of its own |
-| `bool_op` | each run of like `&&` / `\|\|` | each run of like `&&` / `\|\|` / `??` | each run of like `and` / `or` | each run of like `&&` / `\|\|`, a let chain |
-| `jump` | `break`, `continue`, `throw`, an early `return` | `break`, `continue`, `throw`, an early `return` | `break`, `continue`, `raise`, an early `return` | `break`, `continue`, `?`, an early `return` |
-| `operator` | each run of like arithmetic, comparison (`instanceof` too), bitwise or unary operators, a compound assignment, `++` / `--` | the same (`in`, `typeof`, `void`, `delete` too) | the same (`not`, `in`, `is` too) | the same (not `*x`, `&x`) |
-| `access` | a field access, an array index | a member (`a.b`, `a?.b`), a subscript | an attribute, a subscript | a field (`a.b`, `a.0`), an index |
+| Category | Java | TypeScript, TSX, JavaScript | Python | Rust | Go |
+|---|---|---|---|---|---|
+| `statement` | an expression statement, a local variable, a field, a `return` that ends its function or lambda, `yield`, `assert`, `synchronized`, an enum constant | an expression statement, `const` / `let` / `var`, a class field, an interface's property, a `type` alias, a `return` that ends its function | an expression statement (an assignment too; not a docstring or a bare `...`), `assert`, `del`, a `type` alias, a `return` that ends its function | an expression statement, `let`, `const`, `static`, a `type` alias, a field, an enum variant, a block's tail expression (its value, no `;`), a `return` that ends its function or closure | an expression statement, an assignment, `:=`, each `var` / `const` spec, a send, `defer`, `go`, a type alias, a field, `i++` / `x += 1` (an `operator` too; not as a `for` clause's update), a `return` that ends its function or literal |
+| `call` | a method call, `new`, `this(...)` / `super(...)` | a call, `new`; in TSX and JavaScript each JSX element | a call | a call, a macro invocation (its arguments aren't parsed) | a call |
+| `branch` | `if`, a ternary `?:`, each `switch` case | `if`, a ternary `?:`, each `switch` case | `if`, `elif`, `x if c else y`, each `match` case, a comprehension's `if` | `if` (`if let` too), each `match` arm | `if`, each `switch`, type switch or `select` case |
+| `loop` | `for`, for-each, `while`, `do` | `for`, `for ... in` / `of`, `while`, `do` | `for`, `while`, a comprehension's `for` | `for`, `while`, `loop` | `for` |
+| `try` | `try`, try-with-resources | `try` | `try`, `with` | — | — |
+| `catch` | a `catch` clause | a `catch` clause | an `except` clause | — | — |
+| `lambda` | a lambda | an arrow or function expression not bound to a name at the file's level or as a field | a `lambda` | a closure | a `func` literal |
+| `function` | a method or constructor | a function, method, signature, an arrow bound to a name at the file's level or as a field | a `def` | a `fn`, a trait's signature | a function, a method, a named interface's method |
+| `class` | a class, interface, enum, record or annotation type | a class, interface, enum, namespace | a `class` | a struct, enum, union, trait, `mod`; an `impl` is its type's class, weighing nothing of its own | a type definition (`type T struct {...}`, `interface`, `type C float64`), not an alias |
+| `bool_op` | each run of like `&&` / `\|\|` | each run of like `&&` / `\|\|` / `??` | each run of like `and` / `or` | each run of like `&&` / `\|\|`, a let chain | each run of like `&&` / `\|\|` |
+| `jump` | `break`, `continue`, `throw`, an early `return` | `break`, `continue`, `throw`, an early `return` | `break`, `continue`, `raise`, an early `return` | `break`, `continue`, `?`, an early `return` | `break`, `continue`, `goto`, `fallthrough`, an early `return` |
+| `operator` | each run of like arithmetic, comparison (`instanceof` too), bitwise or unary operators, a compound assignment, `++` / `--` | the same (`in`, `typeof`, `void`, `delete` too) | the same (`not`, `in`, `is` too) | the same (not `*x`, `&x`) | the same (`&^` too; not `*p`, `&x`, `<-ch`) |
+| `access` | a field access, an array index | a member (`a.b`, `a?.b`), a subscript | an attribute, a subscript | a field (`a.b`, `a.0`), an index | a selector (`a.b`), an index, a slice (`a[i:j]`) |
 
 JavaScript's elements are TypeScript's but for the type ones (an interface, an enum, a namespace, a signature, an
 interface's property, a `type` alias); a `using` declaration is a statement, as `let`.
@@ -249,8 +252,9 @@ A run of `bool_op`: `a && b && c` is 1, `a && b || c` is 2; parentheses don't br
 A run of `operator` is the same, its like operators those of one precedence level: `a + b - c` is 1, `(b + c) * d`
 is 2, `a * b + c * d` is 3; `x += b + c` is 1, a plain `=` none, a negative number (`-1`) none. An `access` is one
 per `.` or `[]`: `a.b.c` is 2. A call's callee is the call's (`a.f()` is a call, `a.b.f()` a call and an access), an
-access to `this` / `super` / `self` / `cls` is none (`this.x` weighs as a bare `x`), a qualified name in a type or
-an import (`java.util.List`, `a::b`, a Python annotation's `os.PathLike`) is none.
+access to `this` / `super` / `self` / `cls` or a Go method's receiver is none (`this.x`, a receiver's `r.x` weigh as
+a bare `x`), a qualified name in a type or an import (`java.util.List`, `a::b`, a Python annotation's `os.PathLike`)
+is none.
 An early `return` is one that isn't its function's or lambda's last statement. A Rust `if`, `match` or loop
 used as a statement weighs as itself, not as an expression statement too. Annotations and decorators weigh
 nothing of their own; a call in one (`@Input()`, `@app.route("/")`) is a call.

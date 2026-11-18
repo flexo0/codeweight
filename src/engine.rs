@@ -83,6 +83,7 @@ pub struct Weigher<'c> {
     constructs: Vec<Option<&'static Nesting>>,
     returns: Vec<bool>,
     wrappers: Vec<bool>,
+    lists: Vec<bool>,
     lambdas: Vec<bool>,
     parens: Vec<bool>,
 }
@@ -122,6 +123,7 @@ impl<'c> Weigher<'c> {
         };
         let returns = flags(lang.returns);
         let wrappers = flags(lang.wrappers);
+        let lists = flags(lang.lists);
         let lambdas = flags(lang.lambdas);
         let parens = flags(lang.parens);
 
@@ -134,6 +136,7 @@ impl<'c> Weigher<'c> {
             constructs,
             returns,
             wrappers,
+            lists,
             lambdas,
             parens,
         }
@@ -218,7 +221,7 @@ impl<'c> Weigher<'c> {
                 }),
             };
             let mut base = category.map_or(0.0, |c| self.weights.weight(c));
-            if (self.lang.tail)(node) {
+            if (self.lang.also_statement)(node) {
                 base += self.weights.weight(Category::Statement);
             }
             if base > 0.0 {
@@ -294,7 +297,7 @@ impl<'c> Weigher<'c> {
     }
 
     /// Whether a return is early: not the last statement of its function's or lambda's body (the statement it is
-    /// wrapped in, if it is).
+    /// wrapped in, if it is; the last of the body's list of statements, if it has one).
     fn is_early_return(&self, node: Node, source: &[u8]) -> bool {
         let Some(mut body) = node.parent() else {
             return true;
@@ -302,6 +305,14 @@ impl<'c> Weigher<'c> {
         let mut node = node;
         if flag(&self.wrappers, body.kind_id() as usize) {
             node = body;
+            let Some(parent) = body.parent() else {
+                return true;
+            };
+            body = parent;
+        }
+        // The statements' list the return is the last of, and the body it is in.
+        let list = body;
+        if flag(&self.lists, body.kind_id() as usize) {
             let Some(parent) = body.parent() else {
                 return true;
             };
@@ -315,8 +326,8 @@ impl<'c> Weigher<'c> {
         if !owns || owner.child_by_field_name("body").map(|b| b.id()) != Some(body.id()) {
             return true;
         }
-        let mut cursor = body.walk();
-        let last = body
+        let mut cursor = list.walk();
+        let last = list
             .named_children(&mut cursor)
             .filter(|child| !child.is_extra())
             .last();
