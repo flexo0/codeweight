@@ -1,0 +1,503 @@
+//! The weights file: found, merged over the built-in defaults and validated.
+
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use anyhow::{Context, Result, bail};
+use serde::Deserialize;
+
+use crate::lang::{self, Lang};
+
+/// The built-in defaults, written out by `codeweight init`.
+pub const DEFAULTS: &str = include_str!("default.toml");
+
+/// The weights file's name, looked up in the current folder and at the repo's root.
+pub const FILE_NAME: &str = "codeweight.toml";
+
+/// What an element of code is, for its base weight.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Category {
+    Statement,
+    Call,
+    Branch,
+    Loop,
+    Try,
+    Catch,
+    Lambda,
+    Function,
+    Class,
+    BoolOp,
+    Jump,
+}
+
+impl Category {
+    pub const ALL: [Category; 11] = [
+        Category::Statement,
+        Category::Call,
+        Category::Branch,
+        Category::Loop,
+        Category::Try,
+        Category::Catch,
+        Category::Lambda,
+        Category::Function,
+        Category::Class,
+        Category::BoolOp,
+        Category::Jump,
+    ];
+
+    /// Its key in the weights file.
+    pub fn name(self) -> &'static str {
+        match self {
+            Category::Statement => "statement",
+            Category::Call => "call",
+            Category::Branch => "branch",
+            Category::Loop => "loop",
+            Category::Try => "try",
+            Category::Catch => "catch",
+            Category::Lambda => "lambda",
+            Category::Function => "function",
+            Category::Class => "class",
+            Category::BoolOp => "bool_op",
+            Category::Jump => "jump",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Category> {
+        Category::ALL.into_iter().find(|c| c.name() == name)
+    }
+
+    fn index(self) -> usize {
+        self as usize
+    }
+}
+
+/// How a node's weight grows with its depth.
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Model {
+    /// `1 + factor * depth`
+    Linear,
+    /// `factor ^ depth`
+    Exponential,
+}
+
+/// The `[nesting]` table.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Nesting {
+    pub model: Model,
+    pub factor: f64,
+    pub max_depth: u32,
+}
+
+impl Nesting {
+    /// The multiplier of a node's base weight at `depth`, capped at `max_depth`.
+    pub fn factor_at(&self, depth: u32) -> f64 {
+        let depth = depth.min(self.max_depth);
+        match self.model {
+            Model::Linear => 1.0 + self.factor * f64::from(depth),
+            Model::Exponential => self.factor.powi(depth as i32),
+        }
+    }
+}
+
+/// The `[files]` table: which files a folder walk weighs, and how much its tests count.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Files {
+    pub exclude: Vec<String>,
+    pub test_globs: Vec<String>,
+    pub test_factor: f64,
+}
+
+/// A language's weights: `[weights]` with its `[languages.<name>.weights]` over them, and its node kinds remapped.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LangConfig {
+    weights: [f64; Category::ALL.len()],
+    /// A tree-sitter node kind mapped to a category, or to none, over the language's own table.
+    pub node_kinds: BTreeMap<String, Option<Category>>,
+}
+
+impl LangConfig {
+    pub fn weight(&self, category: Category) -> f64 {
+        self.weights[category.index()]
+    }
+}
+
+/// The weights file, merged and validated.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Config {
+    pub nesting: Nesting,
+    pub files: Files,
+    languages: BTreeMap<&'static str, LangConfig>,
+}
+
+impl Config {
+    /// The built-in defaults.
+    pub fn defaults() -> Result<Config> {
+        Config::from_value(parse_toml(DEFAULTS).context("in the built-in defaults")?)
+            .context("in the built-in defaults")
+    }
+
+    /// The weights file at `path` merged over the defaults, or the defaults when there is none.
+    pub fn load(path: Option<&Path>) -> Result<Config> {
+        let Some(path) = path else {
+            return Config::defaults();
+        };
+        let text = fs::read_to_string(path)
+            .with_context(|| format!("reading the weights file {}", path.display()))?;
+        Config::from_str_over_defaults(&text)
+            .with_context(|| format!("in the weights file {}", path.display()))
+    }
+
+    /// A weights file's text merged over the defaults.
+    pub fn from_str_over_defaults(text: &str) -> Result<Config> {
+        let mut merged = parse_toml(DEFAULTS).context("in the built-in defaults")?;
+        merge(&mut merged, parse_toml(text)?);
+        Config::from_value(merged)
+    }
+
+    /// A complete weights file on its own, no defaults under it (the engine's tests use it).
+    #[cfg(test)]
+    pub fn from_str_alone(text: &str) -> Result<Config> {
+        Config::from_value(parse_toml(text)?)
+    }
+
+    /// The weights of `lang`.
+    pub fn lang(&self, lang: &Lang) -> &LangConfig {
+        // Every language of `lang::ALL` gets an entry in `from_value`.
+        &self.languages[lang.name]
+    }
+
+    fn from_value(table: toml::Table) -> Result<Config> {
+        let raw: RawConfig = toml::Value::Table(table).try_into()?;
+        let nesting = raw.nesting;
+        check_non_negative("[nesting] factor", nesting.factor)?;
+        check_non_negative("[files] test_factor", raw.files.test_factor)?;
+
+        let mut base = [0.0; Category::ALL.len()];
+        let mut given = [false; Category::ALL.len()];
+        for (key, value) in &raw.weights {
+            let category = category("[weights]", key)?;
+            check_non_negative(&format!("[weights] {key}"), *value)?;
+            base[category.index()] = *value;
+            given[category.index()] = true;
+        }
+        if let Some(missing) = Category::ALL.iter().find(|c| !given[c.index()]) {
+            bail!("[weights] has no weight for `{}`", missing.name());
+        }
+
+        for name in raw.languages.keys() {
+            if lang::by_name(name).is_none() {
+                bail!(
+                    "unknown language `{name}` in [languages], expected one of: {}",
+                    lang::ALL
+                        .iter()
+                        .map(|l| l.name)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+        }
+        let mut languages = BTreeMap::new();
+        for lang in lang::ALL {
+            let raw_lang = raw.languages.get(lang.name);
+            let mut weights = base;
+            let mut node_kinds = BTreeMap::new();
+            if let Some(raw_lang) = raw_lang {
+                let table = format!("[languages.{}.weights]", lang.name);
+                for (key, value) in &raw_lang.weights {
+                    let category = category(&table, key)?;
+                    check_non_negative(&format!("{table} {key}"), *value)?;
+                    weights[category.index()] = *value;
+                }
+                let table = format!("[languages.{}.node_kinds]", lang.name);
+                let grammar = (lang.grammar)();
+                for (kind, target) in &raw_lang.node_kinds {
+                    if !lang::is_named_kind(&grammar, kind) {
+                        bail!("unknown node kind `{kind}` in {table}");
+                    }
+                    let target = match target.as_str() {
+                        "none" => None,
+                        name => Some(category(&format!("{table} {kind}"), name)?),
+                    };
+                    node_kinds.insert(kind.clone(), target);
+                }
+            }
+            languages.insert(
+                lang.name,
+                LangConfig {
+                    weights,
+                    node_kinds,
+                },
+            );
+        }
+
+        Ok(Config {
+            nesting: Nesting {
+                model: nesting.model,
+                factor: nesting.factor,
+                max_depth: nesting.max_depth,
+            },
+            files: Files {
+                exclude: raw.files.exclude,
+                test_globs: raw.files.test_globs,
+                test_factor: raw.files.test_factor,
+            },
+            languages,
+        })
+    }
+}
+
+/// The weights file to use, the first found: `explicit` (`--config`), `codeweight.toml` in `cwd`, `codeweight.toml`
+/// at the root of the repo `inside` is in; `None` for the defaults.
+pub fn find(explicit: Option<&Path>, cwd: &Path, inside: Option<&Path>) -> Result<Option<PathBuf>> {
+    if let Some(path) = explicit {
+        if !path.is_file() {
+            bail!("the weights file {} doesn't exist", path.display());
+        }
+        return Ok(Some(path.to_path_buf()));
+    }
+    let local = cwd.join(FILE_NAME);
+    if local.is_file() {
+        return Ok(Some(local));
+    }
+    if let Some(root) = inside.and_then(|path| repo_root(&cwd.join(path))) {
+        let at_root = root.join(FILE_NAME);
+        if at_root.is_file() {
+            return Ok(Some(at_root));
+        }
+    }
+    Ok(None)
+}
+
+/// The root of the git repo `path` is in: the nearest folder up from it that holds `.git`.
+fn repo_root(path: &Path) -> Option<PathBuf> {
+    let path = path.canonicalize().ok()?;
+    path.ancestors()
+        .find(|dir| dir.join(".git").exists())
+        .map(Path::to_path_buf)
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawConfig {
+    nesting: RawNesting,
+    weights: BTreeMap<String, f64>,
+    #[serde(default)]
+    languages: BTreeMap<String, RawLang>,
+    files: RawFiles,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawNesting {
+    model: Model,
+    factor: f64,
+    max_depth: u32,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawLang {
+    #[serde(default)]
+    weights: BTreeMap<String, f64>,
+    #[serde(default)]
+    node_kinds: BTreeMap<String, String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawFiles {
+    exclude: Vec<String>,
+    test_globs: Vec<String>,
+    test_factor: f64,
+}
+
+fn parse_toml(text: &str) -> Result<toml::Table> {
+    Ok(text.parse::<toml::Table>()?)
+}
+
+/// Merges `over` into `base`: tables key by key, any other value replaced whole (an array too).
+fn merge(base: &mut toml::Table, over: toml::Table) {
+    for (key, value) in over {
+        match (base.get_mut(&key), value) {
+            (Some(toml::Value::Table(base_table)), toml::Value::Table(over_table)) => {
+                merge(base_table, over_table)
+            }
+            (_, value) => {
+                base.insert(key, value);
+            }
+        }
+    }
+}
+
+fn category(table: &str, name: &str) -> Result<Category> {
+    Category::from_name(name).with_context(|| {
+        format!(
+            "unknown category `{name}` in {table}, expected one of: {}",
+            Category::ALL.map(Category::name).join(", ")
+        )
+    })
+}
+
+fn check_non_negative(what: &str, value: f64) -> Result<()> {
+    if !value.is_finite() || value < 0.0 {
+        bail!("{what} is {value}, expected a number 0 or above");
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lang::java::JAVA;
+
+    #[test]
+    fn defaults_load_and_set_every_category() {
+        let config = Config::defaults().unwrap();
+        assert_eq!(config.nesting.model, Model::Linear);
+        assert_eq!(config.lang(&JAVA).weight(Category::Statement), 1.0);
+    }
+
+    #[test]
+    fn a_user_file_changes_only_what_it_holds() {
+        let defaults = Config::defaults().unwrap();
+        let config = Config::from_str_over_defaults(
+            "[weights]\ncall = 7\nlambda = 10\n[files]\nexclude = [\"a/**\"]\n",
+        )
+        .unwrap();
+        assert_eq!(config.lang(&JAVA).weight(Category::Call), 7.0);
+        // No default per-language weight shadows a base weight the file sets.
+        assert_eq!(config.lang(&JAVA).weight(Category::Lambda), 10.0);
+        assert_eq!(
+            config.lang(&JAVA).weight(Category::Loop),
+            defaults.lang(&JAVA).weight(Category::Loop)
+        );
+        assert_eq!(config.files.exclude, vec!["a/**".to_string()]);
+        assert_eq!(config.files.test_globs, defaults.files.test_globs);
+        assert_eq!(config.nesting, defaults.nesting);
+    }
+
+    #[test]
+    fn a_language_overrides_the_base_weights() {
+        let config = Config::from_str_over_defaults(
+            "[weights]\nbranch = 4\n[languages.java.weights]\nbranch = 9\n",
+        )
+        .unwrap();
+        assert_eq!(config.lang(&JAVA).weight(Category::Branch), 9.0);
+    }
+
+    #[test]
+    fn node_kinds_map_to_a_category_or_none() {
+        let config = Config::from_str_over_defaults(
+            "[languages.java.node_kinds]\nlabeled_statement = \"jump\"\nexpression_statement = \"none\"\n",
+        )
+        .unwrap();
+        let kinds = &config.lang(&JAVA).node_kinds;
+        assert_eq!(kinds["labeled_statement"], Some(Category::Jump));
+        assert_eq!(kinds["expression_statement"], None);
+    }
+
+    fn error_of(text: &str) -> String {
+        format!("{:#}", Config::from_str_over_defaults(text).unwrap_err())
+    }
+
+    #[test]
+    fn an_unknown_key_is_an_error() {
+        assert!(error_of("[nesting]\nfactr = 1\n").contains("factr"));
+        assert!(error_of("[colors]\na = 1\n").contains("colors"));
+        assert!(error_of("[languages.java]\nweight = {}\n").contains("weight"));
+    }
+
+    #[test]
+    fn an_unknown_category_is_an_error() {
+        assert!(error_of("[weights]\nloops = 1\n").contains("unknown category `loops`"));
+        assert!(
+            error_of("[languages.java.weights]\nfunc = 1\n").contains("unknown category `func`")
+        );
+        assert!(
+            error_of("[languages.java.node_kinds]\nif_statement = \"iff\"\n")
+                .contains("unknown category `iff`")
+        );
+    }
+
+    #[test]
+    fn an_unknown_node_kind_is_an_error() {
+        assert!(
+            error_of("[languages.java.node_kinds]\nif_stmt = \"branch\"\n")
+                .contains("unknown node kind `if_stmt`")
+        );
+    }
+
+    #[test]
+    fn an_unknown_language_is_an_error() {
+        assert!(error_of("[languages.cobol.weights]\nloop = 1\n").contains("unknown language"));
+    }
+
+    #[test]
+    fn a_bad_value_is_an_error() {
+        assert!(error_of("[weights]\nloop = -1\n").contains("0 or above"));
+        assert!(error_of("[weights]\nloop = \"3\"\n").contains("invalid type"));
+        assert!(error_of("[nesting]\nmodel = \"cubic\"\n").contains("cubic"));
+    }
+
+    #[test]
+    fn a_file_on_its_own_must_set_every_category() {
+        let error = Config::from_str_alone(
+            "[nesting]\nmodel = \"linear\"\nfactor = 1\nmax_depth = 3\n[weights]\nstatement = 1\n\
+             [files]\nexclude = []\ntest_globs = []\ntest_factor = 1\n",
+        )
+        .unwrap_err();
+        assert!(format!("{error:#}").contains("no weight for `call`"));
+    }
+
+    #[test]
+    fn nesting_models() {
+        let linear = Nesting {
+            model: Model::Linear,
+            factor: 0.5,
+            max_depth: 2,
+        };
+        assert_eq!(linear.factor_at(0), 1.0);
+        assert_eq!(linear.factor_at(1), 1.5);
+        assert_eq!(linear.factor_at(5), 2.0);
+        let exponential = Nesting {
+            model: Model::Exponential,
+            factor: 2.0,
+            max_depth: 3,
+        };
+        assert_eq!(exponential.factor_at(0), 1.0);
+        assert_eq!(exponential.factor_at(2), 4.0);
+        assert_eq!(exponential.factor_at(9), 8.0);
+    }
+
+    #[test]
+    fn the_lookup_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let cwd = root.join("cwd");
+        let repo = root.join("repo");
+        fs::create_dir_all(&cwd).unwrap();
+        fs::create_dir_all(repo.join(".git")).unwrap();
+        fs::create_dir_all(repo.join("src")).unwrap();
+        let explicit = root.join("mine.toml");
+        fs::write(&explicit, "").unwrap();
+
+        assert_eq!(find(None, &cwd, Some(&repo.join("src"))).unwrap(), None);
+        fs::write(repo.join(FILE_NAME), "").unwrap();
+        assert_eq!(
+            find(None, &cwd, Some(&repo.join("src"))).unwrap(),
+            Some(repo.canonicalize().unwrap().join(FILE_NAME))
+        );
+        fs::write(cwd.join(FILE_NAME), "").unwrap();
+        assert_eq!(
+            find(None, &cwd, Some(&repo.join("src"))).unwrap(),
+            Some(cwd.join(FILE_NAME))
+        );
+        assert_eq!(
+            find(Some(&explicit), &cwd, Some(&repo.join("src"))).unwrap(),
+            Some(explicit.clone())
+        );
+        assert!(find(Some(&root.join("missing.toml")), &cwd, None).is_err());
+    }
+}

@@ -10,8 +10,9 @@ functions weighs more. The weight of a file, a folder or a function is the sum o
 a git commit (or a range) is its net delta, after minus before, positive or negative. It reads Java, TypeScript (TS,
 TSX) and Python, parsed by tree-sitter.
 
-Nothing is built yet: the design and its milestones are `docs/design.md`. Build it in the milestones' order, and keep
-that doc in step with what is built (a decision made while building goes into it, in the same commit).
+Milestones 0-2 are built (the CLI, the config, the engine, Java); the design and its milestones are
+`docs/design.md`. Build the rest in the milestones' order, and keep that doc in step with what is built (a decision
+made while building goes into it, in the same commit).
 
 ## Checking a change
 

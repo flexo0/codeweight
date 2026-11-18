@@ -1,0 +1,25 @@
+# The engine's tests' weights file: round numbers, each category its own, so a hand-worked sum reads back.
+# Complete on its own: the tests never load the defaults, so tuning those can't break them.
+
+[nesting]
+model = "linear"   # nest(depth) = 1 + depth
+factor = 1
+max_depth = 3
+
+[weights]
+statement = 1
+call      = 2
+branch    = 10
+loop      = 20
+try       = 30
+catch     = 40
+lambda    = 50
+function  = 100
+class     = 1000
+bool_op   = 5
+jump      = 3
+
+[files]
+exclude = []
+test_globs = []
+test_factor = 1
