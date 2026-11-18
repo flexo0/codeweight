@@ -127,6 +127,8 @@ function  = 3
 class     = 5
 bool_op   = 1
 jump      = 1
+operator  = 0.25
+access    = 0.25
 
 [languages.java.weights]            # yours only: a language's overrides of [weights]
 lambda = 3
@@ -145,7 +147,9 @@ test_factor = 1.0       # a test file's weight times this; 0 leaves the tests ou
 
 The defaults were tuned on real Java, TypeScript and Python code (and re-checked on Rust) so that the heaviest functions are the hardest
 ones: a call weighs half a statement (a long chain of getters or a flat run of setters is long, not hard), and each
-level of nesting adds a whole base weight (`factor = 1.0`), so nested control flow outweighs flat code.
+level of nesting adds a whole base weight (`factor = 1.0`), so nested control flow outweighs flat code. An
+operator and a field access weigh a quarter: `a = (b + c) * d` weighs more than `a = b`, `obj.a.b` more than
+`obj.a`, but an expression's detail stays below its control flow.
 
 ### The weight
 
@@ -178,8 +182,15 @@ names it.
 | `class` | a class, interface, enum, record or annotation type | a class, interface, enum, namespace | a `class` | a struct, enum, union, trait, `mod`; an `impl` is its type's class, weighing nothing of its own |
 | `bool_op` | each run of like `&&` / `\|\|` | each run of like `&&` / `\|\|` / `??` | each run of like `and` / `or` | each run of like `&&` / `\|\|`, a let chain |
 | `jump` | `break`, `continue`, `throw`, an early `return` | `break`, `continue`, `throw`, an early `return` | `break`, `continue`, `raise`, an early `return` | `break`, `continue`, `?`, an early `return` |
+| `operator` | each run of like arithmetic, comparison (`instanceof` too), bitwise or unary operators, a compound assignment, `++` / `--` | the same (`in`, `typeof`, `void`, `delete` too) | the same (`not`, `in`, `is` too) | the same (not `*x`, `&x`) |
+| `access` | a field access, an array index | a member (`a.b`, `a?.b`), a subscript | an attribute, a subscript | a field (`a.b`, `a.0`), an index |
 
 A run of `bool_op`: `a && b && c` is 1, `a && b || c` is 2; parentheses don't break a run, a negation or a call does.
+A run of `operator` is the same, its like operators those of one precedence level: `a + b - c` is 1, `(b + c) * d`
+is 2, `a * b + c * d` is 3; `x += b + c` is 1, a plain `=` none, a negative number (`-1`) none. An `access` is one
+per `.` or `[]`: `a.b.c` is 2. A call's callee is the call's (`a.f()` is a call, `a.b.f()` a call and an access), an
+access to `this` / `super` / `self` / `cls` is none (`this.x` weighs as a bare `x`), a qualified name in a type or
+an import (`java.util.List`, `a::b`, a Python annotation's `os.PathLike`) is none.
 An early `return` is one that isn't its function's or lambda's last statement. A Rust `if`, `match` or loop
 used as a statement weighs as itself, not as an expression statement too. Annotations and decorators weigh
 nothing of their own; a call in one (`@Input()`, `@app.route("/")`) is a call.

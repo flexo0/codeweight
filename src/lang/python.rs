@@ -2,7 +2,7 @@
 
 use tree_sitter::Node;
 
-use super::{Children, Lang, Logical, Nesting, Scope, ScopeKind, only_child, text};
+use super::{Children, Lang, Nesting, Operator, Scope, ScopeKind, is_field_of, only_child, text};
 use crate::config::Category::{self, *};
 
 pub static PYTHON: Lang = Lang {
@@ -16,7 +16,7 @@ pub static PYTHON: Lang = Lang {
     wrappers: &[],
     lambdas: &["lambda"],
     parens: &["parenthesized_expression"],
-    logical,
+    operator,
     exempt,
     tail: |_| false,
     scope,
@@ -43,6 +43,8 @@ const KINDS: &[(&str, Category)] = &[
     ("break_statement", Jump),
     ("continue_statement", Jump),
     ("raise_statement", Jump),
+    ("attribute", Access),
+    ("subscript", Access),
     ("return_statement", Statement),
     ("expression_statement", Statement),
     ("assert_statement", Statement),
@@ -94,26 +96,55 @@ const NESTING: &[Nesting] = &[
     comprehension("generator_expression"),
 ];
 
-fn logical(node: Node) -> Option<Logical> {
-    if node.kind() != "boolean_operator" {
-        return None;
-    }
-    match node.child_by_field_name("operator")?.kind() {
-        "and" => Some(Logical::And),
-        "or" => Some(Logical::Or),
+/// `and` / `or`, a binary or unary operator (`not` too), a comparison (a chained one, `a < b < c`, is one run), a
+/// compound assignment.
+fn operator(node: Node) -> Option<Operator> {
+    let token = || node.child_by_field_name("operator").map(|op| op.kind());
+    match node.kind() {
+        "boolean_operator" | "binary_operator" => Operator::of(token()?),
+        "augmented_assignment" => Operator::of_assignment(token()?),
+        "comparison_operator" => Some(Operator::Comparison),
+        "unary_operator" => {
+            Operator::unary(node.child_by_field_name("argument")?, &["integer", "float"])
+        }
+        "not_operator" => Some(Operator::Unary),
         _ => None,
     }
 }
 
 /// A docstring or a bare `...` (an expression statement that is only a string or the ellipsis), and a `match`
-/// case's guard (its `if`, which the case's branch already is).
-fn exempt(node: Node) -> bool {
+/// case's guard (its `if`, which the case's branch already is). An attribute that is a call's callee (`a.f()`: the
+/// call weighs) or of `self` / `cls` (`self.x`, as Java's bare `x` is no access); an attribute or subscript in an
+/// annotation (`os.PathLike`, `Dict[str, int]`: a type, as other languages' grammars parse theirs).
+fn exempt(node: Node, source: &[u8]) -> bool {
     match node.kind() {
         "expression_statement" => only_child(node)
             .is_some_and(|c| matches!(c.kind(), "string" | "concatenated_string" | "ellipsis")),
         "if_clause" => node.parent().is_some_and(|p| p.kind() == "case_clause"),
+        "attribute" => {
+            is_field_of(node, &["call"], "function")
+                || node.child_by_field_name("object").is_some_and(|object| {
+                    object.kind() == "identifier"
+                        && matches!(&source[object.byte_range()], b"self" | b"cls")
+                })
+                || in_annotation(node)
+        }
+        "subscript" => in_annotation(node),
         _ => false,
     }
+}
+
+/// Whether a node is in a type annotation.
+fn in_annotation(node: Node) -> bool {
+    let mut around = node.parent();
+    while let Some(node) = around {
+        match node.kind() {
+            "type" => return true,
+            "block" | "module" => return false,
+            _ => around = node.parent(),
+        }
+    }
+    false
 }
 
 /// A class or a function (a method, a nested function) by its name. A lambda is no function, even bound to a name.
@@ -234,6 +265,46 @@ class A:                             # class 1000; a bare decorator 0
         assert_eq!(function(&weighed, "A.m.inner"), 100.0 + 20.0 + 9.0 + 2.0);
         assert_eq!(function(&weighed, "A.stub"), 100.0);
         assert_eq!(weighed.entries.len(), 4);
+    }
+
+    #[test]
+    fn a_run_of_like_operators_is_one_operator() {
+        let weighed = testing::weigh_expressions(
+            &PYTHON,
+            "def f():
+    x = (b + c) * d     # statement 1, two runs: 14
+    x = a < b <= c      # 1, a chained comparison, one run: 7
+    x = k not in y      # 1, 7
+    x = not a and b     # 1, `not` 7, bool_op 5
+    x //= 2             # 1, 7
+    x = -1              # 1, a negative number: 0
+    x = -y @ z          # 1, two runs: 14
+",
+        );
+        assert_eq!(
+            function(&weighed, "f"),
+            100.0 + 15.0 + 8.0 + 8.0 + 13.0 + 8.0 + 1.0 + 15.0
+        );
+    }
+
+    #[test]
+    fn each_attribute_or_subscript_is_one_access_but_a_callee_s_or_self_s() {
+        let weighed = testing::weigh_expressions(
+            &PYTHON,
+            "class A:
+    def f(self, x: Dict[str, int] = o.d) -> os.PathLike:   # an annotation's: 0; the default's 9
+        x: os.PathLike = o.a.b  # statement 1, access 18
+        x = self.v      # 1, of `self`: 0
+        x = self.v.w    # 1, 9
+        x = cls.k       # 1, of `cls`: 0
+        o.a.g()         # 1, call 2, `o.a` 9 (the callee `o.a.g` is the call's)
+        x = d[k][0]     # 1, 18
+",
+        );
+        assert_eq!(
+            function(&weighed, "A.f"),
+            100.0 + 9.0 + 19.0 + 1.0 + 10.0 + 1.0 + 12.0 + 19.0
+        );
     }
 
     #[test]

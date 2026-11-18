@@ -18,6 +18,8 @@ function  = 100
 class     = 1000
 bool_op   = 5
 jump      = 3
+operator  = 0      # 0 but in the snippets about them (`lang::testing::weigh_expressions`), so the others leave them out
+access    = 0
 
 [files]
 exclude = []

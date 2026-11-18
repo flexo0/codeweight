@@ -22,6 +22,8 @@ function  = 3
 class     = 5
 bool_op   = 1           # each run of like && / || operators: a && b && c is 1, a && b || c is 2
 jump      = 1           # break, continue, an early return, throw
+operator  = 0.25        # each run of like operators: a + b - c is 1, (a + b) * c is 2; x += 1, i++, -x, !x
+access    = 0.25        # each field access or index: a.b.c is 2, a[i] is 1; not a call's callee, nor this.x
 
 # A file of your own may also override [weights] for one language, and map a node kind to a category. The defaults
 # hold none of these, so a [weights] key you set reaches every language.

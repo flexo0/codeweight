@@ -2,7 +2,7 @@
 
 use tree_sitter::Node;
 
-use super::{Children, Lang, Logical, Nesting, Scope, ScopeKind, only_child, text};
+use super::{Children, Lang, Nesting, Operator, Scope, ScopeKind, is_field_of, only_child, text};
 use crate::config::Category::{self, *};
 
 pub static RUST: Lang = Lang {
@@ -16,7 +16,7 @@ pub static RUST: Lang = Lang {
     wrappers: &["expression_statement"],
     lambdas: &["closure_expression"],
     parens: &["parenthesized_expression"],
-    logical,
+    operator,
     exempt,
     tail,
     scope,
@@ -44,6 +44,8 @@ const KINDS: &[(&str, Category)] = &[
     ("continue_expression", Jump),
     // `?`: an early return of the error.
     ("try_expression", Jump),
+    ("field_expression", Access),
+    ("index_expression", Access),
     ("return_expression", Statement),
     ("expression_statement", Statement),
     ("let_declaration", Statement),
@@ -125,25 +127,37 @@ const BARE: &[&str] = &[
     "continue_expression",
 ];
 
-/// `&&` / `||`, and a let chain (`if let Some(x) = a && x > 0`), which is a run of `&&`.
-fn logical(node: Node) -> Option<Logical> {
+/// A binary operator, a let chain (`if let Some(x) = a && x > 0`, a run of `&&`), a compound assignment, `-x` /
+/// `!x`. A dereference (`*x`) and a borrow (`&x`) are none: plumbing, not arithmetic.
+fn operator(node: Node) -> Option<Operator> {
+    let token = || node.child_by_field_name("operator").map(|op| op.kind());
     match node.kind() {
-        "binary_expression" => match node.child_by_field_name("operator")?.kind() {
-            "&&" => Some(Logical::And),
-            "||" => Some(Logical::Or),
+        "binary_expression" => Operator::of(token()?),
+        "let_chain" => Some(Operator::And),
+        "compound_assignment_expr" => Operator::of_assignment(token()?),
+        "unary_expression" => match node.child(0)?.kind() {
+            "-" | "!" => {
+                Operator::unary(node.named_child(0)?, &["integer_literal", "float_literal"])
+            }
             _ => None,
         },
-        "let_chain" => Some(Logical::And),
         _ => None,
     }
 }
 
 /// An expression statement around a block, a construct ending in one or a jump (see `BARE`); a module declared
-/// without a body (`mod a;`), which is only where its file is.
-fn exempt(node: Node) -> bool {
+/// without a body (`mod a;`), which is only where its file is. A field that is a call's callee (a method call,
+/// `a.f()`: the call weighs) or of `self` (`self.x`, as Java's bare `x` is no access).
+fn exempt(node: Node, _: &[u8]) -> bool {
     match node.kind() {
         "expression_statement" => only_child(node).is_some_and(|c| BARE.contains(&c.kind())),
         "mod_item" => node.child_by_field_name("body").is_none(),
+        "field_expression" => {
+            is_field_of(node, &["call_expression"], "function")
+                || node
+                    .child_by_field_name("value")
+                    .is_some_and(|value| value.kind() == "self")
+        }
         _ => false,
     }
 }
@@ -338,6 +352,44 @@ mod tests {
         assert_eq!(weighed.entries.len(), 12);
         let circle = weighed.entries.iter().find(|e| e.name == "shapes.Circle");
         assert_eq!(circle.map(|e| e.line), Some(2));
+    }
+
+    #[test]
+    fn a_run_of_like_operators_is_one_operator() {
+        let weighed = testing::weigh_expressions(
+            &RUST,
+            "fn f() {
+               let x = (b + c) * d;      // statement 1, two runs: 14
+               let y = -1;               // 1, a negative number: 0
+               let z = !ok && -a < b;    // 1, `!` 7, bool_op 5, `<` 7, `-` 7
+               let r = *p + &q;          // 1, a dereference and a borrow none, `+` 7
+               x += 1;                   // 1, 7
+             }",
+        );
+        assert_eq!(
+            function(&weighed, "f"),
+            100.0 + 15.0 + 1.0 + 27.0 + 8.0 + 8.0
+        );
+    }
+
+    #[test]
+    fn each_field_or_index_is_one_access_but_a_method_s_or_self_s() {
+        let weighed = testing::weigh_expressions(
+            &RUST,
+            "impl A {
+               fn f(&self) {
+                 let x = o.a.b;          // statement 1, access 18
+                 let y = self.v;         // 1, of `self`: 0
+                 let z = self.v.0;       // 1, 9
+                 o.a.g();                // 1, call 2, `o.a` 9 (the callee `o.a.g` is the call's)
+                 v[i][j]                 // the tail: statement 1, 18
+               }
+             }",
+        );
+        assert_eq!(
+            function(&weighed, "A.f"),
+            100.0 + 19.0 + 1.0 + 10.0 + 12.0 + 19.0
+        );
     }
 
     #[test]

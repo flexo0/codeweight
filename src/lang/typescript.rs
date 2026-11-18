@@ -2,7 +2,7 @@
 
 use tree_sitter::Node;
 
-use super::{Children, Lang, Logical, Nesting, Scope, ScopeKind, only_child, text};
+use super::{Children, Lang, Nesting, Operator, Scope, ScopeKind, is_field_of, only_child, text};
 use crate::config::Category::*;
 
 pub static TYPESCRIPT: Lang = Lang {
@@ -16,7 +16,7 @@ pub static TYPESCRIPT: Lang = Lang {
     wrappers: &[],
     lambdas: LAMBDAS,
     parens: &["parenthesized_expression"],
-    logical,
+    operator,
     exempt,
     tail: |_| false,
     scope,
@@ -34,7 +34,7 @@ pub static TSX: Lang = Lang {
     wrappers: &[],
     lambdas: LAMBDAS,
     parens: &["parenthesized_expression"],
-    logical,
+    operator,
     exempt,
     tail: |_| false,
     scope,
@@ -75,6 +75,8 @@ macro_rules! kinds {
             ("break_statement", Jump),
             ("continue_statement", Jump),
             ("throw_statement", Jump),
+            ("member_expression", Access),
+            ("subscript_expression", Access),
             ("return_statement", Statement),
             ("expression_statement", Statement),
             ("lexical_declaration", Statement),
@@ -133,23 +135,45 @@ const NESTING: &[Nesting] = &[
     body("generator_function"),
 ];
 
-fn logical(node: Node) -> Option<Logical> {
-    if node.kind() != "binary_expression" {
-        return None;
-    }
-    match node.child_by_field_name("operator")?.kind() {
-        "&&" => Some(Logical::And),
-        "||" => Some(Logical::Or),
-        "??" => Some(Logical::Nullish),
+/// A binary or unary operator (`typeof`, `void`, `delete` too), a compound assignment (`&&=`, `||=` and `??=` are
+/// logical), `++` / `--`.
+fn operator(node: Node) -> Option<Operator> {
+    let token = || node.child_by_field_name("operator").map(|op| op.kind());
+    match node.kind() {
+        "binary_expression" => Operator::of(token()?),
+        "augmented_assignment_expression" => Operator::of_assignment(token()?),
+        "unary_expression" => Operator::unary(node.child_by_field_name("argument")?, &["number"]),
+        "update_expression" => Some(Operator::Unary),
         _ => None,
     }
 }
 
 /// A directive (`"use strict";`), and a namespace's statement (the grammar wraps a namespace in one; the namespace
-/// is a declaration, like a class): an expression statement that is only a string or a namespace.
-fn exempt(node: Node) -> bool {
-    node.kind() == "expression_statement"
-        && only_child(node).is_some_and(|c| matches!(c.kind(), "string" | "internal_module"))
+/// is a declaration, like a class): an expression statement that is only a string or a namespace. A member that is
+/// a call's callee (`a.f()`, `new a.B()`, a JSX element's `<a.B>`: the call weighs) or of `this` / `super`.
+fn exempt(node: Node, _: &[u8]) -> bool {
+    match node.kind() {
+        "expression_statement" => {
+            only_child(node).is_some_and(|c| matches!(c.kind(), "string" | "internal_module"))
+        }
+        "member_expression" => {
+            is_field_of(node, &["call_expression"], "function")
+                || is_field_of(node, &["new_expression"], "constructor")
+                || is_field_of(
+                    node,
+                    &[
+                        "jsx_opening_element",
+                        "jsx_closing_element",
+                        "jsx_self_closing_element",
+                    ],
+                    "name",
+                )
+                || node
+                    .child_by_field_name("object")
+                    .is_some_and(|object| matches!(object.kind(), "this" | "super"))
+        }
+        _ => false,
+    }
 }
 
 /// A class, interface, enum or namespace by its name (a class expression without one by the variable it is bound
@@ -374,6 +398,49 @@ mod tests {
         assert_eq!(
             function(&weighed, "App"),
             100.0 + 1.0 + 2.0 + 2.0 + 7.0 + 56.0
+        );
+    }
+
+    #[test]
+    fn a_run_of_like_operators_is_one_operator() {
+        let weighed = testing::weigh_expressions(
+            &TYPESCRIPT,
+            "function f() {
+               let x = (b + c) * d;        // statement 1, two runs: 14
+               x = a ** b ** c;            // 1, one run: 7
+               x = -1;                     // 1, a negative number: 0
+               x = !!y;                    // 1, one run: 7
+               x = typeof y === 's';       // 1, typeof, ===: 14
+               x <<= 2;                    // 1, 7
+               x ??= y ?? z;               // 1, a logical compound assignment, one run of ??: bool_op 5
+               x = a in o || b;            // 1, in 7, bool_op 5
+               i--;                        // 1, 7
+             }",
+        );
+        assert_eq!(
+            function(&weighed, "f"),
+            100.0 + 15.0 + 8.0 + 1.0 + 8.0 + 15.0 + 8.0 + 6.0 + 13.0 + 8.0
+        );
+    }
+
+    #[test]
+    fn each_member_or_index_is_one_access_but_a_callee_s_or_this_s() {
+        let weighed = testing::weigh_expressions(
+            &TSX,
+            "class A {
+               f() {
+                 x = o.a.b;                // statement 1, access 18
+                 x = o?.a[i];              // 1, 18
+                 x = this.v;               // 1, of `this`: 0
+                 o.a.g();                  // 1, call 2, `o.a` 9 (the callee `o.a.g` is the call's)
+                 new o.B();                // 1, call 2
+                 return <o.C />;           // the last statement: 1, call 2
+               }
+             }",
+        );
+        assert_eq!(
+            function(&weighed, "A.f"),
+            100.0 + 19.0 + 19.0 + 1.0 + 12.0 + 3.0 + 3.0
         );
     }
 

@@ -41,13 +41,13 @@ pub struct Lang {
     pub wrappers: &'static [&'static str],
     /// The kinds of a lambda, whose last statement isn't an early return either.
     pub lambdas: &'static [&'static str],
-    /// The kinds of a parenthesized expression, which a run of `&&` / `||` goes through.
+    /// The kinds of a parenthesized expression, which a run of like operators goes through.
     pub parens: &'static [&'static str],
-    /// The `&&` / `||` / `??` of a logical expression, if the node is one.
-    pub logical: fn(Node) -> Option<Logical>,
+    /// The operator of an expression, if the node is one: a binary or unary operator, a compound assignment, `++`.
+    pub operator: fn(Node) -> Option<Operator>,
     /// Whether a node weighs nothing although its kind has a category: the cases its kind can't tell (a docstring,
-    /// a `match` case's guard).
-    pub exempt: fn(Node) -> bool,
+    /// a `match` case's guard, a call's callee, `this.x`).
+    pub exempt: fn(Node, &[u8]) -> bool,
     /// Whether a node is a block that ends in a value, an expression without its `;` (Rust's tail expression): it
     /// weighs a statement, beside its own kind's category, as the `return` of that value would.
     pub tail: fn(Node) -> bool,
@@ -97,12 +97,64 @@ impl Children {
     }
 }
 
+/// An operator, by its run: like operators in a row are one run (`a && b && c`, `a + b - c`, `a < b < c`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Logical {
+pub enum Operator {
     And,
     Or,
     /// TypeScript's `??`.
     Nullish,
+    /// `+`, `-`.
+    Additive,
+    /// `*`, `/`, `%`, Python's `//` and `@`.
+    Multiplicative,
+    /// `**`.
+    Power,
+    /// `<<`, `>>`, `>>>`.
+    Shift,
+    /// `==`, `<`, ..., `instanceof`, `in`, `is`.
+    Comparison,
+    BitAnd,
+    BitOr,
+    BitXor,
+    /// `-x`, `!x`, `not x`, `~x`, `typeof x`, `++`, `--`.
+    Unary,
+}
+
+impl Operator {
+    /// A binary operator by its token.
+    pub fn of(token: &str) -> Option<Operator> {
+        Some(match token {
+            "&&" | "and" => Operator::And,
+            "||" | "or" => Operator::Or,
+            "??" => Operator::Nullish,
+            "+" | "-" => Operator::Additive,
+            "*" | "/" | "%" | "//" | "@" => Operator::Multiplicative,
+            "**" => Operator::Power,
+            "<<" | ">>" | ">>>" => Operator::Shift,
+            "==" | "!=" | "===" | "!==" | "<" | "<=" | ">" | ">=" | "<>" | "instanceof" | "in"
+            | "not in" | "is" | "is not" => Operator::Comparison,
+            "&" => Operator::BitAnd,
+            "|" => Operator::BitOr,
+            "^" => Operator::BitXor,
+            _ => return None,
+        })
+    }
+
+    /// A compound assignment's operator by its token (`+=` is `+`); a plain `=` is none.
+    pub fn of_assignment(token: &str) -> Option<Operator> {
+        Operator::of(token.strip_suffix('=')?)
+    }
+
+    /// A unary operator on `operand`; none on a number (`-1` is a literal).
+    pub fn unary(operand: Node, numbers: &[&str]) -> Option<Operator> {
+        (!numbers.contains(&operand.kind())).then_some(Operator::Unary)
+    }
+
+    /// Whether it is `&&` / `||` / `??`, a `bool_op`, not an `operator`.
+    pub fn is_logical(self) -> bool {
+        matches!(self, Operator::And | Operator::Or | Operator::Nullish)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -156,6 +208,16 @@ pub fn named_kind_ids<'a>(
     })
 }
 
+/// Whether `node` is its parent's `field`, its parent of one of `kinds` (a call's callee).
+pub fn is_field_of(node: Node, kinds: &[&str], field: &str) -> bool {
+    node.parent().is_some_and(|parent| {
+        kinds.contains(&parent.kind())
+            && parent
+                .child_by_field_name(field)
+                .is_some_and(|child| child.id() == node.id())
+    })
+}
+
 /// A node's one named child, comments aside, if it has just one.
 pub fn only_child(node: Node) -> Option<Node> {
     let mut cursor = node.walk();
@@ -170,12 +232,13 @@ pub fn text(node: Node, source: &[u8]) -> String {
 }
 
 /// The languages' snippet tests: weighed under `tests/weights.toml` (statement 1, call 2, branch 10, loop 20, try 30,
-/// catch 40, lambda 50, function 100, class 1000, bool_op 5, jump 3; nest(depth) = 1 + depth, depth capped at 3),
-/// each sum worked out by hand: `weight × nest(depth)` per element.
+/// catch 40, lambda 50, function 100, class 1000, bool_op 5, jump 3, operator 0, access 0; nest(depth) = 1 + depth,
+/// depth capped at 3), each sum worked out by hand: `weight × nest(depth)` per element. The snippets about
+/// operators and accesses are weighed with those at 7 and 9 (`weigh_expressions`).
 #[cfg(test)]
 pub mod testing {
     use super::{Lang, ScopeKind};
-    use crate::config::Config;
+    use crate::config::{Category, Config};
     use crate::engine::{Weighed, Weigher};
 
     pub const WEIGHTS: &str = include_str!("../../tests/weights.toml");
@@ -191,6 +254,25 @@ pub mod testing {
     /// A snippet that parses cleanly, weighed under the test weights.
     pub fn weigh(lang: &'static Lang, text: &str) -> Weighed {
         let weighed = weigh_under(lang, WEIGHTS, text);
+        assert!(weighed.clean, "syntax errors in {text}");
+        weighed
+    }
+
+    /// A snippet that parses cleanly, weighed under the test weights with `operator` 7 and `access` 9.
+    pub fn weigh_expressions(lang: &'static Lang, text: &str) -> Weighed {
+        let weights = WEIGHTS
+            .replacen("operator  = 0", "operator  = 7", 1)
+            .replacen("access    = 0", "access    = 9", 1);
+        let weighed = weigh_under(lang, &weights, text);
+        let config = Config::from_str_alone(&weights).unwrap();
+        let weights = config.lang(lang);
+        assert_eq!(
+            (
+                weights.weight(Category::Operator),
+                weights.weight(Category::Access)
+            ),
+            (7.0, 9.0)
+        );
         assert!(weighed.clean, "syntax errors in {text}");
         weighed
     }

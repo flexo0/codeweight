@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use tree_sitter::{Node, Parser};
 
 use crate::config::{self, Category, Config, LangConfig};
-use crate::lang::{self, Lang, Logical, Nesting, ScopeKind};
+use crate::lang::{self, Lang, Nesting, Operator, ScopeKind};
 
 /// A text's weight.
 #[derive(Clone, Debug, PartialEq)]
@@ -135,7 +135,7 @@ impl<'c> Weigher<'c> {
             depth: 0,
             entry: None,
             in_function: false,
-            logical: None,
+            operator: None,
         }];
         let mut children = Vec::new();
 
@@ -169,10 +169,12 @@ impl<'c> Weigher<'c> {
                 in_function |= scope.kind == ScopeKind::Function;
             }
 
-            let logical = (self.lang.logical)(node);
-            let category = match logical {
-                Some(op) => (frame.logical != Some(op)).then_some(Category::BoolOp),
-                None if (self.lang.exempt)(node) => None,
+            let operator = (self.lang.operator)(node);
+            let category = match operator {
+                Some(op) if frame.operator == Some(op) => None,
+                Some(op) if op.is_logical() => Some(Category::BoolOp),
+                Some(_) => Some(Category::Operator),
+                None if (self.lang.exempt)(node, source) => None,
                 None => self.categories.get(id).copied().flatten().map(|category| {
                     if flag(&self.returns, id) && self.is_early_return(node, source) {
                         Category::Jump
@@ -196,9 +198,9 @@ impl<'c> Weigher<'c> {
                 }
             }
 
-            let child_logical = match logical {
-                Some(_) => logical,
-                None if flag(&self.parens, id) => frame.logical,
+            let child_operator = match operator {
+                Some(_) => operator,
+                None if flag(&self.parens, id) => frame.operator,
                 None => None,
             };
             // A node that declares a function or class (a named lambda) nests as one, not as its construct.
@@ -243,7 +245,7 @@ impl<'c> Weigher<'c> {
                     depth: frame.depth + u32::from(deeper),
                     entry,
                     in_function,
-                    logical: child_logical,
+                    operator: child_operator,
                 });
             }
         }
@@ -302,6 +304,6 @@ struct Frame<'t> {
     entry: Option<usize>,
     /// Whether it is inside a function, so a function or class declared here nests.
     in_function: bool,
-    /// The operator of the logical expression it is an operand of (through parentheses), if any.
-    logical: Option<Logical>,
+    /// The operator of the expression it is an operand of (through parentheses), if any.
+    operator: Option<Operator>,
 }

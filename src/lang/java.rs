@@ -2,7 +2,7 @@
 
 use tree_sitter::Node;
 
-use super::{Children, Lang, Logical, Nesting, Scope, ScopeKind, text};
+use super::{Children, Lang, Nesting, Operator, Scope, ScopeKind, text};
 use crate::config::Category::{self, *};
 
 pub static JAVA: Lang = Lang {
@@ -16,8 +16,8 @@ pub static JAVA: Lang = Lang {
     wrappers: &[],
     lambdas: &["lambda_expression"],
     parens: &["parenthesized_expression"],
-    logical,
-    exempt: |_| false,
+    operator,
+    exempt,
     tail: |_| false,
     scope,
 };
@@ -49,6 +49,8 @@ const KINDS: &[(&str, Category)] = &[
     ("break_statement", Jump),
     ("continue_statement", Jump),
     ("throw_statement", Jump),
+    ("field_access", Access),
+    ("array_access", Access),
     ("return_statement", Statement),
     ("expression_statement", Statement),
     ("local_variable_declaration", Statement),
@@ -129,15 +131,36 @@ const NESTING: &[Nesting] = &[
     },
 ];
 
-fn logical(node: Node) -> Option<Logical> {
-    if node.kind() != "binary_expression" {
-        return None;
-    }
-    match node.child_by_field_name("operator")?.kind() {
-        "&&" => Some(Logical::And),
-        "||" => Some(Logical::Or),
+/// The number literals, which a `-` makes a negative number, no operator.
+const NUMBERS: &[&str] = &[
+    "decimal_integer_literal",
+    "hex_integer_literal",
+    "octal_integer_literal",
+    "binary_integer_literal",
+    "decimal_floating_point_literal",
+    "hex_floating_point_literal",
+];
+
+/// A binary or unary operator, a compound assignment, `++` / `--`, `instanceof`. `&` / `|` are bitwise: they can't
+/// be told from logical ones without types.
+fn operator(node: Node) -> Option<Operator> {
+    let token = || node.child_by_field_name("operator").map(|op| op.kind());
+    match node.kind() {
+        "binary_expression" => Operator::of(token()?),
+        "assignment_expression" => Operator::of_assignment(token()?),
+        "unary_expression" => Operator::unary(node.child_by_field_name("operand")?, NUMBERS),
+        "update_expression" => Some(Operator::Unary),
+        "instanceof_expression" => Some(Operator::Comparison),
         _ => None,
     }
+}
+
+/// A field of `this` or `super` (`this.x`, as a bare `x` is no access).
+fn exempt(node: Node, _: &[u8]) -> bool {
+    node.kind() == "field_access"
+        && node
+            .child_by_field_name("object")
+            .is_some_and(|object| matches!(object.kind(), "this" | "super"))
 }
 
 /// A class, interface, enum, record or annotation type by its name; an anonymous class as `new Type`; an enum
@@ -262,6 +285,73 @@ mod tests {
         assert_eq!(
             function(&weighed, "A.f"),
             100.0 + 6.0 + 11.0 + 16.0 + 11.0 + 13.0 + 1.0
+        );
+    }
+
+    #[test]
+    fn a_run_of_like_operators_is_one_operator() {
+        let weighed = testing::weigh_expressions(
+            &JAVA,
+            "class A {
+               void f() {
+                 int x = b;                // statement 1
+                 x = b + c;                // 1, one run: 7
+                 x = (b + c) * d;          // 1, two runs: 14
+                 x = a + b - c;            // 1, `+` and `-` are one run: 7
+                 x = a * b + c * d;        // 1, three runs: 21
+                 x += b + c;               // 1, a compound assignment and its like operand: 7
+                 x = -1;                   // 1, a negative number: 0
+                 x = -y;                   // 1, 7
+                 x++;                      // 1, 7
+                 boolean r = a < b && !(c instanceof D);  // 1, bool_op 5, `<`, `!`, instanceof: 21
+                 r = a & b | c;            // 1, bitwise: 14
+                 if (x > 0) {              // branch 10, 7 at 0
+                   x = x * 2;              // (1 + 7) × 2 at 1
+                 }
+               }
+             }",
+        );
+        assert_eq!(
+            function(&weighed, "A.f"),
+            100.0
+                + 1.0
+                + 8.0
+                + 15.0
+                + 8.0
+                + 22.0
+                + 8.0
+                + 1.0
+                + 8.0
+                + 8.0
+                + 27.0
+                + 15.0
+                + 17.0
+                + 16.0
+        );
+    }
+
+    #[test]
+    fn each_field_access_or_index_is_one_access() {
+        let weighed = testing::weigh_expressions(
+            &JAVA,
+            "class A {
+               int v;                      // statement 1
+               void f() {
+                 x = o.a;                  // statement 1, access 9
+                 x = o.a.b;                // 1, 18
+                 x = this.v;               // 1, of `this`: 0
+                 x = this.v.w;             // 1, 9
+                 x = arr[i];               // 1, 9
+                 x = o.a[i + 1];           // 1, 18, operator 7
+                 o.a.g();                  // 1, call 2, `o.a` 9 (the call names `g` itself)
+                 System.out.println(x);    // 1, call 2, `System.out` 9
+               }
+             }",
+        );
+        assert_eq!(class(&weighed, "A"), 1001.0);
+        assert_eq!(
+            function(&weighed, "A.f"),
+            100.0 + 10.0 + 19.0 + 1.0 + 10.0 + 10.0 + 26.0 + 12.0 + 12.0
         );
     }
 

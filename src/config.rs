@@ -30,10 +30,12 @@ pub enum Category {
     Class,
     BoolOp,
     Jump,
+    Operator,
+    Access,
 }
 
 impl Category {
-    pub const ALL: [Category; 11] = [
+    pub const ALL: [Category; 13] = [
         Category::Statement,
         Category::Call,
         Category::Branch,
@@ -45,6 +47,8 @@ impl Category {
         Category::Class,
         Category::BoolOp,
         Category::Jump,
+        Category::Operator,
+        Category::Access,
     ];
 
     /// Its key in the weights file.
@@ -61,6 +65,8 @@ impl Category {
             Category::Class => "class",
             Category::BoolOp => "bool_op",
             Category::Jump => "jump",
+            Category::Operator => "operator",
+            Category::Access => "access",
         }
     }
 

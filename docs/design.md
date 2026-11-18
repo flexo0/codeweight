@@ -91,6 +91,8 @@ function  = 3
 class     = 5
 bool_op   = 1           # each run of like && / || operators: a && b && c is 1, a && b || c is 2
 jump      = 1           # break, continue, an early return, throw
+operator  = 0.25        # each run of like operators: a + b - c is 1, (a + b) * c is 2; x += 1, i++, -x, !x
+access    = 0.25        # each field access or index: a.b.c is 2, a[i] is 1; not a call's callee, nor this.x
 
 [languages.java.weights]            # a language's overrides of [weights]
 lambda = 3
@@ -133,8 +135,23 @@ total        = Σ weight(node) over the nodes that have a category
   and `a && b && c` are 1, `a && b || c` is 2, `(a && b) || (c && d)` is 3. A logical expression counts one when its
   operator differs from that of the logical expression it is an operand of, or it is no operand of one; parentheses
   are see-through, anything else (`!`, a call) starts a new run. Every logical expression counts, in a condition or
-  not. Java's `&` / `|` are not logical (they can't be told from bitwise ones without types). The rule is the
-  language's `logical` hook, whatever its node kind's table entry is.
+  not. Java's `&` / `|` are not logical (they can't be told from bitwise ones without types): they are bitwise
+  operators. The rule is the language's `operator` hook, whatever its node kind's table entry is.
+- `operator`: one per run of like operators, by the `bool_op` rule (parentheses see-through), so a long flat sum is
+  one and a mix of precedences is more: `a = b` is none, `a + b + c` and `a + b - c` are 1, `(b + c) * d` and
+  `a * b + c` are 2, `a * b + c * d` is 3. Like operators are those of one precedence level: `+ -`, `* / %` (Python's
+  `//` and `@`), `**`, the shifts, the comparisons (`==`, `<`, ..., `instanceof`, `in`, `is`; a chained Python
+  comparison `a < b < c` is one), `&`, `|`, `^`, and the unary ones (`-x`, `!x`, `not x`, `~x`, TS's `typeof`, `++`
+  and `--`). A compound assignment (`x += 1`) is its operator, so `x += b + c` is one run, as `x = x + b + c`; a
+  plain `=` is none, the statement already weighs it. A negative number (`-1`) is a literal, no operator. A Rust
+  dereference (`*x`) and a borrow (`&x`) are none. `&&=`, `||=`, `??=` are logical: `bool_op`.
+- `access`: one per field access or index, so `obj.a` is 1, `obj.a.b` and `a[i][j]` are 2. A call's callee is the
+  call's, no access: `obj.f()` is a call, `obj.a.f()` a call and an access (`obj.a`), as Java's grammar has it (its
+  method call holds its object, no field access around the name); TS's `new a.B()` and a JSX element's `<a.B />`
+  the same. An access to `this` / `super` (Java, TS), `self` / `cls` (Python) or `self` (Rust) is none, as a bare
+  `x` (Java's implicit `this`) is none; `this.a.b` is 1. A qualified name in a type or an import is no access: the
+  grammars parse those as other kinds (`scoped_identifier`, `nested_type_identifier`, `dotted_name`), and a Python
+  annotation's, which is an expression, is exempt. Both are the language's `exempt` hook.
 - `jump`: `break`, `continue`, `throw`, and an early return: a return that isn't the last statement (comments aside)
   of its function's or lambda's body; the last one is a `statement`. So `if (x) return a; return b;` is a jump and a
   statement, and both returns of an `if / else` at the end are jumps.
@@ -168,7 +185,9 @@ total        = Σ weight(node) over the nodes that have a category
   (`memo(() => ...)`, `(() => ...) as F`) and `export default () => ...` are lambdas.
 - `if` nests its consequence; its `else` is a clause beside it, whose block is deeper but whose `if` (`else if`)
   stays at the depth. `switch` cases as in Java. `for`, `for ... in / of`, `while`, `do` are loops.
-- `bool_op` counts runs of `&&`, `||` and `??` (a run of `??` is one, as of `&&`).
+- `bool_op` counts runs of `&&`, `||` and `??` (a run of `??` is one, as of `&&`), `&&=`, `||=` and `??=` too.
+- `operator` counts `===` / `!==`, `in` and `instanceof` as comparisons, `typeof`, `void` and `delete` as unary
+  operators. `access` counts a member (`a.b`, `a?.b`) and a subscript (`a[i]`).
 - A decorator weighs nothing of its own, as a Java annotation; a call in it (`@Input()`, `@Component({...})`) is a
   call, where the grammar puts it: a method's or a field's decorator in the class, a parameter's in the method,
   a class's in the class, but `@d export class` in the file (the export holds it).
@@ -190,7 +209,9 @@ total        = Σ weight(node) over the nodes that have a category
   are one deeper, its `for`s (their iterables) at its depth.
 - `match` is no nesting construct; each `case` is a branch, its body deeper, its guard (`case x if c`) no branch of
   its own (exempt), its condition at the case's depth.
-- `and` / `or` are the logical operators (`not` starts a new run). `raise` is a jump.
+- `and` / `or` are the logical operators (`not` starts a new run: it is a unary `operator`). `raise` is a jump.
+- `access` counts an attribute (`a.b`) and a subscript (`a[i]`), not one in an annotation (`x: os.PathLike`,
+  `Dict[str, int]`), which is a type; a parameter's default is no annotation.
 - A decorator weighs nothing of its own; a call in it (`@app.route("/")`) is a call of the class or file around the
   decorated definition (the grammar puts the decorators beside the definition, not in it).
 
@@ -209,7 +230,9 @@ total        = Σ weight(node) over the nodes that have a category
 - `if` (`if let` too) nests its consequence; its `else` is a clause beside it, as TS's: its block deeper, its `if`
   (`else if`) at the depth. `match` is no nesting construct; each arm is a branch, its pattern and guard at the arm's
   depth, its value deeper. `for`, `while` (`while let`), `loop` are loops; a label (`'outer:`) weighs nothing.
-- `&&` / `||` are the logical operators; a let chain (`if let Some(x) = a && x > 0`) is a run of `&&`.
+- `&&` / `||` are the logical operators; a let chain (`if let Some(x) = a && x > 0`) is a run of `&&`. `-x` and
+  `!x` are unary operators; `*x` and `&x` are none. `access` counts a field (`a.b`, `a.0`) and an index (`a[i]`); a
+  method call's callee (`a.f()`) is the call's, a path (`a::b`) no access.
 - A call and a macro invocation (`println!(...)`, `vec![...]`) are calls. `break`, `continue`, `?` (an early return
   of the error) and an early `return` are jumps.
 - Statements: an expression statement, `let`, `const`, `static`, a `type` alias, a trait's associated type, a
@@ -277,8 +300,9 @@ as a command, no `git2` / `gix`.
   field name or node kind, either listed or all but those listed, or by their place among the named children; and
   its chain, the children of its own kind that stay at its depth, for `else if`), the return, lambda and parenthesis
   kinds, the wrappers (the statement kinds a return is looked through for its place: Rust's expression statement),
-  `logical` (a node's `&&` / `||` / `??`), `exempt` (a node that weighs nothing though its kind has a
-  category, where the kind can't tell: a docstring, a case's guard), `tail` (a node that weighs a statement beside
+  `operator` (a node's operator, by its run: `&&`, `+` / `-`, a comparison, a unary one, ...; a logical one is a
+  `bool_op`, any other an `operator`), `exempt` (a node that weighs nothing though its kind has a category, where
+  the kind can't tell: a docstring, a case's guard, a call's callee, `this.x`), `tail` (a node that weighs a statement beside
   its kind's category: Rust's block ending in a value) and `scope` (the function or class a node
   declares, and its own name). A lambda `scope` names a function weighs and nests as a function (TS's named
   arrows). A test checks that
@@ -344,3 +368,11 @@ boundary.
    field, the one-line getters (`Config.lang`, `Weigher.lang`) least.
    The defaults held, no weight changed. Rust's integration tests are under `tests/`, which a test glob already
    matches; its unit tests are in the source files (the known gap above).
+9. (built) Operators and accesses: `a = b`, `a = b + c` and `a = (b + c) * d` weighed alike, as `obj.a` and
+   `obj.a.b`. Now `operator` (runs of like operators, the `bool_op` rule; the `logical` hook became `operator`) and
+   `access` (a field access or index), both 0.25 by default: below a call's 0.5, an expression's detail is not its
+   control flow. Checked on GraphHopper's core and jsprit (Java) and codeweight itself: the totals grew 3 to 6%,
+   the heaviest functions stayed first (their nesting still dominates), and the ones that grew most for their
+   weight are the arithmetic and bit packing ones (`IntEncodedValueImpl.getInt` +42%, `ArrayUtil.merge` +37%). The
+   engine's test weights set both 0, so the snippets about other things leave them out; the snippets about them
+   are weighed with both set (`lang::testing::weigh_expressions`).
