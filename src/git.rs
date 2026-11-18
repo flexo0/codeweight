@@ -101,15 +101,21 @@ pub fn changes(repo: &Path, range: &Range) -> Result<Vec<Change>> {
         None => args.push("--root"),
     }
     args.push(&range.to);
-    parse_diff_tree(&run(repo, &args)?)
+    parse_diff_tree(&run_bytes(repo, &args)?)
 }
 
 /// `git diff-tree -r -z` output: per file `:<mode> <mode> <blob> <blob> <status>\0<path>\0`, a rename or copy with
-/// a second path (`<from>\0<to>\0`).
-fn parse_diff_tree(output: &str) -> Result<Vec<Change>> {
-    let mut fields = output.split('\0').filter(|f| !f.is_empty());
+/// a second path (`<from>\0<to>\0`). A path is its bytes as they are (`-z` leaves them unquoted), UTF-8 or not.
+fn parse_diff_tree(output: &[u8]) -> Result<Vec<Change>> {
+    let mut fields = output.split(|&b| b == 0).filter(|f| !f.is_empty());
     let mut changes = Vec::new();
     while let Some(header) = fields.next() {
+        let header = std::str::from_utf8(header).with_context(|| {
+            format!(
+                "unexpected `git diff-tree` output: `{}`",
+                String::from_utf8_lossy(header)
+            )
+        })?;
         let parts: Vec<&str> = header.trim_start_matches(':').split(' ').collect();
         let [mode_before, mode_after, blob_before, blob_after, status] = parts[..] else {
             bail!("unexpected `git diff-tree` output: `{header}`");
@@ -117,7 +123,7 @@ fn parse_diff_tree(output: &str) -> Result<Vec<Change>> {
         let mut path = || {
             fields
                 .next()
-                .map(PathBuf::from)
+                .map(path_of)
                 .with_context(|| format!("no path after `{header}` in `git diff-tree` output"))
         };
         let path_before = path()?;
@@ -142,6 +148,20 @@ fn parse_diff_tree(output: &str) -> Result<Vec<Change>> {
         changes.push(Change { before, after });
     }
     Ok(changes)
+}
+
+/// A path as git wrote it: its bytes as they are on Unix, where a file's name may be any bytes; elsewhere read as
+/// UTF-8 (git's encoding of paths there), an invalid byte replaced.
+fn path_of(bytes: &[u8]) -> PathBuf {
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        PathBuf::from(std::ffi::OsStr::from_bytes(bytes))
+    }
+    #[cfg(not(unix))]
+    {
+        PathBuf::from(String::from_utf8_lossy(bytes).into_owned())
+    }
 }
 
 /// The contents of `blobs`, all through one `git cat-file --batch`.
@@ -211,8 +231,14 @@ fn read_batch(mut out: impl BufRead, count: usize) -> Result<HashMap<String, Vec
     Ok(contents)
 }
 
-/// Runs `git -C <repo> <args>`, its stdout; its stderr in the error when it fails.
+/// Runs `git -C <repo> <args>`, its stdout as text; its stderr in the error when it fails.
 fn run(repo: &Path, args: &[&str]) -> Result<String> {
+    String::from_utf8(run_bytes(repo, args)?)
+        .with_context(|| format!("`git {}` output", args.join(" ")))
+}
+
+/// Runs `git -C <repo> <args>`, its stdout as bytes; its stderr in the error when it fails.
+fn run_bytes(repo: &Path, args: &[&str]) -> Result<Vec<u8>> {
     let output = Command::new("git")
         .arg("-C")
         .arg(repo)
@@ -227,7 +253,7 @@ fn run(repo: &Path, args: &[&str]) -> Result<String> {
         };
         bail!("`git {}` failed: {why}", args.join(" "));
     }
-    String::from_utf8(output.stdout).with_context(|| format!("`git {}` output", args.join(" ")))
+    Ok(output.stdout)
 }
 
 #[cfg(test)]
@@ -252,7 +278,7 @@ mod tests {
             })
         };
         assert_eq!(
-            parse_diff_tree(&output).unwrap(),
+            parse_diff_tree(output.as_bytes()).unwrap(),
             vec![
                 Change {
                     before: None,
@@ -280,6 +306,17 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_path_that_isn_t_utf8_is_kept_as_its_bytes() {
+        use std::os::unix::ffi::OsStrExt;
+        let output = b":000000 100644 0000 aaa A\0caf\xe9.py\0";
+        let changes = parse_diff_tree(output).unwrap();
+        let after = changes[0].after.as_ref().unwrap();
+        assert_eq!(after.path.as_os_str().as_bytes(), b"caf\xe9.py");
+        assert_eq!(after.blob, "aaa");
     }
 
     #[test]

@@ -12,7 +12,8 @@ Built (`git`, `source::from_commit`, `report`):
    error, so it can't pass for an option.
 2. The changed files: `git diff-tree -r -M -z --no-commit-id <from> <to>` (renames detected, so a moved file is not a
    deletion and an addition; `-z`, so no path is quoted). Git's own rename rules decide: two files of the same text,
-   one deleted and one added, are a rename.
+   one deleted and one added, are a rename. A path is read as its bytes, so a file whose name isn't UTF-8 (git
+   allows it on Linux) is weighed like any other, its name shown with `�` for the bytes that aren't.
 3. Their text on both sides, all through one `git cat-file --batch`, written from a thread of its own while the
    output is read, so neither pipe can fill and block both.
 4. Per file `delta = weight(after) − weight(before)`: an added file all positive, a deleted one all negative; an

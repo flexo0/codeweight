@@ -387,6 +387,23 @@ fn commit_leaves_out_the_excludes_and_weighs_tests_times_the_test_factor() {
     );
 }
 
+// Linux only: a file's name there may be any bytes, where macOS's file systems and Windows want UTF-8.
+#[cfg(target_os = "linux")]
+#[test]
+fn commit_weighs_a_file_whose_name_isn_t_utf8() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+    let repo = Repo::new();
+    fs::write(repo.path().join(OsStr::from_bytes(b"caf\xe9.py")), F).unwrap();
+    repo.commit(&[("a.py", Some(FG))]);
+    assert_eq!(
+        repo.weigh(&["HEAD"]),
+        "total +209\n\
+         +106  added    a.py  f\n\
+         +103  added    caf\u{fffd}.py  f\n"
+    );
+}
+
 #[test]
 fn commit_at_a_shallow_clone_s_boundary_is_an_error_not_a_root() {
     let repo = Repo::new();
