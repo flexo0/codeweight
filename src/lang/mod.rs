@@ -2,6 +2,7 @@
 //! functions and classes are named. The engine reads these tables; it knows no language itself.
 
 pub mod java;
+pub mod javascript;
 pub mod python;
 pub mod rust;
 pub mod typescript;
@@ -17,6 +18,7 @@ pub const ALL: &[&Lang] = &[
     &java::JAVA,
     &typescript::TYPESCRIPT,
     &typescript::TSX,
+    &javascript::JAVASCRIPT,
     &python::PYTHON,
     &rust::RUST,
 ];
@@ -105,7 +107,7 @@ impl Children {
 pub enum Operator {
     And,
     Or,
-    /// TypeScript's `??`.
+    /// TypeScript's and JavaScript's `??`.
     Nullish,
     /// `+`, `-`.
     Additive,
@@ -345,6 +347,9 @@ mod tests {
             Some("typescript")
         );
         assert_eq!(for_path(Path::new("a/b.tsx")).map(|l| l.name), Some("tsx"));
+        for js in ["a/b.js", "a/b.jsx", "a/b.mjs", "a/b.cjs"] {
+            assert_eq!(for_path(Path::new(js)).map(|l| l.name), Some("javascript"));
+        }
         assert_eq!(
             for_path(Path::new("a/b.py")).map(|l| l.name),
             Some("python")

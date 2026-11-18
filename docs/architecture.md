@@ -5,7 +5,7 @@
 | `cli` | the arguments (`clap`), the commands |
 | `config` | loads the weights file, merges it over the defaults, validates it |
 | `source` | an input as `(path, language, text)` items: from disk (`ignore`, the excludes) or git blobs at a revision |
-| `lang` | a module per language (Java, TS, TSX, Python, Rust): grammar, extensions, node kind → category, nesting kinds, function names |
+| `lang` | a module per language (Java, TS and TSX, JavaScript, Python, Rust): grammar, extensions, node kind → category, nesting kinds, function names |
 | `engine` | one tree walked: each node's weight, summed by function, class and file |
 | `git` | the files a commit or a range changed (`git diff-tree -r -M`), their text before and after (`git cat-file --batch`) |
 | `report` | the text table and the JSON; for `commit`, the deltas |
@@ -13,7 +13,7 @@
 Files are weighed in parallel (`rayon`).
 
 Built: every module. The dependencies: `tree-sitter`, `tree-sitter-java`, `tree-sitter-typescript`,
-`tree-sitter-python`, `tree-sitter-rust`, `clap`, `serde`, `serde_json` (the JSON report), `toml`, `anyhow`, `ignore`, `globset` (the
+`tree-sitter-javascript`, `tree-sitter-python`, `tree-sitter-rust`, `clap`, `serde`, `serde_json` (the JSON report), `toml`, `anyhow`, `ignore`, `globset` (the
 `[files]` globs; `ignore` is built on it, so it costs no build), `rayon`, and `tempfile` for the tests. `git` is run
 as a command, no `git2` / `gix`.
 

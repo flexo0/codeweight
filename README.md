@@ -5,7 +5,8 @@ class, ...) has a weight, set in a weights file. An element nested in branches, 
 weighs more. A file's weight is the sum of its elements' weights, and so is a function's. Code is parsed by
 tree-sitter.
 
-It reads Java (`.java`), TypeScript (`.ts`, `.mts`, `.cts`), TSX (`.tsx`), Python (`.py`, `.pyi`) and Rust (`.rs`). The design is
+It reads Java (`.java`), TypeScript (`.ts`, `.mts`, `.cts`), TSX (`.tsx`), JavaScript (`.js`, `.jsx`, `.mjs`, `.cjs`),
+Python (`.py`, `.pyi`) and Rust (`.rs`). The design is
 in `docs/`, a file per subject (see `docs/README.md`).
 
 ## Example
@@ -60,9 +61,9 @@ name, each as `<weight>  <path>  <name>`; with `--by file`, the files. A class's
 outside its functions; `(file)` is a file's code outside any class. A function is named by its enclosing classes and
 functions, `Outer.Inner.method`. Same-named functions of one class are one line, their weights summed: overloads, or
 a Java class's constructors (`A.A`). A Java anonymous class is `new Type`; a TypeScript constructor is
-`A.constructor`. A TypeScript arrow or function expression bound to a name at the file's level or as a class field
-(`export const f = () => ...`, `onClick = () => ...`) is a function of that name; anywhere else (inside a function
-too) it is a lambda, its code the function's around it. A Rust method is named by its `impl` block's type
+`A.constructor`. A TypeScript (or JavaScript) arrow or function expression bound to a name at the file's level or as
+a class field (`export const f = () => ...`, `onClick = () => ...`) is a function of that name; anywhere else (inside
+a function too) it is a lambda, its code the function's around it. A Rust method is named by its `impl` block's type
 (`Foo.method`), so a type's struct and all its `impl` blocks in a file are one class. A weight has at most two
 decimals.
 
@@ -171,10 +172,11 @@ lambda = 3
 synchronized_statement = "try"
 
 [files]                 # what a folder walk weighs (globs: * and ? within a path's part, ** across parts)
-exclude = ["**/node_modules/**", "**/build/**", "**/target/**", "**/generated/**", "**/*.d.ts"]
+exclude = ["**/node_modules/**", "**/build/**", "**/target/**", "**/generated/**", "**/*.d.ts", "**/*.min.js"]
 test_globs = [
     "**/test/**", "**/tests/**", "**/__tests__/**", "**/*Test.java", "**/*Tests.java",
     "**/*.test.ts", "**/*.spec.ts", "**/*.test.tsx", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py",
+    "**/*.test.js", "**/*.spec.js", "**/*.test.jsx", "**/*.spec.jsx",
 ]
 test_factor = 1.0       # a test's weight times this in a commit's delta; 0 leaves the test files out
 ```
@@ -200,15 +202,15 @@ tree levels don't count (`a.b().c()` is not deep). An `else if` (Python's `elif`
 are the cases of a `switch` or a `match`.
 
 The languages' keys are `java`, `typescript` (for `.ts` and `.tsx` alike: its `node_kinds` may name a kind of either
-grammar, the `jsx_*` ones being TSX's), `python` and `rust`. A node kind is a tree-sitter one, as the language's grammar
-names it.
+grammar, the `jsx_*` ones being TSX's), `javascript` (its own, not `typescript`'s), `python` and `rust`. A node kind
+is a tree-sitter one, as the language's grammar names it.
 
 ### The categories
 
-| Category | Java | TypeScript, TSX | Python | Rust |
+| Category | Java | TypeScript, TSX, JavaScript | Python | Rust |
 |---|---|---|---|---|
 | `statement` | an expression statement, a local variable, a field, a `return` that ends its function or lambda, `yield`, `assert`, `synchronized`, an enum constant | an expression statement, `const` / `let` / `var`, a class field, an interface's property, a `type` alias, a `return` that ends its function | an expression statement (an assignment too; not a docstring or a bare `...`), `assert`, `del`, a `type` alias, a `return` that ends its function | an expression statement, `let`, `const`, `static`, a `type` alias, a field, an enum variant, a block's tail expression (its value, no `;`), a `return` that ends its function or closure |
-| `call` | a method call, `new`, `this(...)` / `super(...)` | a call, `new`; in TSX each JSX element | a call | a call, a macro invocation (its arguments aren't parsed) |
+| `call` | a method call, `new`, `this(...)` / `super(...)` | a call, `new`; in TSX and JavaScript each JSX element | a call | a call, a macro invocation (its arguments aren't parsed) |
 | `branch` | `if`, a ternary `?:`, each `switch` case | `if`, a ternary `?:`, each `switch` case | `if`, `elif`, `x if c else y`, each `match` case, a comprehension's `if` | `if` (`if let` too), each `match` arm |
 | `loop` | `for`, for-each, `while`, `do` | `for`, `for ... in` / `of`, `while`, `do` | `for`, `while`, a comprehension's `for` | `for`, `while`, `loop` |
 | `try` | `try`, try-with-resources | `try` | `try`, `with` | — |
@@ -220,6 +222,9 @@ names it.
 | `jump` | `break`, `continue`, `throw`, an early `return` | `break`, `continue`, `throw`, an early `return` | `break`, `continue`, `raise`, an early `return` | `break`, `continue`, `?`, an early `return` |
 | `operator` | each run of like arithmetic, comparison (`instanceof` too), bitwise or unary operators, a compound assignment, `++` / `--` | the same (`in`, `typeof`, `void`, `delete` too) | the same (`not`, `in`, `is` too) | the same (not `*x`, `&x`) |
 | `access` | a field access, an array index | a member (`a.b`, `a?.b`), a subscript | an attribute, a subscript | a field (`a.b`, `a.0`), an index |
+
+JavaScript's elements are TypeScript's but for the type ones (an interface, an enum, a namespace, a signature, an
+interface's property, a `type` alias); a `using` declaration is a statement, as `let`.
 
 A run of `bool_op`: `a && b && c` is 1, `a && b || c` is 2; parentheses don't break a run, a negation or a call does.
 A run of `operator` is the same, its like operators those of one precedence level: `a + b - c` is 1, `(b + c) * d`

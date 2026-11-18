@@ -3,7 +3,7 @@
 What each language's elements are, where it adds to or differs from the general rules ([weight.md](weight.md)),
 which are Java's as they stand.
 
-## TypeScript and TSX
+## TypeScript, TSX and JavaScript
 
 - A function is a function, generator or method declaration, an overload's or an interface's signature
   (`function f(): void;`, `m(): void;`, `abstract m(): void;`): overloads are one entry, summed, as in Java. A
@@ -28,6 +28,13 @@ which are Java's as they stand.
 - TSX: a JSX element (`jsx_element`, a fragment too, and `jsx_self_closing_element`) is a call, as it compiles to
   one; its attributes and `{...}` weigh what is in them. JSX is no nesting construct.
 - A namespace's statement (the grammar wraps `namespace N {}` in an expression statement) weighs nothing.
+- JavaScript (`.js`, `.jsx`, `.mjs`, `.cjs`; `tree-sitter-javascript`, the grammar TypeScript's is built on) is
+  weighed as TypeScript, its table, nesting and naming taken from `typescript.rs`, but for the type kinds its grammar
+  hasn't: an interface, an enum, an abstract class, a namespace, a signature, a property signature, a `type` alias.
+  Its class field is `field_definition` (TypeScript's `public_field_definition`, its name the `property` field), a
+  field all the same: `onClick = () => ...` is the function `A.onClick`. `using x = ...` (`using_declaration`, which
+  TypeScript's grammar doesn't parse yet) is a statement, as `let`. The grammar reads JSX in any file, so a JSX
+  element is a call in a `.js` file as in a `.jsx` one. Its weights-file table is its own ([config.md](config.md)).
 
 ## Python
 

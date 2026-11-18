@@ -33,9 +33,10 @@ access    = 0.25        # each field access or index: a.b.c is 2, a[i] is 1; not
 # synchronized_statement = "try"
 
 [files]
-exclude = ["**/node_modules/**", "**/build/**", "**/target/**", "**/generated/**", "**/*.d.ts"]
+exclude = ["**/node_modules/**", "**/build/**", "**/target/**", "**/generated/**", "**/*.d.ts", "**/*.min.js"]
 test_globs = [
     "**/test/**", "**/tests/**", "**/__tests__/**", "**/*Test.java", "**/*Tests.java",
     "**/*.test.ts", "**/*.spec.ts", "**/*.test.tsx", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py",
+    "**/*.test.js", "**/*.spec.js", "**/*.test.jsx", "**/*.spec.jsx",
 ]
 test_factor = 1.0       # a test's weight times this in a commit's delta; 0 leaves the test files out

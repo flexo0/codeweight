@@ -13,7 +13,7 @@ Built (`config`, `config::find`):
   unknown key anywhere is an error.
 - Checked after: every `[weights]` key is a category (and every category has a weight, which only a file on its own,
   without the defaults under it, can miss); every `[languages.<name>]` is a language codeweight reads (`java`,
-  `typescript`, `python`, `rust`); every `node_kinds` key is a named node kind of that language's grammar and its value a
+  `typescript`, `javascript`, `python`, `rust`); every `node_kinds` key is a named node kind of that language's grammar and its value a
   category or `"none"`; every weight and factor is a finite number, 0 or above; every `[files]` glob compiles. The
   error names the table and the key, and the file.
 - `typescript` is the table of both `.ts` and `.tsx` files (two grammars, one key): a TS setting reaches TSX too.
@@ -21,6 +21,11 @@ Built (`config`, `config::find`):
   only); the grammar without it has no node of that kind, so there it does nothing. A `[languages.tsx]` table is an
   unknown language; should TSX ever need settings of its own, it can be added over `typescript`'s without changing
   what an existing file means.
+- `javascript` is the table of `.js`, `.jsx`, `.mjs` and `.cjs` files, its own: a TS setting doesn't reach them, nor
+  a JS one TS. Its grammar is the one TS's is built on, but it is another language: a JS-only project tunes it under
+  its own name, and the two grammars' kinds already differ (JS's class field is `field_definition`, TS's
+  `public_field_definition`; JS has `using_declaration`, TS not yet), so one `node_kinds` remap wouldn't reach both.
+  Its `node_kinds` key is a kind of JS's grammar (`interface_declaration` is an unknown node kind there).
 - A language's weights are `[weights]` with its `[languages.<name>.weights]` over them; its `node_kinds` override
   its own table (see [architecture.md](architecture.md)).
 - The defaults hold no `[languages.<name>.weights]` (the example above has one only to show the table): the merge
@@ -58,10 +63,11 @@ lambda = 3
 satisfies_expression = "statement"
 
 [files]
-exclude = ["**/node_modules/**", "**/build/**", "**/target/**", "**/generated/**", "**/*.d.ts"]
+exclude = ["**/node_modules/**", "**/build/**", "**/target/**", "**/generated/**", "**/*.d.ts", "**/*.min.js"]
 test_globs = [
     "**/test/**", "**/tests/**", "**/__tests__/**", "**/*Test.java", "**/*Tests.java",
     "**/*.test.ts", "**/*.spec.ts", "**/*.test.tsx", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py",
+    "**/*.test.js", "**/*.spec.js", "**/*.test.jsx", "**/*.spec.jsx",
 ]
 test_factor = 1.0       # a test's weight times this in a commit's delta; 0 leaves the test files out
 ```

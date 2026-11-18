@@ -1,4 +1,5 @@
-//! TypeScript and TSX: two grammars, one table in the weights file (`[languages.typescript]`).
+//! TypeScript and TSX: two grammars, one table in the weights file (`[languages.typescript]`). Their table and hooks
+//! are JavaScript's too (`javascript`), but for the type kinds.
 
 use tree_sitter::Node;
 
@@ -42,23 +43,38 @@ pub static TSX: Lang = Lang {
     tests: None,
 };
 
-/// The kind → category table both grammars share, and a grammar's own entries after it.
+/// The kind → category table both grammars share, TypeScript's type kinds over JavaScript's, and a grammar's own
+/// entries after it.
 macro_rules! kinds {
     ($($extra:tt)*) => {
-        &[
-            ("class_declaration", Class),
+        js_kinds!(
             ("abstract_class_declaration", Class),
-            ("class", Class),
             ("interface_declaration", Class),
             ("enum_declaration", Class),
             ("internal_module", Class),
             ("module", Class),
-            ("function_declaration", Function),
-            ("generator_function_declaration", Function),
             ("function_signature", Function),
-            ("method_definition", Function),
             ("method_signature", Function),
             ("abstract_method_signature", Function),
+            ("public_field_definition", Statement),
+            ("property_signature", Statement),
+            ("type_alias_declaration", Statement),
+            $($extra)*
+        )
+    };
+}
+use kinds;
+
+/// The kinds of JavaScript's grammar, which TypeScript's is built on (JavaScript's table, TypeScript's under its
+/// type kinds), and a grammar's own entries after them.
+macro_rules! js_kinds {
+    ($($extra:tt)*) => {
+        &[
+            ("class_declaration", Class),
+            ("class", Class),
+            ("function_declaration", Function),
+            ("generator_function_declaration", Function),
+            ("method_definition", Function),
             ("arrow_function", Lambda),
             ("function_expression", Lambda),
             ("generator_function", Lambda),
@@ -83,16 +99,13 @@ macro_rules! kinds {
             ("expression_statement", Statement),
             ("lexical_declaration", Statement),
             ("variable_declaration", Statement),
-            ("public_field_definition", Statement),
-            ("property_signature", Statement),
-            ("type_alias_declaration", Statement),
             $($extra)*
         ]
     };
 }
-use kinds;
+pub(super) use js_kinds;
 
-const LAMBDAS: &[&str] = &[
+pub(super) const LAMBDAS: &[&str] = &[
     "arrow_function",
     "function_expression",
     "generator_function",
@@ -106,7 +119,7 @@ const fn body(kind: &'static str) -> Nesting {
     }
 }
 
-const NESTING: &[Nesting] = &[
+pub(super) const NESTING: &[Nesting] = &[
     Nesting {
         kind: "if_statement",
         body: Children::Only(&["consequence"]),
@@ -139,7 +152,7 @@ const NESTING: &[Nesting] = &[
 
 /// A binary or unary operator (`typeof`, `void`, `delete` too), a compound assignment (`&&=`, `||=` and `??=` are
 /// logical), `++` / `--`.
-fn operator(node: Node) -> Option<Operator> {
+pub(super) fn operator(node: Node) -> Option<Operator> {
     let token = || node.child_by_field_name("operator").map(|op| op.kind());
     match node.kind() {
         "binary_expression" => Operator::of(token()?),
@@ -153,7 +166,7 @@ fn operator(node: Node) -> Option<Operator> {
 /// A directive (`"use strict";`), and a namespace's statement (the grammar wraps a namespace in one; the namespace
 /// is a declaration, like a class): an expression statement that is only a string or a namespace. A member that is
 /// a call's callee (`a.f()`, `new a.B()`, a JSX element's `<a.B>`: the call weighs) or of `this` / `super`.
-fn exempt(node: Node, _: &[u8]) -> bool {
+pub(super) fn exempt(node: Node, _: &[u8]) -> bool {
     match node.kind() {
         "expression_statement" => {
             only_child(node).is_some_and(|c| matches!(c.kind(), "string" | "internal_module"))
@@ -182,7 +195,7 @@ fn exempt(node: Node, _: &[u8]) -> bool {
 /// to, else `class`); a function, method or signature by its name; an arrow or function expression bound to a
 /// name at the file's or a namespace's level, or a class field's value, by that name. Any other arrow or function
 /// expression is a lambda.
-fn scope(node: Node, source: &[u8]) -> Option<Scope> {
+pub(super) fn scope(node: Node, source: &[u8]) -> Option<Scope> {
     let name = |node: Node| node.child_by_field_name("name").map(|n| text(n, source));
     let (kind, name) = match node.kind() {
         "class_declaration"
@@ -219,10 +232,13 @@ fn bound_to(node: Node, source: &[u8]) -> Option<(String, bool)> {
     if parent.child_by_field_name("value")?.id() != node.id() {
         return None;
     }
-    let name = parent.child_by_field_name("name")?;
+    let name = |field: &str| parent.child_by_field_name(field);
     match parent.kind() {
-        "public_field_definition" => Some((text(name, source), true)),
-        "variable_declarator" if name.kind() == "identifier" => {
+        // TypeScript's field, JavaScript's.
+        "public_field_definition" => Some((text(name("name")?, source), true)),
+        "field_definition" => Some((text(name("property")?, source), true)),
+        "variable_declarator" => {
+            let name = name("name").filter(|n| n.kind() == "identifier")?;
             Some((text(name, source), at_top(parent.parent()?)))
         }
         _ => None,

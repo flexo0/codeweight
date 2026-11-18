@@ -444,7 +444,7 @@ mod tests {
         let error = error_of("[languages.cobol.weights]\nloop = 1\n");
         assert!(
             error.contains(
-                "unknown language `cobol` in [languages], expected one of: java, typescript, python, rust"
+                "unknown language `cobol` in [languages], expected one of: java, typescript, javascript, python, rust"
             ),
             "{error}"
         );
@@ -470,6 +470,32 @@ mod tests {
         assert!(
             error_of("[languages.typescript.node_kinds]\njsx_elem = \"call\"\n")
                 .contains("unknown node kind `jsx_elem` in [languages.typescript.node_kinds]")
+        );
+    }
+
+    #[test]
+    fn javascript_s_table_is_its_own() {
+        use crate::lang::javascript::JAVASCRIPT;
+        use crate::lang::typescript::TYPESCRIPT;
+        let config = Config::from_str_over_defaults(
+            "[languages.typescript.weights]\nloop = 9\n\
+             [languages.javascript.weights]\nloop = 7\n\
+             [languages.javascript.node_kinds]\nfield_definition = \"none\"\n",
+        )
+        .unwrap();
+        assert_eq!(config.lang(&TYPESCRIPT).weight(Category::Loop), 9.0);
+        assert_eq!(config.lang(&JAVASCRIPT).weight(Category::Loop), 7.0);
+        assert_eq!(
+            config.lang(&JAVASCRIPT).node_kinds["field_definition"],
+            None
+        );
+        assert!(config.lang(&TYPESCRIPT).node_kinds.is_empty());
+        // A TypeScript kind is no JavaScript one.
+        assert!(
+            error_of("[languages.javascript.node_kinds]\ninterface_declaration = \"call\"\n")
+                .contains(
+                    "unknown node kind `interface_declaration` in [languages.javascript.node_kinds]"
+                )
         );
     }
 

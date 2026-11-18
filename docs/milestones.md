@@ -1,7 +1,7 @@
 # Milestones
 
-Built: milestones 0-9 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
-`commit`, the reports, the tuned defaults, Rust, operators and accesses).
+Built: milestones 0-10 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
+`commit`, the reports, the tuned defaults, Rust, operators and accesses, JavaScript).
 
 0. (built) The repo: `Cargo.toml`, `README.md` (usage, the weights file), the MIT license, GitHub Actions (`cargo fmt
    --check`, `clippy -D warnings`, `test`).
@@ -53,3 +53,7 @@ Built: milestones 0-9 (the repo, the CLI and the config, the engine and Java, Ty
    weight are the arithmetic and bit packing ones (`IntEncodedValueImpl.getInt` +42%, `ArrayUtil.merge` +37%). The
    engine's test weights set both 0, so the snippets about other things leave them out; the snippets about them
    are weighed with both set (`lang::testing::weigh_expressions`).
+10. (built) JavaScript (`.js`, `.jsx`, `.mjs`, `.cjs`, `tree-sitter-javascript` 0.25 on `tree-sitter` 0.27):
+    TypeScript's table but for the type kinds, its nesting and hooks; its own weights-file key, `javascript`
+    ([config.md](config.md)); snippet tests. The test globs gained `*.test.js` / `*.spec.js` and their `.jsx`, the
+    excludes `*.min.js` (a minified bundle is built, not written). The defaults are TS's, untuned on JS.
