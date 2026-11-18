@@ -41,6 +41,8 @@ decision made while building goes into its subject's file, in the same commit).
 - The output is deterministic: sorted by weight, then by path and name, whatever order `rayon` finished in.
 - The JSON output is the machine contract (other tools read it): a change to its fields changes the README's
   description of it, in the same commit.
+- The agents' skill, `skills/codeweight/SKILL.md`, is how agents run codeweight: a change to a command, an option,
+  the text output or the JSON's fields changes it too, in the same commit.
 - A file that doesn't parse cleanly is still weighed (tree-sitter recovers) and gets a warning in the report; an
   unsupported file is skipped and listed, never an error.
 - Errors carry context (`anyhow::Context`) and end the CLI with exit 2; no `unwrap` / `expect` outside tests but on
@@ -51,7 +53,7 @@ decision made while building goes into its subject's file, in the same commit).
 - A language: a module in `src/lang/` (its grammar, extensions, node kind → category table, nesting kinds, how a
   function is named), its default weights' overrides in `src/default.toml` if any, its tests.
 - A category: `src/default.toml` (its default weight), the languages' tables, the README's list.
-- A command or option: `src/cli.rs`, the README's usage.
+- A command or option: `src/cli.rs`, the README's usage, the skill (`skills/codeweight/SKILL.md`).
 
 ## Style
 

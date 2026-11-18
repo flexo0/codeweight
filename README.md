@@ -32,6 +32,10 @@ cargo install --git https://github.com/flexo0/codeweight
 
 It isn't on crates.io yet; once it is, `cargo install codeweight`. To build from a clone, see "Building" below.
 
+For a coding agent that reads `SKILL.md` skills (Claude Code and others), `skills/codeweight/` tells it how to run
+codeweight: link or copy the folder into the agent's skills, e.g. from a clone
+`ln -s "$PWD/skills/codeweight" ~/.claude/skills/codeweight`.
+
 ## Usage
 
 ```
