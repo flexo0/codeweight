@@ -14,8 +14,10 @@ use crate::lang::{self, Lang, Nesting, Operator, ScopeKind};
 pub struct Weighed {
     /// The whole text's.
     pub total: f64,
-    /// Of the code outside any class or function.
+    /// Of the code outside any class or function, its test code aside.
     pub file: f64,
+    /// Of the test code outside any class or function (Rust's `#[cfg(test)] use ...;`).
+    pub file_tests: f64,
     /// Each class's (its code outside its functions) and each function's (its nested functions' not in it), in the
     /// order they first appear; same-named ones of one kind are one entry.
     pub entries: Vec<Entry>,
@@ -31,16 +33,46 @@ pub struct Entry {
     /// The line it starts on (its first declaration's, for same-named ones), from 1.
     pub line: usize,
     pub weight: f64,
+    /// Whether it is test code (a test and a non-test one of one name are two entries).
+    pub test: bool,
 }
 
 impl Weighed {
-    /// Every weight times `factor` (a test file's, times the test factor).
-    pub fn scaled(mut self, factor: f64) -> Weighed {
-        self.total *= factor;
-        self.file *= factor;
+    /// Its code outside any class or function, test code or not.
+    pub fn outside(&self) -> f64 {
+        self.file + self.file_tests
+    }
+
+    /// All of it test code: a test file's.
+    pub fn all_tests(mut self) -> Weighed {
+        self.file_tests += self.file;
+        self.file = 0.0;
         for entry in &mut self.entries {
-            entry.weight *= factor;
+            entry.test = true;
         }
+        self
+    }
+
+    /// Its test code alone (`tests`), or its code without its tests.
+    pub fn only(self, tests: bool) -> Weighed {
+        let (code, test) = if tests { (0.0, 1.0) } else { (1.0, 0.0) };
+        let mut weighed = self.times(code, test);
+        weighed.entries.retain(|e| e.test == tests);
+        weighed
+    }
+
+    /// Its test code's weights times `factor` (a commit's, times the test factor).
+    pub fn tests_times(self, factor: f64) -> Weighed {
+        self.times(1.0, factor)
+    }
+
+    fn times(mut self, code: f64, tests: f64) -> Weighed {
+        self.file *= code;
+        self.file_tests *= tests;
+        for entry in &mut self.entries {
+            entry.weight *= if entry.test { tests } else { code };
+        }
+        self.total = self.outside() + self.entries.iter().map(|e| e.weight).sum::<f64>();
         self
     }
 }
@@ -128,14 +160,16 @@ impl<'c> Weigher<'c> {
         let source = text.as_bytes();
 
         let mut file = 0.0;
+        let mut file_tests = 0.0;
         let mut entries: Vec<Entry> = Vec::new();
-        let mut index: HashMap<(ScopeKind, String), usize> = HashMap::new();
+        let mut index: HashMap<(ScopeKind, String, bool), usize> = HashMap::new();
         let mut stack = vec![Frame {
             node: root,
             depth: 0,
             entry: None,
             in_function: false,
             operator: None,
+            test: false,
         }];
         let mut children = Vec::new();
 
@@ -146,6 +180,7 @@ impl<'c> Weigher<'c> {
             let mut entry = frame.entry;
             let mut in_function = frame.in_function;
             let mut nested_scope = false;
+            let test = frame.test || self.lang.tests.is_some_and(|tests| tests(node, source));
             let scope = (self.lang.scope)(node, source);
             let declares = scope.as_ref().map(|s| s.kind);
             if let Some(scope) = scope {
@@ -153,17 +188,18 @@ impl<'c> Weigher<'c> {
                     Some(parent) => format!("{}.{}", entries[parent].name, scope.name),
                     None => scope.name,
                 };
-                let at = *index
-                    .entry((scope.kind, name))
-                    .or_insert_with_key(|(kind, name)| {
+                let at = *index.entry((scope.kind, name, test)).or_insert_with_key(
+                    |(kind, name, test)| {
                         entries.push(Entry {
                             kind: *kind,
                             name: name.clone(),
                             line: node.start_position().row + 1,
                             weight: 0.0,
+                            test: *test,
                         });
                         entries.len() - 1
-                    });
+                    },
+                );
                 entry = Some(at);
                 nested_scope = frame.in_function;
                 in_function |= scope.kind == ScopeKind::Function;
@@ -194,6 +230,7 @@ impl<'c> Weigher<'c> {
                 let weight = base * self.nesting.factor_at(frame.depth);
                 match entry {
                     Some(at) => entries[at].weight += weight,
+                    None if test => file_tests += weight,
                     None => file += weight,
                 }
             }
@@ -246,14 +283,16 @@ impl<'c> Weigher<'c> {
                     entry,
                     in_function,
                     operator: child_operator,
+                    test,
                 });
             }
         }
 
-        let total = file + entries.iter().map(|e| e.weight).sum::<f64>();
+        let total = file + file_tests + entries.iter().map(|e| e.weight).sum::<f64>();
         Ok(Weighed {
             total,
             file,
+            file_tests,
             entries,
             clean: !root.has_error(),
         })
@@ -306,4 +345,6 @@ struct Frame<'t> {
     in_function: bool,
     /// The operator of the expression it is an operand of (through parentheses), if any.
     operator: Option<Operator>,
+    /// Whether it is test code, or inside some.
+    test: bool,
 }

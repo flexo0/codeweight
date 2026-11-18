@@ -54,6 +54,9 @@ pub struct Lang {
     /// The function or class a node declares, if it does one, and its own name (not qualified). A lambda it names
     /// a function is one: it weighs as a function, and nests as one, not as a lambda.
     pub scope: fn(Node, &[u8]) -> Option<Scope>,
+    /// Whether a node is test code in a source file, it and all in it (Rust's `#[cfg(test)]` and `#[test]`
+    /// items); `None` for a language whose tests are files of their own, which the test globs find.
+    pub tests: Option<fn(Node, &[u8]) -> bool>,
 }
 
 /// A nesting construct: which of its children are one level deeper than it.
@@ -246,7 +249,7 @@ pub mod testing {
     pub fn weigh_under(lang: &'static Lang, weights: &str, text: &str) -> Weighed {
         let config = Config::from_str_alone(weights).unwrap();
         let weighed = Weigher::new(lang, &config).weigh(text).unwrap();
-        let sum = weighed.file + weighed.entries.iter().map(|e| e.weight).sum::<f64>();
+        let sum = weighed.outside() + weighed.entries.iter().map(|e| e.weight).sum::<f64>();
         assert_eq!(weighed.total, sum);
         weighed
     }

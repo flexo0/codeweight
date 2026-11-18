@@ -20,6 +20,7 @@ pub static TYPESCRIPT: Lang = Lang {
     exempt,
     tail: |_| false,
     scope,
+    tests: None,
 };
 
 pub static TSX: Lang = Lang {
@@ -38,6 +39,7 @@ pub static TSX: Lang = Lang {
     exempt,
     tail: |_| false,
     scope,
+    tests: None,
 };
 
 /// The kind → category table both grammars share, and a grammar's own entries after it.

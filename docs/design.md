@@ -7,8 +7,9 @@ Once a part is built, its section is rewritten as a reference (what it is, why s
 ## 1. The CLI
 
 ```
-codeweight scan <path>...                 a file or a folder, absolute or relative; several allowed
-codeweight commit <rev>|<A>..<B> [-C <repo>]   the net weight delta of a commit, or between two revisions
+codeweight scan <path>... [-v]            a file or a folder, absolute or relative; several allowed; tests left out
+codeweight scanTests <path>... [-v]       the same, of the tests alone
+codeweight commit <rev>|<A>..<B> [-C <repo>] [-v]   the net weight delta of a commit, or between two revisions
 codeweight init [<file>]                  writes the default weights file (default ./codeweight.toml)
 ```
 
@@ -26,11 +27,18 @@ Built (`cli`, `report`): every command and option. `init` never overwrites a fil
 error). `--by` defaults to `function`; `--top` keeps the report's first N lines, whichever `--by` lists (so "the N
 heaviest functions", or files).
 
-- `scan`'s text: the total, then one line per function or class (`<weight>  <path>  <name>`, a class as
+- `scan` prints its total alone, a number, so a script or a person reads one value, and `commit` its net delta alone,
+  signed (`+42.5`); `--verbose` (`-v`), `--top` or `--by` print the whole report (a list was asked for). `scan` weighs the code without its tests, `scanTests`
+  (alias `scan-tests`) the tests alone: two numbers, not one mixed by `test_factor`, so neither hides the other.
+  Each weighs at its full weight; `test_factor` is `commit`'s alone (a delta is one number for a change to both).
+  The tests are the test files (by path) and the test code inside a source file (Rust's, see section 3). With the
+  total alone, the syntax warnings go to stderr and the skipped files aren't listed. The JSON is the whole report,
+  `--verbose` or not: a machine reads the fields it wants.
+- `scan`'s text with `--verbose`: the total, then one line per function or class (`<weight>  <path>  <name>`, a class as
   `Name (class)`, a file's code outside any class as `(file)`) or per file with `--by file`, heaviest first, then by
   path and the shown name; then the warnings (syntax errors), then the skipped files. A line that weighs 0 (at two
   decimals) is left out.
-- `commit`'s text: the total delta (`total +42.5`), then `<delta>  <status>  <path>  <name>` per line, a renamed
+- `commit`'s text with `--verbose`: the total delta (`total +42.5`), then `<delta>  <status>  <path>  <name>` per line, a renamed
   file's path `old -> new`. A commit has no "heaviest": its lines sort by the delta's size, a gain before a loss of
   the same size, then by path and name, so `--top` keeps the largest changes either way. A line whose delta is 0 (at
   two decimals) is left out, a pure rename's too: the report is of weight, not of files moved.
@@ -106,7 +114,7 @@ test_globs = [
     "**/test/**", "**/tests/**", "**/__tests__/**", "**/*Test.java", "**/*Tests.java",
     "**/*.test.ts", "**/*.spec.ts", "**/*.test.tsx", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py",
 ]
-test_factor = 1.0       # a test file's weight times this; 0 leaves the tests out
+test_factor = 1.0       # a test's weight times this in a commit's delta; 0 leaves the test files out
 ```
 
 Folder walks honour `.gitignore` too (the `ignore` crate).
@@ -249,9 +257,17 @@ total        = Σ weight(node) over the nodes that have a category
   twice. The same holds in any block: an `if`'s, an arm's, a closure's, `unsafe { }`'s.
 - Known gaps: a macro's arguments are a token tree, not parsed, so only the macro call weighs (what is inside
   `vec![f(x), g(y)]` or `assert_eq!(...)` weighs nothing), and a `macro_rules!` definition weighs nothing.
-  `#[cfg(test)] mod tests` in a source file weighs in full, as a class `tests` of that file: the test globs are by
-  path, so neither they nor `test_factor` reach it. `let ... else { }` is no branch, its block not deeper; an `async`
+  `let ... else { }` is no branch, its block not deeper; an `async`
   block is no lambda.
+- Tests inside a source file (the `tests` hook): an item marked `#[cfg(test)]`, `#[test]` or `#[...::test]`
+  (`tokio::test`), the attribute among the attributes and comments right before it, is test code with all in it
+  (a `mod tests`, its functions); a file marked `#![cfg(test)]` is all test code. Its entries are test entries
+  (a test and a non-test one of one name are two, so `#[cfg(test)] fn f` and `#[cfg(not(test))] fn f` stay
+  apart), its code outside any class the file's test code; `scan` leaves it out, `scanTests` weighs it alone,
+  `commit` weighs it times `test_factor` as a test file. Left as it is: a marked item that is no class or function
+  inside a class or function (`#[cfg(test)] const` in an `impl`) weighs in its class's or function's code; a
+  `mod tests;` whose file is `tests.rs` marks that file only in its parent, so `tests.rs` is code unless a test
+  glob or its own `#![cfg(test)]` says otherwise.
 
 ## 4. Architecture
 
@@ -281,7 +297,8 @@ as a command, no `git2` / `gix`.
   glob means the same from any folder scanned, and later for `commit`; outside a repo, from the current folder when
   the path is in it, else from the folder given (a file given: its name), never with the folders above, so a project
   under a `build` or `tests` folder is neither excluded nor taken for tests whatever the path's spelling. A
-  file the test globs match is weighed times `test_factor`; at 0 it is left out, unlisted. A path is shown as given,
+  file the test globs match is a test file: `scan` leaves it out, `scanTests` keeps it and the files of a language
+  with tests inside its source files (Rust's), each weighed for its tests alone. A path is shown as given,
   or the folder given joined with the path in it, without a leading `./`; a path given twice, or under two folders
   given, is weighed once.
 - `source` for `commit` (`from_commit`): a changed file's each side is kept as a walk of the repo's root would keep
@@ -295,7 +312,7 @@ as a command, no `git2` / `gix`.
   never all in memory; the results are collected in the listed order, and the report sorts them (weight, then path
   and name), so the output doesn't depend on which thread finished first.
 
-- `lang::Lang` is a table of plain data and four hooks: its name and its weights file key, the extensions, the
+- `lang::Lang` is a table of plain data and five hooks: its name and its weights file key, the extensions, the
   grammar, the node kind → category list, the nesting constructs (each with its body: the children it nests, by
   field name or node kind, either listed or all but those listed, or by their place among the named children; and
   its chain, the children of its own kind that stay at its depth, for `else if`), the return, lambda and parenthesis
@@ -303,8 +320,9 @@ as a command, no `git2` / `gix`.
   `operator` (a node's operator, by its run: `&&`, `+` / `-`, a comparison, a unary one, ...; a logical one is a
   `bool_op`, any other an `operator`), `exempt` (a node that weighs nothing though its kind has a category, where
   the kind can't tell: a docstring, a case's guard, a call's callee, `this.x`), `tail` (a node that weighs a statement beside
-  its kind's category: Rust's block ending in a value) and `scope` (the function or class a node
-  declares, and its own name). A lambda `scope` names a function weighs and nests as a function (TS's named
+  its kind's category: Rust's block ending in a value), `scope` (the function or class a node
+  declares, and its own name) and `tests` (a node that is test code inside a source file, it and all in it:
+  Rust's `#[cfg(test)]` items; none for a language whose tests are files of their own). A lambda `scope` names a function weighs and nests as a function (TS's named
   arrows). A test checks that
   every kind and field the tables name is in the grammar, so a typo can't silently weigh nothing.
 - `engine::Weigher` turns a language's tables and its weights into arrays by node kind id once, then walks each
@@ -367,7 +385,7 @@ boundary.
    `from_paths`); a language's long `const` tables weigh a statement each, a struct its class and a statement a
    field, the one-line getters (`Config.lang`, `Weigher.lang`) least.
    The defaults held, no weight changed. Rust's integration tests are under `tests/`, which a test glob already
-   matches; its unit tests are in the source files (the known gap above).
+   matches; its unit tests are in the source files (the `tests` hook, section 3, finds them since).
 9. (built) Operators and accesses: `a = b`, `a = b + c` and `a = (b + c) * d` weighed alike, as `obj.a` and
    `obj.a.b`. Now `operator` (runs of like operators, the `bool_op` rule; the `logical` hook became `operator`) and
    `access` (a field access or index), both 0.25 by default: below a call's 0.5, an expression's detail is not its

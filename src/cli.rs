@@ -27,29 +27,56 @@ struct Cli {
     /// The report's format
     #[arg(long, global = true, value_enum, default_value_t = Format::Text)]
     format: Format,
-    /// Only the N heaviest lines of the report
+    /// Only the N heaviest lines of the report (the report, not the total alone)
     #[arg(long, global = true, value_name = "N")]
     top: Option<usize>,
-    /// What the report lists
-    #[arg(long, global = true, value_enum, default_value_t = By::Function)]
-    by: By,
+    /// What the report lists [default: function] (the report, not the total alone)
+    #[arg(long, global = true, value_enum)]
+    by: Option<By>,
+}
+
+impl Cli {
+    fn by(&self) -> By {
+        self.by.unwrap_or(By::Function)
+    }
+
+    /// Whether the text is the whole report, not the total alone: `--verbose`, or a list asked for.
+    fn report(&self, verbose: bool) -> bool {
+        verbose || self.top.is_some() || self.by.is_some()
+    }
 }
 
 #[derive(Subcommand)]
 enum Command {
-    /// Weighs files and folders
+    /// The weight of files and folders, their tests left out: the total alone
     Scan {
         /// A file or a folder, absolute or relative
         #[arg(required = true)]
         paths: Vec<PathBuf>,
+        /// The whole report: the total, the functions (or files), the warnings and the skipped files
+        #[arg(short, long)]
+        verbose: bool,
     },
-    /// The net weight delta of a commit, or between two revisions
+    /// The weight of the tests in files and folders (the test files, a Rust file's tests): the total alone
+    #[command(name = "scanTests", alias = "scan-tests")]
+    ScanTests {
+        /// A file or a folder, absolute or relative
+        #[arg(required = true)]
+        paths: Vec<PathBuf>,
+        /// The whole report: the total, the functions (or files), the warnings and the skipped files
+        #[arg(short, long)]
+        verbose: bool,
+    },
+    /// The net weight delta of a commit, or between two revisions: the total alone
     Commit {
         /// A revision (against its first parent) or a range A..B
         rev: String,
         /// Any path inside the repo
         #[arg(short = 'C', default_value = ".")]
         repo: PathBuf,
+        /// The whole report: the total, the functions (or files), the warnings and the skipped files
+        #[arg(short, long)]
+        verbose: bool,
     },
     /// Writes the default weights file
     Init {
@@ -69,15 +96,18 @@ enum Format {
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
     match &cli.command {
-        Command::Scan { paths } => scan(&cli, paths),
-        Command::Commit { rev, repo } => commit(&cli, rev, repo),
+        Command::Scan { paths, verbose } => scan(&cli, paths, *verbose, false),
+        Command::ScanTests { paths, verbose } => scan(&cli, paths, *verbose, true),
+        Command::Commit { rev, repo, verbose } => commit(&cli, rev, repo, *verbose),
         Command::Init { file } => init(file),
     }
 }
 
-fn scan(cli: &Cli, paths: &[PathBuf]) -> Result<()> {
+/// Weighs the code at `paths`, or its tests (`tests`), each at its full weight.
+fn scan(cli: &Cli, paths: &[PathBuf], verbose: bool, tests: bool) -> Result<()> {
     let config = load_config(cli, paths.first().map(PathBuf::as_path))?;
-    let input = source::from_paths(paths, &config.files)?;
+    let mut input = source::from_paths(paths, &config.files)?;
+    input.keep(tests);
     let weighers = Weighers::new(&config);
     // In parallel, each file read when weighed; `collect` keeps the input's order.
     let files = input
@@ -87,21 +117,26 @@ fn scan(cli: &Cli, paths: &[PathBuf]) -> Result<()> {
             let weighed = weighers.weigh(item.lang, &item.text()?, item.test, &item.path)?;
             Ok(Weighted {
                 path: item.path,
-                weighed,
+                weighed: weighed.only(tests),
             })
         })
         .collect::<Result<Vec<_>>>()?;
+    let report = cli.report(verbose);
     print!(
         "{}",
         match cli.format {
-            Format::Text => report::scan_text(&files, &input.skipped, cli.by, cli.top),
-            Format::Json => report::scan_json(&files, &input.skipped, cli.by, cli.top),
+            Format::Text if report => report::scan_text(&files, &input.skipped, cli.by(), cli.top),
+            Format::Text => {
+                eprint!("{}", report::scan_warnings(&files));
+                report::scan_number(&files)
+            }
+            Format::Json => report::scan_json(&files, &input.skipped, cli.by(), cli.top),
         }
     );
     Ok(())
 }
 
-fn commit(cli: &Cli, rev: &str, repo: &Path) -> Result<()> {
+fn commit(cli: &Cli, rev: &str, repo: &Path, verbose: bool) -> Result<()> {
     let config = load_config(cli, Some(repo))?;
     let range = git::resolve(repo, rev)?;
     let input = source::from_commit(repo, &range, &config.files)?;
@@ -109,7 +144,7 @@ fn commit(cli: &Cli, rev: &str, repo: &Path) -> Result<()> {
     let side = |blob: Option<source::Blob>| -> Result<Option<(PathBuf, Weighed)>> {
         blob.map(|b| {
             let weighed = weighers.weigh(b.lang, &b.text, b.test, &b.path)?;
-            Ok((b.path, weighed))
+            Ok((b.path, weighed.tests_times(config.files.test_factor)))
         })
         .transpose()
     };
@@ -135,13 +170,19 @@ fn commit(cli: &Cli, rev: &str, repo: &Path) -> Result<()> {
     print!(
         "{}",
         match cli.format {
-            Format::Text => report::commit_text(&changes, &input.skipped, cli.by, cli.top),
+            Format::Text if cli.report(verbose) => {
+                report::commit_text(&changes, &input.skipped, cli.by(), cli.top)
+            }
+            Format::Text => {
+                eprint!("{}", report::commit_warnings_text(&changes));
+                report::commit_number(&changes)
+            }
             Format::Json => {
                 let revisions = Revisions {
                     from: range.from.as_deref(),
                     to: &range.to,
                 };
-                report::commit_json(&changes, &input.skipped, &revisions, cli.by, cli.top)
+                report::commit_json(&changes, &input.skipped, &revisions, cli.by(), cli.top)
             }
         }
     );
@@ -158,18 +199,16 @@ fn load_config(cli: &Cli, inside: Option<&Path>) -> Result<Config> {
 /// A weigher per language.
 struct Weighers<'c> {
     weighers: Vec<Weigher<'c>>,
-    test_factor: f64,
 }
 
 impl<'c> Weighers<'c> {
     fn new(config: &'c Config) -> Weighers<'c> {
         Weighers {
             weighers: lang::ALL.iter().map(|l| Weigher::new(l, config)).collect(),
-            test_factor: config.files.test_factor,
         }
     }
 
-    /// A text of `lang` weighed, a test's times the test factor.
+    /// A text of `lang` weighed, a test file's (`test`) all test code.
     fn weigh(&self, lang: &'static Lang, text: &str, test: bool, path: &Path) -> Result<Weighed> {
         let weigher = self
             .weighers
@@ -179,11 +218,7 @@ impl<'c> Weighers<'c> {
         let weighed = weigher
             .weigh(text)
             .with_context(|| format!("weighing {}", path.display()))?;
-        Ok(if test {
-            weighed.scaled(self.test_factor)
-        } else {
-            weighed
-        })
+        Ok(if test { weighed.all_tests() } else { weighed })
     }
 }
 

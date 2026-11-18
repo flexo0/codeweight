@@ -20,6 +20,7 @@ pub static RUST: Lang = Lang {
     exempt,
     tail,
     scope,
+    tests: Some(tests),
 };
 
 const KINDS: &[(&str, Category)] = &[
@@ -204,6 +205,63 @@ fn scope(node: Node, source: &[u8]) -> Option<Scope> {
         _ => return None,
     };
     Some(Scope { kind, name })
+}
+
+/// The items an outer attribute (`#[cfg(test)]`) can mark as tests.
+const ITEMS: &[&str] = &[
+    "function_item",
+    "function_signature_item",
+    "mod_item",
+    "impl_item",
+    "struct_item",
+    "enum_item",
+    "union_item",
+    "trait_item",
+    "const_item",
+    "static_item",
+    "type_item",
+    "use_declaration",
+    "macro_definition",
+    "extern_crate_declaration",
+];
+
+/// Test code: an item marked `#[cfg(test)]`, `#[test]` or a runner's `#[tokio::test]` (any `...::test`), the
+/// attribute among those right before it; a file marked `#![cfg(test)]`.
+fn tests(node: Node, source: &[u8]) -> bool {
+    let mut cursor = node.walk();
+    match node.kind() {
+        "source_file" => node
+            .named_children(&mut cursor)
+            .any(|c| c.kind() == "inner_attribute_item" && is_test_attribute(c, source)),
+        kind if ITEMS.contains(&kind) => {
+            let mut before = node.prev_named_sibling();
+            while let Some(sibling) = before {
+                if sibling.kind() == "attribute_item" {
+                    if is_test_attribute(sibling, source) {
+                        return true;
+                    }
+                } else if !sibling.is_extra() {
+                    return false;
+                }
+                before = sibling.prev_named_sibling();
+            }
+            false
+        }
+        _ => false,
+    }
+}
+
+/// Whether an attribute (`#[...]`, `#![...]`) is `test`, `...::test` or `cfg(test)`.
+fn is_test_attribute(item: Node, source: &[u8]) -> bool {
+    let mut cursor = item.walk();
+    let Some(attribute) = item
+        .named_children(&mut cursor)
+        .find(|c| c.kind() == "attribute")
+    else {
+        return false;
+    };
+    let text: String = text(attribute, source).split_whitespace().collect();
+    text == "test" || text.ends_with("::test") || text == "cfg(test)"
 }
 
 /// A type's name without its type arguments, references and path: `Vec<T>`, `&mut a::Foo<'_>` are `Vec`, `Foo`.
@@ -405,6 +463,46 @@ mod tests {
         // g(): statement 1, call 7; the macro's statement 1, the macro none (and h() in it unparsed).
         let weighed = testing::weigh_under(&RUST, &weights, text);
         assert_eq!(function(&weighed, "f"), 100.0 + 8.0 + 1.0);
+    }
+
+    #[test]
+    fn test_items_are_test_code() {
+        let weighed = weigh(
+            "fn f() { g(); }                         // f: function 100, statement 1, call 2
+             #[cfg(test)]
+             use super::f;                           // test code outside any class: nothing of its own
+             #[cfg(test)]
+             const N: i32 = 1;                       // test code outside any class: statement 1
+             #[cfg(test)]
+             mod tests {                             // tests: class 1000, test code
+               #[test]
+               fn t() { f(); }                       // tests.t: 103, test code
+             }
+             #[tokio::test]
+             /// A doc comment between.
+             async fn r() { }                        // r: 100, test code
+             #[cfg(not(test))]
+             fn f() { }                              // f again, not test code: one f, 100 more",
+        );
+        let code = weighed.clone().only(false);
+        assert_eq!(code.total, 103.0 + 100.0);
+        assert_eq!(function(&code, "f"), 203.0);
+        assert_eq!(code.file, 0.0);
+        let tests = weighed.clone().only(true);
+        assert_eq!(tests.total, 1.0 + 1000.0 + 103.0 + 100.0);
+        assert_eq!(class(&tests, "tests"), 1000.0);
+        assert_eq!(function(&tests, "tests.t"), 103.0);
+        assert_eq!(function(&tests, "r"), 100.0);
+        assert_eq!(tests.outside(), 1.0);
+        let halved = weighed.tests_times(0.5);
+        assert_eq!(halved.total, 203.0 + 1204.0 / 2.0);
+    }
+
+    #[test]
+    fn a_file_marked_cfg_test_is_all_test_code() {
+        let weighed = weigh("#![cfg(test)]\nfn t() { g(); }");
+        assert_eq!(weighed.clone().only(false).total, 0.0);
+        assert_eq!(weighed.only(true).total, 103.0);
     }
 
     #[test]

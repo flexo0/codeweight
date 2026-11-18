@@ -11,8 +11,9 @@ It reads Java (`.java`), TypeScript (`.ts`, `.mts`, `.cts`), TSX (`.tsx`), Pytho
 ## Usage
 
 ```
-codeweight scan <path>...                 the weight of files and folders, absolute or relative; several allowed
-codeweight commit <rev>|<A>..<B> [-C <repo>]   the net weight delta of a commit, or between two revisions
+codeweight scan <path>... [-v]            the weight of files and folders, their tests left out; several allowed
+codeweight scanTests <path>... [-v]       the weight of their tests alone
+codeweight commit <rev>|<A>..<B> [-C <repo>] [-v]   the net weight delta of a commit, or between two revisions
 codeweight init [<file>]                  writes the default weights file (default ./codeweight.toml), never over an existing one
 ```
 
@@ -23,7 +24,15 @@ Every command takes:
 - `--top <N>`: only the report's first N lines (the heaviest; for `commit`, the largest changes);
 - `--by file|function`: what the report lists, the functions by default.
 
-The text report starts with the total. After it come the functions and classes, heaviest first, then by path and
+`scan` prints its total alone, a number (`4698.25`): the weight of the code, its tests left out. `scanTests` (or
+`scan-tests`) prints the weight of the tests alone: the test files (`test_globs`), and in a Rust file the items
+marked `#[cfg(test)]`, `#[test]` or a runner's `#[tokio::test]` (any `#[...::test]`), all in them (a `mod tests`
+and its functions), and a whole file marked `#![cfg(test)]`. Each weighs at its full weight, whatever
+`test_factor` (which is `commit`'s). `commit` prints its net delta alone, signed (`+42.5`, `-17`, `0`). For each
+command, `--verbose` (`-v`) prints the whole report instead, as `--top` and `--by` do; with the total alone, a file's
+syntax errors are a warning on stderr and the skipped files aren't listed.
+
+The text report (`-v`) starts with the total. After it come the functions and classes, heaviest first, then by path and
 name, each as `<weight>  <path>  <name>`; with `--by file`, the files. A class's line (`Name (class)`) has its code
 outside its functions; `(file)` is a file's code outside any class. A function is named by its enclosing classes and
 functions, `Outer.Inner.method`. Same-named functions of one class are one line, their weights summed: overloads, or
@@ -37,8 +46,8 @@ decimals.
 A folder is walked for the files in it: its `.gitignore` is honoured, hidden files and the `[files]` excludes are
 left out (a file named on the command line is weighed even if excluded). The globs are matched against a file's path
 from the root of its git repo (outside a repo, from the current folder, or from the folder given when the path is
-outside the current one). A test file (`test_globs`) weighs its
-weight times `test_factor`; at 0 it is left out. Files are weighed in parallel; the output is the same on every run.
+outside the current one). `scan` leaves the test files (`test_globs`) and a Rust file's tests out, `scanTests`
+weighs only them. Files are weighed in parallel; the output is the same on every run.
 
 A file that doesn't parse cleanly is still weighed, as tree-sitter recovered it, with a warning. A file in a language
 codeweight doesn't read is skipped and listed, never an error.
@@ -57,10 +66,10 @@ directly, so a change made and undone between them nets to zero (an empty side i
 A file's delta is its weight after minus before: an added file's is all positive, a deleted one's all negative. Its
 functions and classes are matched by their qualified name within the file (a renamed file's old and new), each one
 `added`, `removed`, `heavier` or `lighter`. The changed files are weighed as a walk of the repo's root weighs them:
-the `[files]` excludes and hidden paths are left out, a test file is times `test_factor`, a file codeweight doesn't
-read is skipped and listed.
+the `[files]` excludes and hidden paths are left out, a test file and a Rust file's tests are times `test_factor`
+(at 0 a test file is left out), a file codeweight doesn't read is skipped and listed.
 
-The text report starts with the total delta (`total +42.5`, `total -17`). After it comes one line per function and
+With `-v`, the text report starts with the total delta (`total +42.5`, `total -17`). After it comes one line per function and
 class (or per file with `--by file`), `<delta>  <status>  <path>  <name>`, a renamed file's path as `old -> new`; the
 largest changes first, either way (a gain before a loss of the same size), then by path and name. A line whose delta
 is 0 (an untouched function, a pure rename) is left out; `--top` keeps the first N lines.
@@ -68,7 +77,7 @@ is 0 (an untouched function, a pure rename) is left out; `--top` keeps the first
 ### The JSON
 
 `--format json` prints one JSON object with the same lines as the text, in the same order, `--top` and `--by`
-acting alike. Every field below is always there, `null` where it has no value. A weight or a delta is a number
+acting alike; the whole report, `--verbose` or not. Every field below is always there, `null` where it has no value. A weight or a delta is a number
 rounded to two decimals, as the text shows it.
 
 - `total`: the whole weight (or delta), not only the rows shown.
@@ -77,7 +86,7 @@ rounded to two decimals, as the text shows it.
   one of `"function"`, `"class"` (its code outside its functions) and `"file"` (a file's code outside any class, its
   `name` and `line` `null`), `name` qualified (`Outer.Inner.method`), `line` the first line, from 1 (for `commit`, the after
 side's, a removed one's the before side's).
-- `warnings`: the files with syntax errors, `{path, kind: "syntax_errors", side}`, `side` `null` for `scan`.
+- `warnings`: the files with syntax errors, `{path, kind: "syntax_errors", side}`, `side` `null` for `scan` and `scanTests`.
 - `skipped`: the paths of the files in no language codeweight reads.
 
 For `commit`, also `from` (the full hash compared from, `null` for the root commit's empty tree) and `to`; each row
@@ -142,7 +151,7 @@ test_globs = [
     "**/test/**", "**/tests/**", "**/__tests__/**", "**/*Test.java", "**/*Tests.java",
     "**/*.test.ts", "**/*.spec.ts", "**/*.test.tsx", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py",
 ]
-test_factor = 1.0       # a test file's weight times this; 0 leaves the tests out
+test_factor = 1.0       # a test's weight times this in a commit's delta; 0 leaves the test files out
 ```
 
 The defaults were tuned on real Java, TypeScript and Python code (and re-checked on Rust) so that the heaviest functions are the hardest

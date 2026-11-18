@@ -150,8 +150,8 @@ pub fn glob(glob: &str) -> Result<Glob> {
 }
 
 /// The files at `paths`: a file as given, a folder walked (its `.gitignore`s honoured, hidden files and the
-/// excluded ones left out, in the order of the names). A test file is left out when `test_factor` is 0. A path
-/// given twice, or found under two given folders, is one item.
+/// excluded ones left out, in the order of the names), the test files among them. A path given twice, or found
+/// under two given folders, is one item.
 pub fn from_paths(paths: &[PathBuf], files: &Files) -> Result<Input> {
     let matchers = Matchers::new(files)?;
     let mut input = Input {
@@ -163,7 +163,7 @@ pub fn from_paths(paths: &[PathBuf], files: &Files) -> Result<Input> {
         let meta = fs::metadata(path).with_context(|| format!("reading {}", path.display()))?;
         let base = Base::of(path);
         if !meta.is_dir() {
-            input.add(path, &base.key(path), &matchers, files, &mut seen);
+            input.add(path, &base.key(path), &matchers, &mut seen);
             continue;
         }
         let excluded = matchers.folders.clone();
@@ -186,21 +186,23 @@ pub fn from_paths(paths: &[PathBuf], files: &Files) -> Result<Input> {
             if matchers.exclude.is_match(&key) {
                 continue;
             }
-            input.add(entry.path(), &key, &matchers, files, &mut seen);
+            input.add(entry.path(), &key, &matchers, &mut seen);
         }
     }
     Ok(input)
 }
 
 impl Input {
-    fn add(
-        &mut self,
-        path: &Path,
-        key: &Path,
-        matchers: &Matchers,
-        files: &Files,
-        seen: &mut HashSet<PathBuf>,
-    ) {
+    /// Only the items a scan of the code weighs (those the test globs don't match), or a scan of the tests (those
+    /// they match, and those of a language with tests in its source files, Rust's).
+    pub fn keep(&mut self, tests: bool) {
+        self.items.retain(|item| match tests {
+            true => item.test || item.lang.tests.is_some(),
+            false => !item.test,
+        });
+    }
+
+    fn add(&mut self, path: &Path, key: &Path, matchers: &Matchers, seen: &mut HashSet<PathBuf>) {
         let path = shown(path);
         if !seen.insert(path.clone()) {
             return;
@@ -210,9 +212,6 @@ impl Input {
             return;
         };
         let test = matchers.tests.is_match(key);
-        if test && files.test_factor == 0.0 {
-            return;
-        }
         self.items.push(Item { path, lang, test });
     }
 }
@@ -430,12 +429,21 @@ mod tests {
     }
 
     #[test]
-    fn tests_are_left_out_at_test_factor_0() {
+    fn a_scan_keeps_the_code_or_the_tests_and_the_files_with_tests_inside() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
-        write(root, &["a.py", "test_a.py"]);
-        let input = from_paths(&[root.to_path_buf()], &files(&[], &["**/test_*.py"], 0.0)).unwrap();
-        assert_eq!(found(&input, root).0, vec!["a.py".to_string()]);
+        write(root, &["a.py", "b.rs", "test_a.py"]);
+        let scan = |tests| {
+            let mut input =
+                from_paths(&[root.to_path_buf()], &files(&[], &["**/test_*.py"], 1.0)).unwrap();
+            input.keep(tests);
+            found(&input, root).0
+        };
+        assert_eq!(scan(false), vec!["a.py".to_string(), "b.rs".to_string()]);
+        assert_eq!(
+            scan(true),
+            vec!["b.rs".to_string(), "test_a.py (test)".to_string()]
+        );
     }
 
     #[test]

@@ -1,5 +1,5 @@
 //! The reports of a scan (the weights) and of a commit (the deltas), as text or JSON: the total, then the files or
-//! the functions and classes, then the warnings and the skipped files.
+//! the functions and classes, then the warnings and the skipped files; or the total alone.
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -124,7 +124,7 @@ fn rows_of(
             total(after, whole),
         )];
     }
-    let file = |w: &Weighed| w.file;
+    let file = |w: &Weighed| w.outside();
     let mut rows = vec![row(
         Some(Kind::File),
         None,
@@ -218,6 +218,19 @@ pub fn scan_text(files: &[Weighted], skipped: &[PathBuf], by: By, top: Option<us
         let line = format!("{weight:>width$}  {}  {}", row.path, row.label());
         let _ = writeln!(out, "{}", line.trim_end());
     }
+    out.push_str(&scan_warnings(files));
+    skipped_text(&mut out, skipped);
+    out
+}
+
+/// A scan's total alone, a number on its line.
+pub fn scan_number(files: &[Weighted]) -> String {
+    format!("{}\n", number(scan_total(files)))
+}
+
+/// A scan's warnings (syntax errors), a line each.
+pub fn scan_warnings(files: &[Weighted]) -> String {
+    let mut out = String::new();
     for file in files.iter().filter(|f| !f.weighed.clean) {
         let _ = writeln!(
             out,
@@ -225,7 +238,6 @@ pub fn scan_text(files: &[Weighted], skipped: &[PathBuf], by: By, top: Option<us
             file.path.display()
         );
     }
-    skipped_text(&mut out, skipped);
     out
 }
 
@@ -295,6 +307,19 @@ pub fn commit_text(changes: &[Changed], skipped: &[PathBuf], by: By, top: Option
         );
         let _ = writeln!(out, "{}", line.trim_end());
     }
+    out.push_str(&commit_warnings_text(changes));
+    skipped_text(&mut out, skipped);
+    out
+}
+
+/// A commit's total delta alone, a signed number on its line.
+pub fn commit_number(changes: &[Changed]) -> String {
+    format!("{}\n", signed(commit_total(changes)))
+}
+
+/// A commit's warnings (syntax errors on a side), a line each.
+pub fn commit_warnings_text(changes: &[Changed]) -> String {
+    let mut out = String::new();
     for (change, side, _) in commit_warnings(changes) {
         let _ = writeln!(
             out,
@@ -302,7 +327,6 @@ pub fn commit_text(changes: &[Changed], skipped: &[PathBuf], by: By, top: Option
             change.path.display()
         );
     }
-    skipped_text(&mut out, skipped);
     out
 }
 
@@ -540,11 +564,13 @@ mod tests {
                 name: name.to_string(),
                 line: line + 1,
                 weight: *weight,
+                test: false,
             })
             .collect();
         Weighed {
             total: file + entries.iter().map(|e| e.weight).sum::<f64>(),
             file,
+            file_tests: 0.0,
             entries,
             clean: true,
         }

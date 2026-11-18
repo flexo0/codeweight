@@ -108,7 +108,7 @@ impl Nesting {
     }
 }
 
-/// The `[files]` table: which files a folder walk weighs, and how much its tests count.
+/// The `[files]` table: which files a folder walk weighs, which are tests, and how much a commit counts them.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Files {
     pub exclude: Vec<String>,

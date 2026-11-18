@@ -20,6 +20,7 @@ pub static PYTHON: Lang = Lang {
     exempt,
     tail: |_| false,
     scope,
+    tests: None,
 };
 
 const KINDS: &[(&str, Category)] = &[

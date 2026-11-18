@@ -49,10 +49,15 @@ fn scan_reports_a_java_file_s_functions_and_classes() {
     // Under the defaults: A.f is function 3, statement 1 and call 0.5; A is class 5.
     let output = codeweight(dir.path(), &["scan", "A.java"]);
     assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(stdout(&output), "9.5\n");
+
+    let verbose = codeweight(dir.path(), &["scan", "A.java", "--verbose"]);
     assert_eq!(
-        stdout(&output),
+        stdout(&verbose),
         "total 9.5\n  5  A.java  A (class)\n4.5  A.java  A.f\n"
     );
+    let short = codeweight(dir.path(), &["scan", "-v", "A.java"]);
+    assert_eq!(stdout(&short), stdout(&verbose));
 
     let by_file = codeweight(dir.path(), &["scan", "A.java", "--by", "file"]);
     assert_eq!(stdout(&by_file), "total 9.5\n9.5  A.java\n");
@@ -65,11 +70,18 @@ fn scan_skips_and_lists_an_unsupported_file_and_warns_of_syntax_errors() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("notes.txt"), "hello").unwrap();
     fs::write(dir.path().join("B.java"), "class B { void f( }").unwrap();
-    let output = codeweight(dir.path(), &["scan", "notes.txt", "B.java"]);
+    let output = codeweight(dir.path(), &["scan", "notes.txt", "B.java", "-v"]);
     assert!(output.status.success(), "{}", stderr(&output));
     let out = stdout(&output);
     assert!(out.contains("skipped: notes.txt"), "{out}");
     assert!(out.contains("warning: B.java has syntax errors"), "{out}");
+
+    // The total alone: the warning to stderr, the skipped file unlisted.
+    let quiet = codeweight(dir.path(), &["scan", "notes.txt", "B.java"]);
+    assert!(quiet.status.success(), "{}", stderr(&quiet));
+    assert_eq!(stdout(&quiet).lines().count(), 1, "{}", stdout(&quiet));
+    assert!(stdout(&quiet).trim().parse::<f64>().is_ok());
+    assert!(stderr(&quiet).starts_with("warning: B.java has syntax errors"));
 }
 
 #[test]
@@ -126,7 +138,7 @@ fn the_weights_file_is_looked_up_in_order() {
 }
 
 #[test]
-fn scan_walks_a_folder_its_excludes_left_out_its_tests_times_the_test_factor() {
+fn scan_walks_a_folder_its_excludes_and_tests_left_out_and_scan_tests_weighs_the_tests() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     for (file, text) in [
@@ -134,8 +146,13 @@ fn scan_walks_a_folder_its_excludes_left_out_its_tests_times_the_test_factor() {
         ("src/a.py", "def f():\n    g()\n"),
         // h is function 3 and its call 0.5; the file's declaration statement 1.
         ("src/b.ts", "export const h = () => g();\n"),
-        // t is 4.5, times the test factor 0.5.
+        // A test: t is 4.5, at its full weight whatever the test factor.
         ("tests/test_a.py", "def t():\n    g()\n"),
+        // c is 4.5, its test u 4.5 (a class 5 and a function 3 of the tests, each with a statement and a call).
+        (
+            "src/c.rs",
+            "fn c() { g(); }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn u() { c(); }\n}\n",
+        ),
         ("node_modules/x/y.ts", "g();\n"),
         ("src/notes.md", "# notes\n"),
     ] {
@@ -147,13 +164,16 @@ fn scan_walks_a_folder_its_excludes_left_out_its_tests_times_the_test_factor() {
 
     let output = codeweight(root, &["scan", "."]);
     assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(stdout(&output), "13.5\n");
+
+    let verbose = codeweight(root, &["scan", ".", "--verbose"]);
     assert_eq!(
-        stdout(&output),
-        "total 11.25\n\
-         \x204.5  src/a.py  f\n\
-         \x203.5  src/b.ts  h\n\
-         2.25  tests/test_a.py  t\n\
-         \x20  1  src/b.ts  (file)\n\
+        stdout(&verbose),
+        "total 13.5\n\
+         4.5  src/a.py  f\n\
+         4.5  src/c.rs  c\n\
+         3.5  src/b.ts  h\n\
+         \x20 1  src/b.ts  (file)\n\
          skipped: codeweight.toml (not a language codeweight reads)\n\
          skipped: src/notes.md (not a language codeweight reads)\n"
     );
@@ -161,17 +181,22 @@ fn scan_walks_a_folder_its_excludes_left_out_its_tests_times_the_test_factor() {
     let by_file = codeweight(root, &["scan", "src", "tests", "--by", "file"]);
     assert_eq!(
         stdout(&by_file),
-        "total 11.25\n 4.5  src/a.py\n 4.5  src/b.ts\n2.25  tests/test_a.py\n\
+        "total 13.5\n4.5  src/a.py\n4.5  src/b.ts\n4.5  src/c.rs\n\
          skipped: src/notes.md (not a language codeweight reads)\n"
     );
 
-    fs::write(root.join("codeweight.toml"), "[files]\ntest_factor = 0\n").unwrap();
-    let no_tests = codeweight(root, &["scan", "src", "tests", "--by", "file"]);
+    let tests = codeweight(root, &["scanTests", "."]);
+    assert!(tests.status.success(), "{}", stderr(&tests));
+    assert_eq!(stdout(&tests), "14\n");
+    let tests = codeweight(root, &["scan-tests", ".", "-v"]);
     assert_eq!(
-        stdout(&no_tests).lines().next(),
-        Some("total 9"),
-        "{}",
-        stdout(&no_tests)
+        stdout(&tests),
+        "total 14\n\
+         \x20 5  src/c.rs  tests (class)\n\
+         4.5  src/c.rs  tests.u\n\
+         4.5  tests/test_a.py  t\n\
+         skipped: codeweight.toml (not a language codeweight reads)\n\
+         skipped: src/notes.md (not a language codeweight reads)\n"
     );
 }
 
@@ -230,10 +255,11 @@ impl Repo {
         self.git(&["rev-parse", "HEAD"])
     }
 
-    /// `codeweight commit` under the engine's test weights (statement 1, call 2, function 100), its stdout.
+    /// `codeweight commit -v` (the whole report) under the engine's test weights (statement 1, call 2, function
+    /// 100), its stdout.
     fn weigh(&self, args: &[&str]) -> String {
         let weights = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/weights.toml");
-        let mut all = vec!["commit"];
+        let mut all = vec!["commit", "-v"];
         all.extend_from_slice(args);
         all.extend_from_slice(&["--config", weights]);
         let output = codeweight(self.path(), &all);
@@ -258,6 +284,11 @@ fn commit_weighs_the_root_commit_against_the_empty_tree() {
          +103  added    a.py  f\n\
          skipped: notes.md (not a language codeweight reads)\n"
     );
+
+    // The total delta alone, without `-v`.
+    let output = codeweight(repo.path(), &["commit", "HEAD"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(stdout(&output), "+4.5\n");
 }
 
 #[test]
@@ -343,7 +374,10 @@ fn commit_leaves_out_the_excludes_and_weighs_tests_times_the_test_factor() {
     )
     .unwrap();
     // Under the defaults: f is 4.5 (function 3, statement 1, call 0.5), the test's half of it.
-    let output = codeweight(repo.path(), &["commit", "HEAD", "--config", "half.toml"]);
+    let output = codeweight(
+        repo.path(),
+        &["commit", "HEAD", "-v", "--config", "half.toml"],
+    );
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(
         stdout(&output),
