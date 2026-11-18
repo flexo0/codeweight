@@ -3,14 +3,21 @@
 Built (`git`, `source::from_commit`, `report`):
 
 1. The two sides (`git::resolve`): a revision is `git rev-parse --verify <rev>^{commit}`, compared against its first
-   parent (a merge too, so it shows what the merge brought in), the root commit against the empty tree
-   (`git diff-tree --root`). The parent is the commit object's first `parent` line (`git cat-file commit`), not
+   parent (a merge too, so it shows what the merge brought in), the root commit against the empty tree. The parent is the commit object's first `parent` line (`git cat-file commit`), not
    `git rev-list --parents`: that follows a shallow clone's grafts, so the commit at its boundary (CI's depth-1
    checkout) would look like a root and its whole tree added. A parent missing from the repo is an error that says
    to fetch more history. `A..B` is the two revisions, an empty side `HEAD` as in git;
    `A...B` (against the merge base) is an error, not silently read as `A..B`. A revision starting with `-` is an
    error, so it can't pass for an option.
-2. The changed files: `git diff-tree -r -M -z --no-commit-id <from> <to>` (renames detected, so a moved file is not a
+   No revision (`git::uncommitted`): `HEAD` (the empty tree in a repo with no commit) against a tree of the working
+   tree, made by `git add -A` into a copy of the index (`GIT_INDEX_FILE`, in a temp folder of its own) and
+   `git write-tree`. So the untracked files are in it and the ignored ones aren't, renames are found between a
+   tracked file and an untracked one, the index's stat cache spares hashing the unchanged files, and the rest of
+   the pipeline is the one a commit goes through. The user's index is never touched; the blobs and trees go to the
+   repo's objects, unreferenced, for `git gc`. The other way, `git diff-index HEAD` with the after side read from
+   the disk, would have been a second path for the texts and the untracked files listed apart, without renames.
+2. The changed files: `git diff-tree -r -M -z --no-commit-id <from> <to>`, the empty tree by its hash
+   (`git hash-object -t tree --stdin`) where there's no `from` (`--root` takes a commit, not a tree) (renames detected, so a moved file is not a
    deletion and an addition; `-z`, so no path is quoted). Git's own rename rules decide: two files of the same text,
    one deleted and one added, are a rename. A path is read as its bytes, so a file whose name isn't UTF-8 (git
    allows it on Linux) is weighed like any other, its name shown with `�` for the bytes that aren't.
@@ -25,4 +32,5 @@ Built (`git`, `source::from_commit`, `report`):
 
 The `commit` tests make throwaway repos (`tempfile`, git's global and system config off): an add, a delete, a
 rename, a merge, the root commit, a range, the excludes and test factor, a bad revision, a shallow clone's
-boundary.
+boundary; the uncommitted changes (staged, unstaged, untracked, ignored, the index unchanged after), a rename into
+an untracked file, a repo with no commit.

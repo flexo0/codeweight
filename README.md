@@ -37,7 +37,8 @@ It isn't on crates.io yet; once it is, `cargo install codeweight`. To build from
 ```
 codeweight scan <path>... [-v]            the weight of files and folders, their tests left out; several allowed
 codeweight scanTests <path>... [-v]       the weight of their tests alone
-codeweight commit <rev>|<A>..<B> [-C <repo>] [-v]   the net weight delta of a commit, or between two revisions
+codeweight commit [<rev>|<A>..<B>] [-C <repo>] [-v]   the net weight delta of a commit, between two revisions,
+                                          or of the uncommitted changes (no revision)
 codeweight init [<file>]                  writes the default weights file (default ./codeweight.toml), never over an existing one
 ```
 
@@ -89,6 +90,12 @@ directly, so a change made and undone between them nets to zero (an empty side i
 `<rev>` is any git revision (a hash, `HEAD~2`, a tag); `-C <path>` is any path inside the repo (default `.`). It runs
 `git` (`git diff-tree -r -M`, so a renamed file is one file, and one `git cat-file --batch` for the texts).
 
+`codeweight commit` with no revision weighs the uncommitted changes, before you commit them: `HEAD` against the
+working tree, staged or not, the untracked files too and the ignored ones left out, as `git add -A && git commit`
+would commit them (in a repo with no commit yet, against the empty tree). Your index is left as it is: the working
+tree is added to a copy of it. git writes the changed files' blobs to the repo's objects, which nothing refers to,
+and `git gc` drops them later.
+
 A file's delta is its weight after minus before: an added file's is all positive, a deleted one's all negative. Its
 functions and classes are matched by their qualified name within the file (a renamed file's old and new), each one
 `added`, `removed`, `heavier` or `lighter`. The changed files are weighed as a walk of the repo's root weighs them:
@@ -116,10 +123,10 @@ side's, a removed one's the before side's).
   then, for `scan` and `scanTests`, the paths under a folder given that couldn't be read and were left out,
   `{path, kind: "unreadable", side: null}`.
 
-For `commit`, also `from` (the full hash compared from, `null` for the root commit's empty tree) and `to`; each row
-has, instead of `weight`, `before`, `after` (0 on the side it isn't), `delta` and `status` (`"added"`, `"removed"`,
-`"heavier"` or `"lighter"`), and `old_path` (the path before a rename, else `null`); a warning's `side` is
-`"before"` or `"after"`.
+For `commit`, also `from` (the full hash compared from, `null` for the root commit's empty tree) and `to` (the full
+hash compared to, `null` for the uncommitted changes); each row has, instead of `weight`, `before`, `after` (0 on the
+side it isn't), `delta` and `status` (`"added"`, `"removed"`, `"heavier"` or `"lighter"`), and `old_path` (the path
+before a rename, else `null`); a warning's `side` is `"before"` or `"after"`.
 
 ```json
 {

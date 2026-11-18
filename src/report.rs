@@ -36,10 +36,11 @@ pub struct Changed {
     pub after: Option<Weighed>,
 }
 
-/// What a commit's revisions were, as full hashes; `from` is `None` for the empty tree.
+/// What a commit's revisions were, as full hashes; `from` is `None` for the empty tree, `to` for the uncommitted
+/// changes.
 pub struct Revisions<'a> {
     pub from: Option<&'a str>,
-    pub to: &'a str,
+    pub to: Option<&'a str>,
 }
 
 /// What a row is: a function, a class (its code outside its functions), or a file's code outside any class.
@@ -445,7 +446,7 @@ struct Report<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     from: Option<Option<&'a str>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    to: Option<&'a str>,
+    to: Option<Option<&'a str>>,
     total: f64,
     by: By,
     rows: Vec<JsonRow>,
@@ -644,7 +645,7 @@ mod tests {
             &changes(),
             &Revisions {
                 from: None,
-                to: "abc",
+                to: Some("abc"),
             },
             By::Function,
             Some(1),

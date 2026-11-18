@@ -9,7 +9,8 @@ Built: milestones 0-10 (the repo, the CLI and the config, the engine and Java, T
 2. (built) The engine and Java, for `scan <file>`: snippet tests with weights worked out by hand.
 3. (built) TypeScript, TSX and Python.
 4. (built) Folders: the walk, the excludes, the test globs and factor, `rayon`.
-5. (built) `commit`: tests on throwaway repos (an add, a delete, a rename, a merge, the root commit, a range).
+5. (built) `commit`: tests on throwaway repos (an add, a delete, a rename, a merge, the root commit, a range, the
+   uncommitted changes).
 6. (built) The reports: text, JSON, `--top`, `--by`.
 7. (built) Tuning on real code: the default weights adjusted until the heaviest functions found are the hardest
    ones. Weighed on GraphHopper's and OptaPlanner's cores (Java), a React app (TS, TSX) and two Python tools. Under

@@ -1,14 +1,18 @@
-//! The files a commit or a range changed and their blobs, through the `git` command: `git diff-tree -r -M` for
-//! the changes, one `git cat-file --batch` for the texts.
+//! The files a commit, a range or the uncommitted changes changed and their blobs, through the `git` command:
+//! `git diff-tree -r -M` for the changes, one `git cat-file --batch` for the texts.
 
 use std::collections::HashMap;
+use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
 
-/// The two sides compared: `from` is `None` for the empty tree (a root commit's parent).
+/// The two sides compared: `from` is `None` for the empty tree (a root commit's parent); `to` a commit, or the
+/// tree of the uncommitted changes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Range {
     pub from: Option<String>,
@@ -93,14 +97,91 @@ fn commit(repo: &Path, rev: &str) -> Result<String> {
     Ok(found.trim().to_string())
 }
 
+/// The uncommitted changes, as the commit `git add -A && git commit` would make: `HEAD` (the empty tree before
+/// the first commit) against the working tree, its untracked files too, the ignored ones left out. The working
+/// tree is added to a copy of the index, so the repo's own index isn't touched; its blobs and trees are written
+/// to the repo's objects, unreferenced (`git gc` drops them).
+pub fn uncommitted(repo: &Path) -> Result<Range> {
+    let index = run(
+        repo,
+        &["rev-parse", "--path-format=absolute", "--git-path", "index"],
+    )?;
+    let index = PathBuf::from(index.trim_end_matches('\n'));
+    let head = git(repo)
+        .args(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"])
+        .output()
+        .context("running git (is it installed?)")?;
+    // A repo with no commit yet has no `HEAD` to compare from: the empty tree.
+    let from = head
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&head.stdout).trim().to_string());
+    let scratch = Scratch::new()?;
+    let copy = scratch.0.join("index");
+    if index.exists() {
+        fs::copy(&index, &copy)
+            .with_context(|| format!("copying {} to {}", index.display(), copy.display()))?;
+    }
+    let with_copy = || {
+        let mut command = git(repo);
+        command.env("GIT_INDEX_FILE", &copy);
+        command
+    };
+    run_command(with_copy(), &["add", "-A", "--", ":/"])?;
+    let to = run_command(with_copy(), &["write-tree"])?;
+    let to = String::from_utf8(to).context("`git write-tree` output")?;
+    Ok(Range {
+        from,
+        to: to.trim().to_string(),
+    })
+}
+
+/// A folder of its own in the temp folder, removed when dropped.
+struct Scratch(PathBuf);
+
+impl Scratch {
+    fn new() -> Result<Scratch> {
+        static COUNT: AtomicU32 = AtomicU32::new(0);
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |d| d.subsec_nanos());
+        let dir = std::env::temp_dir().join(format!(
+            "codeweight-{}-{nanos}-{}",
+            std::process::id(),
+            COUNT.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir(&dir).with_context(|| format!("creating {}", dir.display()))?;
+        Ok(Scratch(dir))
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        // Best effort: a folder left in the temp folder harms nothing.
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
 /// The files changed between the range's two sides, renames detected (`-M`), in git's order (by path).
 pub fn changes(repo: &Path, range: &Range) -> Result<Vec<Change>> {
-    let mut args = vec!["diff-tree", "-r", "-M", "-z", "--no-commit-id"];
-    match &range.from {
-        Some(from) => args.push(from),
-        None => args.push("--root"),
-    }
-    args.push(&range.to);
+    // The empty tree by its hash, not `--root`: that takes a commit, and `to` may be a tree.
+    let empty;
+    let from = match &range.from {
+        Some(from) => from.as_str(),
+        None => {
+            empty = run(repo, &["hash-object", "-t", "tree", "--stdin"])?;
+            empty.trim()
+        }
+    };
+    let args = [
+        "diff-tree",
+        "-r",
+        "-M",
+        "-z",
+        "--no-commit-id",
+        from,
+        &range.to,
+    ];
     parse_diff_tree(&run_bytes(repo, &args)?)
 }
 
@@ -239,9 +320,19 @@ fn run(repo: &Path, args: &[&str]) -> Result<String> {
 
 /// Runs `git -C <repo> <args>`, its stdout as bytes; its stderr in the error when it fails.
 fn run_bytes(repo: &Path, args: &[&str]) -> Result<Vec<u8>> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(repo)
+    run_command(git(repo), args)
+}
+
+/// `git -C <repo>`, to be given its arguments.
+fn git(repo: &Path) -> Command {
+    let mut command = Command::new("git");
+    command.arg("-C").arg(repo);
+    command
+}
+
+/// Runs a `git` command with `args`, its stdout as bytes (its stdin empty); its stderr in the error when it fails.
+fn run_command(mut command: Command, args: &[&str]) -> Result<Vec<u8>> {
+    let output = command
         .args(args)
         .output()
         .context("running git (is it installed?)")?;

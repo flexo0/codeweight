@@ -381,6 +381,75 @@ fn commit_leaves_out_the_excludes_and_weighs_tests_times_the_test_factor() {
     );
 }
 
+#[test]
+fn commit_without_a_revision_weighs_the_uncommitted_changes_and_leaves_the_index_alone() {
+    let repo = Repo::new();
+    repo.commit(&[
+        ("a.py", Some(F)),
+        ("gone.py", Some("def x():\n    pass\n")),
+        (".gitignore", Some("ignored.py\n")),
+    ]);
+    assert_eq!(repo.weigh(&[]), "total 0\n");
+
+    // One change staged, the others not, one file untracked, one ignored.
+    fs::write(repo.path().join("staged.py"), F).unwrap();
+    repo.git(&["add", "staged.py"]);
+    fs::write(repo.path().join("a.py"), FG).unwrap();
+    fs::write(repo.path().join("untracked.py"), F).unwrap();
+    fs::write(repo.path().join("ignored.py"), F).unwrap();
+    fs::remove_file(repo.path().join("gone.py")).unwrap();
+    let state = || {
+        [
+            repo.git(&["ls-files", "-s"]),
+            repo.git(&["status", "--porcelain"]),
+        ]
+    };
+    let before = state();
+    assert_eq!(
+        repo.weigh(&[]),
+        "total +109\n\
+         +103  added    staged.py  f\n\
+         +103  added    untracked.py  f\n\
+         -100  removed  gone.py  x\n\
+         \x20 +3  heavier  a.py  f\n"
+    );
+    assert_eq!(state(), before);
+
+    let json: serde_json::Value = serde_json::from_str(&repo.weigh(&["--format", "json"])).unwrap();
+    assert_eq!(
+        json["from"],
+        serde_json::json!(repo.git(&["rev-parse", "HEAD"]))
+    );
+    assert_eq!(json["to"], serde_json::Value::Null);
+    assert_eq!(json["total"], serde_json::json!(109.0));
+}
+
+#[test]
+fn commit_without_a_revision_sees_a_rename_into_an_untracked_file_and_a_repo_with_no_commit() {
+    let repo = Repo::new();
+    let renamed = format!("{FH}{}", "\n\n# a comment\n".repeat(20));
+    repo.commit(&[("old.py", Some(&renamed))]);
+    fs::remove_file(repo.path().join("old.py")).unwrap();
+    fs::write(
+        repo.path().join("new.py"),
+        renamed.replace("    pass\n", "    g()\n"),
+    )
+    .unwrap();
+    assert_eq!(
+        repo.weigh(&[]),
+        "total +3\n+3  heavier  old.py -> new.py  h\n"
+    );
+
+    // No commit yet: against the empty tree.
+    let fresh = Repo::new();
+    fs::write(fresh.path().join("a.py"), F).unwrap();
+    assert_eq!(fresh.weigh(&[]), "total +103\n+103  added    a.py  f\n");
+    let json: serde_json::Value =
+        serde_json::from_str(&fresh.weigh(&["--format", "json"])).unwrap();
+    assert_eq!(json["from"], serde_json::Value::Null);
+    assert_eq!(json["to"], serde_json::Value::Null);
+}
+
 // Linux only: a file's name there may be any bytes, where macOS's file systems and Windows want UTF-8.
 #[cfg(target_os = "linux")]
 #[test]

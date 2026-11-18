@@ -7,7 +7,7 @@
 | `source` | an input as `(path, language, text)` items: from disk (`ignore`, the excludes) or git blobs at a revision |
 | `lang` | a module per language (Java, TS and TSX, JavaScript, Python, Rust): grammar, extensions, node kind → category, nesting kinds, function names |
 | `engine` | one tree walked: each node's weight, summed by function, class and file |
-| `git` | the files a commit or a range changed (`git diff-tree -r -M`), their text before and after (`git cat-file --batch`) |
+| `git` | the files a commit, a range or the uncommitted changes changed (`git diff-tree -r -M`; the uncommitted ones as a tree, `git add -A` into a copy of the index, `git write-tree`), their text before and after (`git cat-file --batch`) |
 | `report` | the text table and the JSON; for `commit`, the deltas |
 
 Files are weighed in parallel (`rayon`).

@@ -67,10 +67,11 @@ enum Command {
         #[arg(short, long)]
         verbose: bool,
     },
-    /// The net weight delta of a commit, or between two revisions: the total alone
+    /// The net weight delta of a commit, between two revisions, or of the uncommitted changes: the total alone
     Commit {
-        /// A revision (against its first parent) or a range A..B
-        rev: String,
+        /// A revision (against its first parent) or a range A..B; none, the uncommitted changes against HEAD (the
+        /// untracked files too)
+        rev: Option<String>,
         /// Any path inside the repo
         #[arg(short = 'C', default_value = ".")]
         repo: PathBuf,
@@ -98,7 +99,7 @@ pub fn run() -> Result<()> {
     match &cli.command {
         Command::Scan { paths, verbose } => scan(&cli, paths, *verbose, false),
         Command::ScanTests { paths, verbose } => scan(&cli, paths, *verbose, true),
-        Command::Commit { rev, repo, verbose } => commit(&cli, rev, repo, *verbose),
+        Command::Commit { rev, repo, verbose } => commit(&cli, rev.as_deref(), repo, *verbose),
         Command::Init { file } => init(file),
     }
 }
@@ -140,9 +141,13 @@ fn scan(cli: &Cli, paths: &[PathBuf], verbose: bool, tests: bool) -> Result<()> 
     Ok(())
 }
 
-fn commit(cli: &Cli, rev: &str, repo: &Path, verbose: bool) -> Result<()> {
+/// Weighs the net delta of `rev` (a commit or a range), or of the uncommitted changes (none).
+fn commit(cli: &Cli, rev: Option<&str>, repo: &Path, verbose: bool) -> Result<()> {
     let config = load_config(cli, Some(repo))?;
-    let range = git::resolve(repo, rev)?;
+    let range = match rev {
+        Some(rev) => git::resolve(repo, rev)?,
+        None => git::uncommitted(repo)?,
+    };
     let changes = source::from_commit(repo, &range, &config.files)?;
     let weighers = Weighers::new(&config);
     let side = |blob: Option<source::Blob>| -> Result<Option<(PathBuf, Weighed)>> {
@@ -183,7 +188,8 @@ fn commit(cli: &Cli, rev: &str, repo: &Path, verbose: bool) -> Result<()> {
             Format::Json => {
                 let revisions = Revisions {
                     from: range.from.as_deref(),
-                    to: &range.to,
+                    // The uncommitted changes' tree is no commit of the repo's.
+                    to: rev.map(|_| range.to.as_str()),
                 };
                 report::commit_json(&changes, &revisions, cli.by(), cli.top)
             }

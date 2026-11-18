@@ -3,7 +3,8 @@
 ```
 codeweight scan <path>... [-v]            a file or a folder, absolute or relative; several allowed; tests left out
 codeweight scanTests <path>... [-v]       the same, of the tests alone
-codeweight commit <rev>|<A>..<B> [-C <repo>] [-v]   the net weight delta of a commit, or between two revisions
+codeweight commit [<rev>|<A>..<B>] [-C <repo>] [-v]   the net weight delta of a commit, between two revisions,
+                                          or of the uncommitted changes (no revision)
 codeweight init [<file>]                  writes the default weights file (default ./codeweight.toml)
 ```
 
@@ -14,6 +15,8 @@ and `--by file|function` (what the report lists).
   absolute (default `.`); `git -C` finds the repo from it, and the weights file is looked up at its root.
 - A single `<rev>` is compared against its first parent (a merge commit too); the root commit against the empty tree.
 - A range `A..B` diffs the two trees directly, so a change made and undone inside it nets to zero.
+- No revision: the uncommitted changes, `HEAD` against the working tree, untracked files too (the commit
+  `git add -A && git commit` would make), so the weight of a commit can be seen before it is made.
 - Exit codes: 0 done, 2 an error (a bad path, revision or weights file). `main` prints the error with its context
   chain (`error: ...`) to stderr; clap's own usage errors exit 2 too.
 
@@ -42,7 +45,7 @@ heaviest functions", or files).
   order, `--top` and `--by` acting alike, so the two formats can't disagree (one row list and one sort feed both).
   A row by file is `{path, weight}`, by function `{path, kind, name, line, weight}`, `kind` `function`, `class` or
   `file`; a commit's row has `before`, `after`, `delta`, `status` and `old_path` instead of `weight`, and the object
-  `from` / `to` (full hashes, `from` null for the empty tree). Every field is always there, null where it has no
-  value; the numbers rounded to two decimals as the text's, so a float's last bits never show. `total` is the whole
+  `from` / `to` (full hashes, `from` null for the empty tree, `to` null for the uncommitted changes). Every field is
+  always there, null where it has no value; the numbers rounded to two decimals as the text's, so a float's last bits never show. `total` is the whole
   total, not the rows'. Warnings are `{path, kind: "syntax_errors", side}`, `side` a commit's `before` / `after`, and a scan's
   `{path, kind: "unreadable", side: null}`.
