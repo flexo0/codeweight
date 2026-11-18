@@ -1,4 +1,6 @@
-# codeweight's weights file. A file of your own is merged over these defaults, so it needs only what it changes.
+# This repo's own weights file, not the defaults: those are src/default.toml, which `codeweight init` writes. It holds
+# every key of them, but weighs a branch 3 and a loop 2 (the defaults: 2 and 3). A file of your own is merged over the
+# defaults, so it needs only what it changes.
 #
 # weight(node) = weights[category(node)] * nest(min(depth, max_depth))
 # depth: the number of nesting constructs around the node (a branch, a loop, a try / catch / finally, a case,
