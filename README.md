@@ -6,7 +6,7 @@ weighs more. A file's weight is the sum of its elements' weights, and so is a fu
 tree-sitter.
 
 It reads Java (`.java`), TypeScript (`.ts`, `.mts`, `.cts`), TSX (`.tsx`), Python (`.py`, `.pyi`) and Rust (`.rs`). The design is
-`docs/design.md`.
+in `docs/`, a file per subject (see `docs/README.md`).
 
 ## Example
 

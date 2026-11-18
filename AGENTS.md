@@ -11,8 +11,9 @@ a git commit (or a range) is its net delta, after minus before, positive or nega
 TSX), Python and Rust, parsed by tree-sitter.
 
 Milestones 0-9 are built (the CLI, the config, the engine, Java, TypeScript, TSX, Python, folders, `commit`, the
-text and JSON reports, the tuned defaults, Rust, operators and accesses); the design and its milestones are `docs/design.md`. Keep that doc in step
-with what is built (a decision made while building goes into it, in the same commit).
+text and JSON reports, the tuned defaults, Rust, operators and accesses); the design is `docs/`, a file per subject
+(its index `docs/README.md`), the milestones `docs/milestones.md`. Keep those docs in step with what is built (a
+decision made while building goes into its subject's file, in the same commit).
 
 ## Checking a change
 
