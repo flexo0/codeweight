@@ -3,6 +3,7 @@
 mod cli;
 mod config;
 mod engine;
+mod git;
 mod lang;
 mod report;
 mod source;

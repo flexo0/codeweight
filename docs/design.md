@@ -1,6 +1,7 @@
 # codeweight: the design
 
-Built: milestones 0-4 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders).
+Built: milestones 0-7 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
+`commit`, the reports, the tuned defaults).
 Once a part is built, its section is rewritten as a reference (what it is, why so, what is left).
 
 ## 1. The CLI
@@ -15,18 +16,31 @@ Every command takes `--config <file>`, `--format text|json` (text by default), `
 and `--by file|function` (what the report lists).
 
 - `<rev>` is any git revision: a hash, a short hash, `HEAD~2`, a tag. `-C` is any path inside the repo, relative or
-  absolute (default `.`); the repo's root is found from it.
+  absolute (default `.`); `git -C` finds the repo from it, and the weights file is looked up at its root.
 - A single `<rev>` is compared against its first parent (a merge commit too); the root commit against the empty tree.
 - A range `A..B` diffs the two trees directly, so a change made and undone inside it nets to zero.
 - Exit codes: 0 done, 2 an error (a bad path, revision or weights file). `main` prints the error with its context
   chain (`error: ...`) to stderr; clap's own usage errors exit 2 too.
 
-Built: `scan` of files and folders, `init`, the four options. `init` never overwrites a file (it is created new, else
-an error). `--by` defaults to `function`. Not built yet, an error for now: `commit` (milestone 5), `--format json`
-(milestone 6). The text report (`report`) is a stopgap for milestone 6: the total,
-then one line per function or class (`<weight>  <path>  <name>`, a class as `Name (class)`, a file's code outside
-any class as `(file)`, the zero-weight ones left out) or per file with `--by file`, heaviest first, then by path and
-name; `--top` keeps the first N lines. Then the warnings (syntax errors), then the skipped files.
+Built (`cli`, `report`): every command and option. `init` never overwrites a file (it is created new, else an
+error). `--by` defaults to `function`; `--top` keeps the report's first N lines, whichever `--by` lists (so "the N
+heaviest functions", or files).
+
+- `scan`'s text: the total, then one line per function or class (`<weight>  <path>  <name>`, a class as
+  `Name (class)`, a file's code outside any class as `(file)`) or per file with `--by file`, heaviest first, then by
+  path and the shown name; then the warnings (syntax errors), then the skipped files. A line that weighs 0 (at two
+  decimals) is left out.
+- `commit`'s text: the total delta (`total +42.5`), then `<delta>  <status>  <path>  <name>` per line, a renamed
+  file's path `old -> new`. A commit has no "heaviest": its lines sort by the delta's size, a gain before a loss of
+  the same size, then by path and name, so `--top` keeps the largest changes either way. A line whose delta is 0 (at
+  two decimals) is left out, a pure rename's too: the report is of weight, not of files moved.
+- The JSON (the machine contract, its fields in the README): one object with the text's lines as `rows`, in its
+  order, `--top` and `--by` acting alike, so the two formats can't disagree (one row list and one sort feed both).
+  A row by file is `{path, weight}`, by function `{path, kind, name, line, weight}`, `kind` `function`, `class` or
+  `file`; a commit's row has `before`, `after`, `delta`, `status` and `old_path` instead of `weight`, and the object
+  `from` / `to` (full hashes, `from` null for the empty tree). Every field is always there, null where it has no
+  value; the numbers rounded to two decimals as the text's, so a float's last bits never show. `total` is the whole
+  total, not the rows'. Warnings are `{path, kind: "syntax_errors", side}`, `side` a commit's `before` / `after`.
 
 ## 2. The weights file
 
@@ -55,19 +69,19 @@ Built (`config`, `config::find`):
   its own table (see section 4).
 - The defaults hold no `[languages.<name>.weights]` (the example above has one only to show the table): the merge
   never removes a key, so a default per-language weight would beat the same key a user's file sets in `[weights]`,
-  and that change would silently do nothing for that language. Should tuning (milestone 7) want one, the merge must
-  first drop a default per-language key whose base key the user's file sets.
+  and that change would silently do nothing for that language. Tuning (milestone 7) needed none; should one ever be
+  wanted, the merge must first drop a default per-language key whose base key the user's file sets.
 - `[files]` is for what is weighed (section 4, `source`).
 
 ```toml
 [nesting]
 model = "linear"        # linear: 1 + factor * depth; exponential: factor ^ depth
-factor = 0.5
+factor = 1.0
 max_depth = 10          # depth is capped here, so one deep method can't explode the total
 
 [weights]               # the base weight of each category, for every language
 statement = 1
-call      = 1
+call      = 0.5         # a chain of getters is long, not hard
 branch    = 2           # if, ternary, case
 loop      = 3
 try       = 2
@@ -86,7 +100,10 @@ satisfies_expression = "statement"
 
 [files]
 exclude = ["**/node_modules/**", "**/build/**", "**/target/**", "**/generated/**", "**/*.d.ts"]
-test_globs = ["**/test/**", "**/tests/**", "**/*Test.java", "**/*.test.ts", "**/*.spec.ts", "**/test_*.py"]
+test_globs = [
+    "**/test/**", "**/tests/**", "**/__tests__/**", "**/*Test.java", "**/*Tests.java",
+    "**/*.test.ts", "**/*.spec.ts", "**/*.test.tsx", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py",
+]
 test_factor = 1.0       # a test file's weight times this; 0 leaves the tests out
 ```
 
@@ -191,10 +208,10 @@ total        = Σ weight(node) over the nodes that have a category
 
 Files are weighed in parallel (`rayon`).
 
-Built so far: `cli`, `config`, `lang` (Java, TypeScript, TSX, Python), `engine`, `source` (files and folders), and a
-stopgap of `report` (the text above). Dependencies come with the milestone that uses them; so far `tree-sitter`,
-`tree-sitter-java`, `tree-sitter-typescript`, `tree-sitter-python`, `clap`, `serde`, `toml`, `anyhow`, `ignore`,
-`globset` (the `[files]` globs; `ignore` is built on it, so it costs no build), `rayon`, and `tempfile` for the tests.
+Built: every module. The dependencies: `tree-sitter`, `tree-sitter-java`, `tree-sitter-typescript`,
+`tree-sitter-python`, `clap`, `serde`, `serde_json` (the JSON report), `toml`, `anyhow`, `ignore`, `globset` (the
+`[files]` globs; `ignore` is built on it, so it costs no build), `rayon`, and `tempfile` for the tests. `git` is run
+as a command, no `git2` / `gix`.
 
 - `source` (built): a file given is weighed as is, though an exclude matches it; a folder is walked by `ignore`, its
   `.gitignore`s (and `.ignore`s, the global gitignore) honoured, hidden files and folders left out, each folder's
@@ -208,6 +225,13 @@ stopgap of `report` (the text above). Dependencies come with the milestone that 
   file the test globs match is weighed times `test_factor`; at 0 it is left out, unlisted. A path is shown as given,
   or the folder given joined with the path in it, without a leading `./`; a path given twice, or under two folders
   given, is weighed once.
+- `source` for `commit` (`from_commit`): a changed file's each side is kept as a walk of the repo's root would keep
+  it: its path (from the root, as `git diff-tree` gives it) not hidden (no part starting with `.`), not excluded, in
+  a language codeweight reads, not a test at `test_factor` 0; a side that isn't a regular file (a symlink, a
+  submodule) is none. A side's language is its own path's, so a rename `a.js -> a.ts` is an added file. A change with
+  no side kept is skipped and listed when a side was in no language codeweight reads, else left out unlisted. Then
+  the kept sides' blobs, each once, all through one `git cat-file --batch`; all of a commit's texts are in memory
+  at once (a commit's, or a range's, changed files only), then weighed in parallel.
 - The files are listed first, then read and weighed in parallel (`rayon`), each read when weighed so the texts are
   never all in memory; the results are collected in the listed order, and the report sorts them (weight, then path
   and name), so the output doesn't depend on which thread finished first.
@@ -229,13 +253,31 @@ stopgap of `report` (the text above). Dependencies come with the milestone that 
 
 ## 5. The commit's net delta
 
-1. The changed files: `git diff-tree -r -M <from> <to>` (renames detected, so a moved file is not a deletion and an
-   addition).
-2. Their text on both sides, all through one `git cat-file --batch`.
-3. Per file `delta = weight(after) − weight(before)`: an added file all positive, a deleted one all negative; an
+Built (`git`, `source::from_commit`, `report`):
+
+1. The two sides (`git::resolve`): a revision is `git rev-parse --verify <rev>^{commit}`, compared against its first
+   parent (a merge too, so it shows what the merge brought in), the root commit against the empty tree
+   (`git diff-tree --root`). The parent is the commit object's first `parent` line (`git cat-file commit`), not
+   `git rev-list --parents`: that follows a shallow clone's grafts, so the commit at its boundary (CI's depth-1
+   checkout) would look like a root and its whole tree added. A parent missing from the repo is an error that says
+   to fetch more history. `A..B` is the two revisions, an empty side `HEAD` as in git;
+   `A...B` (against the merge base) is an error, not silently read as `A..B`. A revision starting with `-` is an
+   error, so it can't pass for an option.
+2. The changed files: `git diff-tree -r -M -z --no-commit-id <from> <to>` (renames detected, so a moved file is not a
+   deletion and an addition; `-z`, so no path is quoted). Git's own rename rules decide: two files of the same text,
+   one deleted and one added, are a rename.
+3. Their text on both sides, all through one `git cat-file --batch`, written from a thread of its own while the
+   output is read, so neither pipe can fill and block both.
+4. Per file `delta = weight(after) − weight(before)`: an added file all positive, a deleted one all negative; an
    unsupported one skipped and listed.
-4. Per function, matched by its qualified name (`Class.method`, `module.func`): added, removed, heavier, lighter.
-5. The report: the total delta first (`+42.5`, `-17`), then the files' and the functions' deltas.
+5. Per function and class, and the file's code outside them, matched by kind and qualified name (`Class.method`,
+   `module.func`) within the file, a renamed file's old and new: added, removed, heavier, lighter. A function moved
+   to another file is removed from one and added to the other.
+6. The report: the total delta first (`+42.5`, `-17`), then the files' or the functions' deltas (section 1).
+
+The `commit` tests make throwaway repos (`tempfile`, git's global and system config off): an add, a delete, a
+rename, a merge, the root commit, a range, the excludes and test factor, a bad revision, a shallow clone's
+boundary.
 
 ## 6. Milestones
 
@@ -245,6 +287,14 @@ stopgap of `report` (the text above). Dependencies come with the milestone that 
 2. (built) The engine and Java, for `scan <file>`: snippet tests with weights worked out by hand.
 3. (built) TypeScript, TSX and Python.
 4. (built) Folders: the walk, the excludes, the test globs and factor, `rayon`.
-5. `commit`: tests on throwaway repos (an add, a delete, a rename, a merge, the root commit, a range).
-6. The reports: text, JSON, `--top`, `--by`.
-7. Tuning on real code: the default weights adjusted until the heaviest functions found are the hardest ones.
+5. (built) `commit`: tests on throwaway repos (an add, a delete, a rename, a merge, the root commit, a range).
+6. (built) The reports: text, JSON, `--top`, `--by`.
+7. (built) Tuning on real code: the default weights adjusted until the heaviest functions found are the hardest
+   ones. Weighed on GraphHopper's and OptaPlanner's cores (Java), a React app (TS, TSX) and two Python tools. Under
+   the first defaults (call 1, nesting factor 0.5) long flat methods ranked with the hardest algorithms: a config
+   reader of a hundred `setX(config.getY("key", getX()))` lines (three calls each) weighed as much as a nested graph
+   search. Now a call is 0.5 (a getter chain is long, not hard) and each level of nesting adds a whole base weight
+   (factor 1.0): the flat readers fell out of the top, the nested searches and parsers stayed first. The other
+   weights held. The test globs gained `__tests__`, `*.test.tsx` / `*.spec.tsx`, `*Tests.java` and `*_test.py`.
+   Left as it is, not a weight's matter: a TS object literal's methods and arrows (a store of handlers) are lambdas
+   of the file, so such a file's `(file)` line can be its heaviest.

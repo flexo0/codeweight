@@ -7,12 +7,12 @@
 
 [nesting]
 model = "linear"        # linear: 1 + factor * depth; exponential: factor ^ depth
-factor = 0.5
+factor = 1.0
 max_depth = 10          # depth is capped here, so one deep method can't explode the total
 
 [weights]               # the base weight of each category, for every language
 statement = 1
-call      = 1
+call      = 0.5         # a call, `new`: a chain of getters is long, not hard
 branch    = 2           # if, ternary, case
 loop      = 3
 try       = 2
@@ -32,5 +32,8 @@ jump      = 1           # break, continue, an early return, throw
 
 [files]
 exclude = ["**/node_modules/**", "**/build/**", "**/target/**", "**/generated/**", "**/*.d.ts"]
-test_globs = ["**/test/**", "**/tests/**", "**/*Test.java", "**/*.test.ts", "**/*.spec.ts", "**/test_*.py"]
+test_globs = [
+    "**/test/**", "**/tests/**", "**/__tests__/**", "**/*Test.java", "**/*Tests.java",
+    "**/*.test.ts", "**/*.spec.ts", "**/*.test.tsx", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py",
+]
 test_factor = 1.0       # a test file's weight times this; 0 leaves the tests out

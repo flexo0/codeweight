@@ -9,9 +9,10 @@ use clap::{Parser, Subcommand, ValueEnum};
 use rayon::prelude::*;
 
 use crate::config::{self, Config};
-use crate::engine::Weigher;
-use crate::lang;
-use crate::report::{self, By, Weighted};
+use crate::engine::{Weighed, Weigher};
+use crate::git;
+use crate::lang::{self, Lang};
+use crate::report::{self, By, Changed, Revisions, Weighted};
 use crate::source;
 
 /// Weighs code: every element by its weight, heavier when nested.
@@ -69,52 +70,121 @@ pub fn run() -> Result<()> {
     let cli = Cli::parse();
     match &cli.command {
         Command::Scan { paths } => scan(&cli, paths),
-        Command::Commit { .. } => bail!("`commit` is not built yet"),
+        Command::Commit { rev, repo } => commit(&cli, rev, repo),
         Command::Init { file } => init(file),
     }
 }
 
 fn scan(cli: &Cli, paths: &[PathBuf]) -> Result<()> {
-    if cli.format == Format::Json {
-        bail!("the JSON output is not built yet");
-    }
-    let cwd = std::env::current_dir().context("reading the current folder")?;
-    let found = config::find(
-        cli.config.as_deref(),
-        &cwd,
-        paths.first().map(PathBuf::as_path),
-    )?;
-    let config = Config::load(found.as_deref())?;
+    let config = load_config(cli, paths.first().map(PathBuf::as_path))?;
     let input = source::from_paths(paths, &config.files)?;
-    let weighers: Vec<Weigher> = lang::ALL
-        .iter()
-        .map(|lang| Weigher::new(lang, &config))
-        .collect();
+    let weighers = Weighers::new(&config);
     // In parallel, each file read when weighed; `collect` keeps the input's order.
     let files = input
         .items
         .into_par_iter()
         .map(|item| {
-            let weigher = weighers
-                .iter()
-                .find(|w| std::ptr::eq(w.lang(), item.lang))
-                .context("a file of a language with no weigher")?;
-            let weighed = weigher
-                .weigh(&item.text()?)
-                .with_context(|| format!("weighing {}", item.path.display()))?;
-            let weighed = if item.test {
-                weighed.scaled(config.files.test_factor)
-            } else {
-                weighed
-            };
+            let weighed = weighers.weigh(item.lang, &item.text()?, item.test, &item.path)?;
             Ok(Weighted {
                 path: item.path,
                 weighed,
             })
         })
         .collect::<Result<Vec<_>>>()?;
-    print!("{}", report::text(&files, &input.skipped, cli.by, cli.top));
+    print!(
+        "{}",
+        match cli.format {
+            Format::Text => report::scan_text(&files, &input.skipped, cli.by, cli.top),
+            Format::Json => report::scan_json(&files, &input.skipped, cli.by, cli.top),
+        }
+    );
     Ok(())
+}
+
+fn commit(cli: &Cli, rev: &str, repo: &Path) -> Result<()> {
+    let config = load_config(cli, Some(repo))?;
+    let range = git::resolve(repo, rev)?;
+    let input = source::from_commit(repo, &range, &config.files)?;
+    let weighers = Weighers::new(&config);
+    let side = |blob: Option<source::Blob>| -> Result<Option<(PathBuf, Weighed)>> {
+        blob.map(|b| {
+            let weighed = weighers.weigh(b.lang, &b.text, b.test, &b.path)?;
+            Ok((b.path, weighed))
+        })
+        .transpose()
+    };
+    let changes = input
+        .changes
+        .into_par_iter()
+        .map(|change| {
+            let before = side(change.before)?;
+            let after = side(change.after)?;
+            let (path, old_path) = match (&before, &after) {
+                (Some((old, _)), Some((new, _))) if old != new => (new.clone(), Some(old.clone())),
+                (_, Some((path, _))) | (Some((path, _)), None) => (path.clone(), None),
+                (None, None) => bail!("a change with neither side"),
+            };
+            Ok(Changed {
+                path,
+                old_path,
+                before: before.map(|(_, w)| w),
+                after: after.map(|(_, w)| w),
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    print!(
+        "{}",
+        match cli.format {
+            Format::Text => report::commit_text(&changes, &input.skipped, cli.by, cli.top),
+            Format::Json => {
+                let revisions = Revisions {
+                    from: range.from.as_deref(),
+                    to: &range.to,
+                };
+                report::commit_json(&changes, &input.skipped, &revisions, cli.by, cli.top)
+            }
+        }
+    );
+    Ok(())
+}
+
+/// The weights file found for a path (`inside`: the first scanned, or the commit's repo), loaded.
+fn load_config(cli: &Cli, inside: Option<&Path>) -> Result<Config> {
+    let cwd = std::env::current_dir().context("reading the current folder")?;
+    let found = config::find(cli.config.as_deref(), &cwd, inside)?;
+    Config::load(found.as_deref())
+}
+
+/// A weigher per language.
+struct Weighers<'c> {
+    weighers: Vec<Weigher<'c>>,
+    test_factor: f64,
+}
+
+impl<'c> Weighers<'c> {
+    fn new(config: &'c Config) -> Weighers<'c> {
+        Weighers {
+            weighers: lang::ALL.iter().map(|l| Weigher::new(l, config)).collect(),
+            test_factor: config.files.test_factor,
+        }
+    }
+
+    /// A text of `lang` weighed, a test's times the test factor.
+    fn weigh(&self, lang: &'static Lang, text: &str, test: bool, path: &Path) -> Result<Weighed> {
+        let weigher = self
+            .weighers
+            .iter()
+            .find(|w| std::ptr::eq(w.lang(), lang))
+            .context("a file of a language with no weigher")?;
+        let weighed = weigher
+            .weigh(text)
+            .with_context(|| format!("weighing {}", path.display()))?;
+        Ok(if test {
+            weighed.scaled(self.test_factor)
+        } else {
+            weighed
+        })
+    }
 }
 
 fn init(file: &Path) -> Result<()> {

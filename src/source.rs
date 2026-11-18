@@ -1,7 +1,7 @@
 //! The inputs as `(path, language, text)` items: the files and folders named on the command line, a folder walked
-//! with its `.gitignore` and the weights file's excludes. (Git blobs at a revision come with milestone 5.)
+//! with its `.gitignore` and the weights file's excludes; or a commit's changed files, both their sides' texts.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
@@ -10,6 +10,7 @@ use globset::{Glob, GlobBuilder, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
 
 use crate::config::{self, Files};
+use crate::git::{self, Range};
 use crate::lang::{self, Lang};
 
 /// A file to weigh, its text read when it is weighed.
@@ -26,10 +27,15 @@ impl Item {
     pub fn text(&self) -> Result<String> {
         let bytes =
             fs::read(&self.path).with_context(|| format!("reading {}", self.path.display()))?;
-        Ok(match String::from_utf8(bytes) {
-            Ok(text) => text,
-            Err(error) => String::from_utf8_lossy(error.as_bytes()).into_owned(),
-        })
+        Ok(lossy(bytes))
+    }
+}
+
+/// A text, lossy where it isn't UTF-8.
+fn lossy(bytes: Vec<u8>) -> String {
+    match String::from_utf8(bytes) {
+        Ok(text) => text,
+        Err(error) => String::from_utf8_lossy(error.as_bytes()).into_owned(),
     }
 }
 
@@ -37,6 +43,105 @@ impl Item {
 pub struct Input {
     pub items: Vec<Item>,
     pub skipped: Vec<PathBuf>,
+}
+
+/// One side of a file a commit changed, its text read from git.
+pub struct Blob {
+    /// From the repo's root.
+    pub path: PathBuf,
+    pub lang: &'static Lang,
+    /// Whether the test globs match it.
+    pub test: bool,
+    pub text: String,
+}
+
+/// A file a commit changed: its side before and after, `None` where it isn't there or isn't weighed.
+pub struct Changed {
+    pub before: Option<Blob>,
+    pub after: Option<Blob>,
+}
+
+/// A commit's changed files to weigh (at least one side each), and those skipped as in no language codeweight
+/// reads, in git's order.
+pub struct CommitInput {
+    pub changes: Vec<Changed>,
+    pub skipped: Vec<PathBuf>,
+}
+
+/// The files `range` changed in the repo at `repo`, as a walk of the repo's root would weigh them on each side:
+/// a side that is hidden (a part of its path starts with `.`), excluded, in no language codeweight reads, or a
+/// test at `test_factor` 0 is left out. A change with neither side left is skipped and listed when a side was in
+/// no language codeweight reads, else left out unlisted.
+pub fn from_commit(repo: &Path, range: &Range, files: &Files) -> Result<CommitInput> {
+    let matchers = Matchers::new(files)?;
+    let mut kept = Vec::new();
+    let mut skipped = Vec::new();
+    for change in git::changes(repo, range)? {
+        let mut unsupported = None;
+        let mut keep = |side: Option<git::Side>| {
+            let side = side?;
+            let hidden = side
+                .path
+                .components()
+                .any(|c| c.as_os_str().to_string_lossy().starts_with('.'));
+            if hidden || matchers.exclude.is_match(&side.path) {
+                return None;
+            }
+            let Some(lang) = lang::for_path(&side.path) else {
+                unsupported = Some(side.path);
+                return None;
+            };
+            let test = matchers.tests.is_match(&side.path);
+            (!test || files.test_factor != 0.0).then_some((side, lang, test))
+        };
+        let before = keep(change.before);
+        let after = keep(change.after);
+        if before.is_none() && after.is_none() {
+            skipped.extend(unsupported);
+            continue;
+        }
+        kept.push((before, after));
+    }
+
+    // How many sides use each blob (two for a pure rename's), so each is read once and moved out at its last use.
+    let mut uses: HashMap<String, usize> = HashMap::new();
+    for (side, _, _) in kept
+        .iter()
+        .flat_map(|(before, after)| [before, after])
+        .flatten()
+    {
+        *uses.entry(side.blob.clone()).or_default() += 1;
+    }
+    let wanted: Vec<&str> = uses.keys().map(String::as_str).collect();
+    let mut texts = git::blobs(repo, &wanted)?;
+    let mut blob = |side: Option<(git::Side, &'static Lang, bool)>| -> Result<Option<Blob>> {
+        let Some((side, lang, test)) = side else {
+            return Ok(None);
+        };
+        let missing = || format!("no blob {} for {}", side.blob, side.path.display());
+        let left = uses.get_mut(&side.blob).with_context(missing)?;
+        *left -= 1;
+        let bytes = if *left == 0 {
+            texts.remove(&side.blob)
+        } else {
+            texts.get(&side.blob).cloned()
+        }
+        .with_context(missing)?;
+        Ok(Some(Blob {
+            path: side.path,
+            lang,
+            test,
+            text: lossy(bytes),
+        }))
+    };
+    let mut changes = Vec::with_capacity(kept.len());
+    for (before, after) in kept {
+        changes.push(Changed {
+            before: blob(before)?,
+            after: blob(after)?,
+        });
+    }
+    Ok(CommitInput { changes, skipped })
 }
 
 /// A glob of the weights file's `[files]`: `*` and `?` stay within a path's part, `**` crosses parts.

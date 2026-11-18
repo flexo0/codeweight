@@ -149,6 +149,7 @@ dependencies = [
  "ignore",
  "rayon",
  "serde",
+ "serde_json",
  "tempfile",
  "toml",
  "tree-sitter",

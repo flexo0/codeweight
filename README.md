@@ -5,23 +5,22 @@ class, ...) has a weight, set in a weights file. An element nested in branches, 
 weighs more. A file's weight is the sum of its elements' weights, and so is a function's. Code is parsed by
 tree-sitter.
 
-It reads Java (`.java`), TypeScript (`.ts`, `.mts`, `.cts`), TSX (`.tsx`) and Python (`.py`, `.pyi`). Built so far:
-`scan` of files and folders, the weights file, `init`. Not yet: `commit`, the JSON output. The plan is
+It reads Java (`.java`), TypeScript (`.ts`, `.mts`, `.cts`), TSX (`.tsx`) and Python (`.py`, `.pyi`). The design is
 `docs/design.md`.
 
 ## Usage
 
 ```
 codeweight scan <path>...                 the weight of files and folders, absolute or relative; several allowed
-codeweight commit <rev>|<A>..<B> [-C <repo>]   the net weight delta of a commit, or between two revisions (not built yet)
+codeweight commit <rev>|<A>..<B> [-C <repo>]   the net weight delta of a commit, or between two revisions
 codeweight init [<file>]                  writes the default weights file (default ./codeweight.toml), never over an existing one
 ```
 
 Every command takes:
 
 - `--config <file>`: the weights file (see below for where it is looked up without one);
-- `--format text|json`: the report's format, text by default (JSON is not built yet);
-- `--top <N>`: only the report's N heaviest lines;
+- `--format text|json`: the report's format, text by default (the JSON is described below);
+- `--top <N>`: only the report's first N lines (the heaviest; for `commit`, the largest changes);
 - `--by file|function`: what the report lists, the functions by default.
 
 The text report starts with the total. After it come the functions and classes, heaviest first, then by path and
@@ -42,12 +41,67 @@ weight times `test_factor`; at 0 it is left out. Files are weighed in parallel; 
 A file that doesn't parse cleanly is still weighed, as tree-sitter recovered it, with a warning. A file in a language
 codeweight doesn't read is skipped and listed, never an error.
 
-Exit codes: 0 done, 2 an error (a bad path or weights file).
+Exit codes: 0 done, 2 an error (a bad path, revision or weights file, or not in a git repo).
+
+### `commit`
+
+`codeweight commit <rev>` weighs what a commit changed: its files before and after, against its first parent (a
+merge's too), the root commit against the empty tree; in a shallow clone, a commit whose parent wasn't fetched is
+an error (fetch more history), not a root. `codeweight commit A..B` compares the two revisions' trees
+directly, so a change made and undone between them nets to zero (an empty side is `HEAD`; `A...B` is an error).
+`<rev>` is any git revision (a hash, `HEAD~2`, a tag); `-C <path>` is any path inside the repo (default `.`). It runs
+`git` (`git diff-tree -r -M`, so a renamed file is one file, and one `git cat-file --batch` for the texts).
+
+A file's delta is its weight after minus before: an added file's is all positive, a deleted one's all negative. Its
+functions and classes are matched by their qualified name within the file (a renamed file's old and new), each one
+`added`, `removed`, `heavier` or `lighter`. The changed files are weighed as a walk of the repo's root weighs them:
+the `[files]` excludes and hidden paths are left out, a test file is times `test_factor`, a file codeweight doesn't
+read is skipped and listed.
+
+The text report starts with the total delta (`total +42.5`, `total -17`). After it comes one line per function and
+class (or per file with `--by file`), `<delta>  <status>  <path>  <name>`, a renamed file's path as `old -> new`; the
+largest changes first, either way (a gain before a loss of the same size), then by path and name. A line whose delta
+is 0 (an untouched function, a pure rename) is left out; `--top` keeps the first N lines.
+
+### The JSON
+
+`--format json` prints one JSON object with the same lines as the text, in the same order, `--top` and `--by`
+acting alike. Every field below is always there, `null` where it has no value. A weight or a delta is a number
+rounded to two decimals, as the text shows it.
+
+- `total`: the whole weight (or delta), not only the rows shown.
+- `by`: `"function"` or `"file"`.
+- `rows`: the report's lines. By file, `{path, weight}`; by function, `{path, kind, name, line, weight}`, `kind`
+  one of `"function"`, `"class"` (its code outside its functions) and `"file"` (a file's code outside any class, its
+  `name` and `line` `null`), `name` qualified (`Outer.Inner.method`), `line` the first line, from 1 (for `commit`, the after
+side's, a removed one's the before side's).
+- `warnings`: the files with syntax errors, `{path, kind: "syntax_errors", side}`, `side` `null` for `scan`.
+- `skipped`: the paths of the files in no language codeweight reads.
+
+For `commit`, also `from` (the full hash compared from, `null` for the root commit's empty tree) and `to`; each row
+has, instead of `weight`, `before`, `after` (0 on the side it isn't), `delta` and `status` (`"added"`, `"removed"`,
+`"heavier"` or `"lighter"`), and `old_path` (the path before a rename, else `null`); a warning's `side` is
+`"before"` or `"after"`.
+
+```json
+{
+  "from": "60baba96b16d35eb98e1c87993574780995f624c",
+  "to": "b48be68e77d42c8c9a8a28f2060d0bbe261779d4",
+  "total": 6.0,
+  "by": "function",
+  "rows": [
+    {"path": "a.py", "old_path": null, "kind": "function", "name": "f", "line": 1,
+     "before": 4.5, "after": 10.5, "delta": 6.0, "status": "heavier"}
+  ],
+  "warnings": [],
+  "skipped": ["README.md"]
+}
+```
 
 ## The weights file
 
 TOML. The first one found wins: `--config`, then `./codeweight.toml`, then `codeweight.toml` at the root of the git
-repo the first scanned path is in, then the built-in defaults. Your file is merged over the defaults, so it holds only
+repo the first scanned path is in (for `commit`, the repo's), then the built-in defaults. Your file is merged over the defaults, so it holds only
 what it changes. A key, category, language or node kind codeweight doesn't know is an error, not ignored.
 `codeweight init` writes out the defaults ([src/default.toml](src/default.toml)) to start from. The example below is
 the defaults plus the two per-language tables a file of yours can add (the defaults have neither, so a `[weights]` key
@@ -56,12 +110,12 @@ you set reaches every language):
 ```toml
 [nesting]
 model = "linear"        # linear: 1 + factor * depth; exponential: factor ^ depth
-factor = 0.5
+factor = 1.0
 max_depth = 10          # depth is capped here, so one deep method can't explode the total
 
 [weights]               # the base weight of each category, for every language
 statement = 1
-call      = 1
+call      = 0.5
 branch    = 2
 loop      = 3
 try       = 2
@@ -80,9 +134,16 @@ synchronized_statement = "try"
 
 [files]                 # what a folder walk weighs (globs: * and ? within a path's part, ** across parts)
 exclude = ["**/node_modules/**", "**/build/**", "**/target/**", "**/generated/**", "**/*.d.ts"]
-test_globs = ["**/test/**", "**/tests/**", "**/*Test.java", "**/*.test.ts", "**/*.spec.ts", "**/test_*.py"]
+test_globs = [
+    "**/test/**", "**/tests/**", "**/__tests__/**", "**/*Test.java", "**/*Tests.java",
+    "**/*.test.ts", "**/*.spec.ts", "**/*.test.tsx", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py",
+]
 test_factor = 1.0       # a test file's weight times this; 0 leaves the tests out
 ```
+
+The defaults were tuned on real Java, TypeScript and Python code so that the heaviest functions are the hardest
+ones: a call weighs half a statement (a long chain of getters or a flat run of setters is long, not hard), and each
+level of nesting adds a whole base weight (`factor = 1.0`), so nested control flow outweighs flat code.
 
 ### The weight
 
