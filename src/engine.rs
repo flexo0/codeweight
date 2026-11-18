@@ -326,12 +326,7 @@ impl<'c> Weigher<'c> {
         if !owns || owner.child_by_field_name("body").map(|b| b.id()) != Some(body.id()) {
             return true;
         }
-        let mut cursor = list.walk();
-        let last = list
-            .named_children(&mut cursor)
-            .filter(|child| !child.is_extra())
-            .last();
-        last.map(|last| last.id()) != Some(node.id())
+        lang::last_child(list).map(|last| last.id()) != Some(node.id())
     }
 }
 

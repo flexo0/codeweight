@@ -273,6 +273,14 @@ pub fn only_child(node: Node) -> Option<Node> {
     children.next().is_none().then_some(first)
 }
 
+/// A node's last named child, comments aside, if it has any.
+pub fn last_child(node: Node) -> Option<Node> {
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor)
+        .filter(|c| !c.is_extra())
+        .last()
+}
+
 /// The text of a node, lossy where it isn't UTF-8.
 pub fn text(node: Node, source: &[u8]) -> String {
     String::from_utf8_lossy(&source[node.byte_range()]).into_owned()

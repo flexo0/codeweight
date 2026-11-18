@@ -2,7 +2,7 @@
 
 use tree_sitter::Node;
 
-use super::{Lang, Nesting, Operator, Scope, ScopeKind, is_field_of, only_child, text};
+use super::{Lang, Nesting, Operator, Scope, ScopeKind, is_field_of, last_child, only_child, text};
 use crate::config::Category::{self, *};
 
 pub static RUST: Lang = Lang {
@@ -158,12 +158,7 @@ fn tail(node: Node) -> bool {
     if node.kind() != "block" {
         return false;
     }
-    let mut cursor = node.walk();
-    let last = node
-        .named_children(&mut cursor)
-        .filter(|c| !c.is_extra())
-        .last();
-    last.is_some_and(|last| {
+    last_child(node).is_some_and(|last| {
         !last.is_error()
             && !NOT_TAILS.contains(&last.kind())
             && !matches!(
