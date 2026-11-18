@@ -13,10 +13,12 @@ pub static TYPESCRIPT: Lang = Lang {
     kinds: kinds!(),
     nesting: NESTING,
     returns: &["return_statement"],
+    wrappers: &[],
     lambdas: LAMBDAS,
     parens: &["parenthesized_expression"],
     logical,
     exempt,
+    tail: |_| false,
     scope,
 };
 
@@ -29,10 +31,12 @@ pub static TSX: Lang = Lang {
     kinds: kinds!(("jsx_element", Call), ("jsx_self_closing_element", Call),),
     nesting: NESTING,
     returns: &["return_statement"],
+    wrappers: &[],
     lambdas: LAMBDAS,
     parens: &["parenthesized_expression"],
     logical,
     exempt,
+    tail: |_| false,
     scope,
 };
 

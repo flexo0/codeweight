@@ -3,6 +3,7 @@
 
 pub mod java;
 pub mod python;
+pub mod rust;
 pub mod typescript;
 
 use std::path::Path;
@@ -17,6 +18,7 @@ pub const ALL: &[&Lang] = &[
     &typescript::TYPESCRIPT,
     &typescript::TSX,
     &python::PYTHON,
+    &rust::RUST,
 ];
 
 /// A language's tables.
@@ -34,6 +36,9 @@ pub struct Lang {
     pub nesting: &'static [Nesting],
     /// The kinds of a return: an early one (not its function's or lambda's last statement) is a jump.
     pub returns: &'static [&'static str],
+    /// The kinds of a statement that is an expression and its `;` (Rust's `expression_statement`): a return in one
+    /// is at the statement's place, so the last statement of a body is a return so wrapped, not an early one.
+    pub wrappers: &'static [&'static str],
     /// The kinds of a lambda, whose last statement isn't an early return either.
     pub lambdas: &'static [&'static str],
     /// The kinds of a parenthesized expression, which a run of `&&` / `||` goes through.
@@ -43,6 +48,9 @@ pub struct Lang {
     /// Whether a node weighs nothing although its kind has a category: the cases its kind can't tell (a docstring,
     /// a `match` case's guard).
     pub exempt: fn(Node) -> bool,
+    /// Whether a node is a block that ends in a value, an expression without its `;` (Rust's tail expression): it
+    /// weighs a statement, beside its own kind's category, as the `return` of that value would.
+    pub tail: fn(Node) -> bool,
     /// The function or class a node declares, if it does one, and its own name (not qualified). A lambda it names
     /// a function is one: it weighs as a function, and nests as one, not as a lambda.
     pub scope: fn(Node, &[u8]) -> Option<Scope>,
@@ -222,6 +230,7 @@ mod tests {
                 .map(|(kind, _)| *kind)
                 .chain(lang.nesting.iter().map(|n| n.kind))
                 .chain(lang.returns.iter().copied())
+                .chain(lang.wrappers.iter().copied())
                 .chain(lang.lambdas.iter().copied())
                 .chain(lang.parens.iter().copied());
             for kind in kinds {
@@ -255,6 +264,7 @@ mod tests {
             for_path(Path::new("a/b.py")).map(|l| l.name),
             Some("python")
         );
+        assert_eq!(for_path(Path::new("a/b.rs")).map(|l| l.name), Some("rust"));
         assert!(for_path(Path::new("a/b.txt")).is_none());
         assert!(for_path(Path::new("Makefile")).is_none());
     }

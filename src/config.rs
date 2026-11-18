@@ -438,7 +438,7 @@ mod tests {
         let error = error_of("[languages.cobol.weights]\nloop = 1\n");
         assert!(
             error.contains(
-                "unknown language `cobol` in [languages], expected one of: java, typescript, python"
+                "unknown language `cobol` in [languages], expected one of: java, typescript, python, rust"
             ),
             "{error}"
         );

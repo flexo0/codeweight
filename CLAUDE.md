@@ -8,10 +8,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 function, a class, ...) has a weight, set in a weights file; an element nested in branches, loops, lambdas and nested
 functions weighs more. The weight of a file, a folder or a function is the sum of its elements' weights; the weight of
 a git commit (or a range) is its net delta, after minus before, positive or negative. It reads Java, TypeScript (TS,
-TSX) and Python, parsed by tree-sitter.
+TSX), Python and Rust, parsed by tree-sitter.
 
-Milestones 0-7 are built (the CLI, the config, the engine, Java, TypeScript, TSX, Python, folders, `commit`, the
-text and JSON reports, the tuned defaults); the design and its milestones are `docs/design.md`. Keep that doc in step
+Milestones 0-8 are built (the CLI, the config, the engine, Java, TypeScript, TSX, Python, folders, `commit`, the
+text and JSON reports, the tuned defaults, Rust); the design and its milestones are `docs/design.md`. Keep that doc in step
 with what is built (a decision made while building goes into it, in the same commit).
 
 ## Checking a change
@@ -22,9 +22,9 @@ with what is built (a decision made while building goes into it, in the same com
   test weights file of their own (round numbers), never the defaults: tuning the defaults must not break them.
 - The `commit` tests make throwaway git repos in a temp dir (`tempfile`); never run against a real repo.
 - Rust 1.100 (`rust-toolchain.toml`, `rust-version` in `Cargo.toml`), edition 2024. Few dependencies: `tree-sitter`
-  and its grammars (`tree-sitter-java`, `tree-sitter-typescript`, `tree-sitter-python`), `clap`, `serde`, `toml`,
-  `serde_json`, `ignore` and its `globset` (the `[files]` globs), `rayon`, `anyhow`; `tempfile` for the tests. A new
-  one needs a reason.
+  and its grammars (`tree-sitter-java`, `tree-sitter-typescript`, `tree-sitter-python`, `tree-sitter-rust`),
+  `clap`, `serde`, `toml`, `serde_json`, `ignore` and its `globset` (the `[files]` globs), `rayon`, `anyhow`;
+  `tempfile` for the tests. A new one needs a reason.
 - External tool: `git` (the commit mode runs it, `git diff-tree` and `git cat-file --batch`; no `git2` / `gix`).
 
 ## Invariants

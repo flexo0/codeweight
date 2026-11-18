@@ -13,10 +13,12 @@ pub static JAVA: Lang = Lang {
     kinds: KINDS,
     nesting: NESTING,
     returns: &["return_statement"],
+    wrappers: &[],
     lambdas: &["lambda_expression"],
     parens: &["parenthesized_expression"],
     logical,
     exempt: |_| false,
+    tail: |_| false,
     scope,
 };
 

@@ -55,6 +55,7 @@ pub struct Weigher<'c> {
     categories: Vec<Option<Category>>,
     constructs: Vec<Option<&'static Nesting>>,
     returns: Vec<bool>,
+    wrappers: Vec<bool>,
     lambdas: Vec<bool>,
     parens: Vec<bool>,
 }
@@ -93,6 +94,7 @@ impl<'c> Weigher<'c> {
             flags
         };
         let returns = flags(lang.returns);
+        let wrappers = flags(lang.wrappers);
         let lambdas = flags(lang.lambdas);
         let parens = flags(lang.parens);
 
@@ -104,6 +106,7 @@ impl<'c> Weigher<'c> {
             categories,
             constructs,
             returns,
+            wrappers,
             lambdas,
             parens,
         }
@@ -181,8 +184,12 @@ impl<'c> Weigher<'c> {
                     }
                 }),
             };
-            if let Some(category) = category {
-                let weight = self.weights.weight(category) * self.nesting.factor_at(frame.depth);
+            let mut base = category.map_or(0.0, |c| self.weights.weight(c));
+            if (self.lang.tail)(node) {
+                base += self.weights.weight(Category::Statement);
+            }
+            if base > 0.0 {
+                let weight = base * self.nesting.factor_at(frame.depth);
                 match entry {
                     Some(at) => entries[at].weight += weight,
                     None => file += weight,
@@ -250,11 +257,20 @@ impl<'c> Weigher<'c> {
         })
     }
 
-    /// Whether a return is early: not the last statement of its function's or lambda's body.
+    /// Whether a return is early: not the last statement of its function's or lambda's body (the statement it is
+    /// wrapped in, if it is).
     fn is_early_return(&self, node: Node, source: &[u8]) -> bool {
-        let Some(body) = node.parent() else {
+        let Some(mut body) = node.parent() else {
             return true;
         };
+        let mut node = node;
+        if flag(&self.wrappers, body.kind_id() as usize) {
+            node = body;
+            let Some(parent) = body.parent() else {
+                return true;
+            };
+            body = parent;
+        }
         let Some(owner) = body.parent() else {
             return true;
         };

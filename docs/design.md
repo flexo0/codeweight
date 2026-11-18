@@ -1,7 +1,7 @@
 # codeweight: the design
 
-Built: milestones 0-7 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
-`commit`, the reports, the tuned defaults).
+Built: milestones 0-8 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
+`commit`, the reports, the tuned defaults, Rust).
 Once a part is built, its section is rewritten as a reference (what it is, why so, what is left).
 
 ## 1. The CLI
@@ -57,7 +57,7 @@ Built (`config`, `config::find`):
   unknown key anywhere is an error.
 - Checked after: every `[weights]` key is a category (and every category has a weight, which only a file on its own,
   without the defaults under it, can miss); every `[languages.<name>]` is a language codeweight reads (`java`,
-  `typescript`, `python`); every `node_kinds` key is a named node kind of that language's grammar and its value a
+  `typescript`, `python`, `rust`); every `node_kinds` key is a named node kind of that language's grammar and its value a
   category or `"none"`; every weight and factor is a finite number, 0 or above; every `[files]` glob compiles. The
   error names the table and the key, and the file.
 - `typescript` is the table of both `.ts` and `.tsx` files (two grammars, one key): a TS setting reaches TSX too.
@@ -194,6 +194,42 @@ total        = Σ weight(node) over the nodes that have a category
 - A decorator weighs nothing of its own; a call in it (`@app.route("/")`) is a call of the class or file around the
   decorated definition (the grammar puts the decorators beside the definition, not in it).
 
+### Rust
+
+- A `fn` is a function: a method of the class around it, a nested function of the function around it (its body
+  nests), a trait's signature (`fn a(&self);`) a function as TS's. A struct, an enum, a union, a trait and a module
+  with a body are classes; `mod a;` (only where a file is) weighs nothing and is no class.
+- An `impl` block (`impl Foo`, `impl<T> Trait for Foo<T>`, `impl Trait for &mut a::Foo`) is a class named by its type
+  (its type arguments, references and path dropped), so its methods are `Foo.method`, and a type's struct and every
+  `impl` of it in a file are one class (same-named entries of one kind are one). An `impl` weighs nothing of its
+  own: the type's declaration does, so a struct with three `impl` blocks weighs one class, and an `impl` of a type
+  declared elsewhere only its contents. A type that is no path (`impl T for [u8]`) is named by its text.
+- A closure is a lambda, even bound to a name (`let f = |x| ...`), its body deeper; an expression body (`|x| x + 1`)
+  is no statement, as a Java lambda's.
+- `if` (`if let` too) nests its consequence; its `else` is a clause beside it, as TS's: its block deeper, its `if`
+  (`else if`) at the depth. `match` is no nesting construct; each arm is a branch, its pattern and guard at the arm's
+  depth, its value deeper. `for`, `while` (`while let`), `loop` are loops; a label (`'outer:`) weighs nothing.
+- `&&` / `||` are the logical operators; a let chain (`if let Some(x) = a && x > 0`) is a run of `&&`.
+- A call and a macro invocation (`println!(...)`, `vec![...]`) are calls. `break`, `continue`, `?` (an early return
+  of the error) and an early `return` are jumps.
+- Statements: an expression statement, `let`, `const`, `static`, a `type` alias, a trait's associated type, a
+  struct's field and an enum's variant (as Java's fields and enum constants). `use` and `extern crate` weigh nothing,
+  as an import.
+- Rust's blocks are expressions, so the grammar wraps a statement around any expression in a block's statement
+  place: `g();`, but also an `if`, a `match`, a loop, a block, `return x;`, `break;`. That wrapper weighs nothing
+  around a block, an expression ending in one or a jump (the language's `exempt`): an `if` is a branch, `return x;`
+  a statement (or a jump), `break;` a jump, as in Java. The early return looks through it (the language's
+  `wrappers`): `return x;` as the last statement of its body is the statement wrapping it, so it is no jump.
+- A block's tail expression (its value, without `;`) is a statement (the language's `tail` hook, which weighs the
+  block a statement beside its own category, at the block's depth, the tail's too), so `fn f() -> i32 { a + b }`
+  weighs as Java's `return a + b;`, `{ g() }` as `g();`. A tail jump (`return x`, `break`) weighs as itself, not
+  twice. The same holds in any block: an `if`'s, an arm's, a closure's, `unsafe { }`'s.
+- Known gaps: a macro's arguments are a token tree, not parsed, so only the macro call weighs (what is inside
+  `vec![f(x), g(y)]` or `assert_eq!(...)` weighs nothing), and a `macro_rules!` definition weighs nothing.
+  `#[cfg(test)] mod tests` in a source file weighs in full, as a class `tests` of that file: the test globs are by
+  path, so neither they nor `test_factor` reach it. `let ... else { }` is no branch, its block not deeper; an `async`
+  block is no lambda.
+
 ## 4. Architecture
 
 | Module | What it does |
@@ -201,7 +237,7 @@ total        = Σ weight(node) over the nodes that have a category
 | `cli` | the arguments (`clap`), the commands |
 | `config` | loads the weights file, merges it over the defaults, validates it |
 | `source` | an input as `(path, language, text)` items: from disk (`ignore`, the excludes) or git blobs at a revision |
-| `lang` | a module per language (Java, TS, TSX, Python): grammar, extensions, node kind → category, nesting kinds, function names |
+| `lang` | a module per language (Java, TS, TSX, Python, Rust): grammar, extensions, node kind → category, nesting kinds, function names |
 | `engine` | one tree walked: each node's weight, summed by function, class and file |
 | `git` | the files a commit or a range changed (`git diff-tree -r -M`), their text before and after (`git cat-file --batch`) |
 | `report` | the text table and the JSON; for `commit`, the deltas |
@@ -209,7 +245,7 @@ total        = Σ weight(node) over the nodes that have a category
 Files are weighed in parallel (`rayon`).
 
 Built: every module. The dependencies: `tree-sitter`, `tree-sitter-java`, `tree-sitter-typescript`,
-`tree-sitter-python`, `clap`, `serde`, `serde_json` (the JSON report), `toml`, `anyhow`, `ignore`, `globset` (the
+`tree-sitter-python`, `tree-sitter-rust`, `clap`, `serde`, `serde_json` (the JSON report), `toml`, `anyhow`, `ignore`, `globset` (the
 `[files]` globs; `ignore` is built on it, so it costs no build), `rayon`, and `tempfile` for the tests. `git` is run
 as a command, no `git2` / `gix`.
 
@@ -236,12 +272,14 @@ as a command, no `git2` / `gix`.
   never all in memory; the results are collected in the listed order, and the report sorts them (weight, then path
   and name), so the output doesn't depend on which thread finished first.
 
-- `lang::Lang` is a table of plain data and three hooks: its name and its weights file key, the extensions, the
+- `lang::Lang` is a table of plain data and four hooks: its name and its weights file key, the extensions, the
   grammar, the node kind → category list, the nesting constructs (each with its body: the children it nests, by
   field name or node kind, either listed or all but those listed, or by their place among the named children; and
   its chain, the children of its own kind that stay at its depth, for `else if`), the return, lambda and parenthesis
-  kinds, `logical` (a node's `&&` / `||` / `??`), `exempt` (a node that weighs nothing though its kind has a
-  category, where the kind can't tell: a docstring, a case's guard) and `scope` (the function or class a node
+  kinds, the wrappers (the statement kinds a return is looked through for its place: Rust's expression statement),
+  `logical` (a node's `&&` / `||` / `??`), `exempt` (a node that weighs nothing though its kind has a
+  category, where the kind can't tell: a docstring, a case's guard), `tail` (a node that weighs a statement beside
+  its kind's category: Rust's block ending in a value) and `scope` (the function or class a node
   declares, and its own name). A lambda `scope` names a function weighs and nests as a function (TS's named
   arrows). A test checks that
   every kind and field the tables name is in the grammar, so a typo can't silently weigh nothing.
@@ -298,3 +336,11 @@ boundary.
    weights held. The test globs gained `__tests__`, `*.test.tsx` / `*.spec.tsx`, `*Tests.java` and `*_test.py`.
    Left as it is, not a weight's matter: a TS object literal's methods and arrows (a store of handlers) are lambdas
    of the file, so such a file's `(file)` line can be its heaviest.
+8. (built) Rust (`.rs`, `tree-sitter-rust`): its table, the engine's look through a statement wrapping a return
+   (`wrappers`) and the tail expression as a statement (`tail`); snippet tests. The defaults re-checked on a Rust
+   repo, codeweight itself: the heaviest are the engine's tree walk (`Weigher.weigh`, a loop of matches and nested
+   ifs), the weights file's checks (`Config.from_value`) and the two inputs' listings (`from_commit`,
+   `from_paths`); a language's long `const` tables weigh a statement each, a struct its class and a statement a
+   field, the one-line getters (`Config.lang`, `Weigher.lang`) least.
+   The defaults held, no weight changed. Rust's integration tests are under `tests/`, which a test glob already
+   matches; its unit tests are in the source files (the known gap above).

@@ -13,10 +13,12 @@ pub static PYTHON: Lang = Lang {
     kinds: KINDS,
     nesting: NESTING,
     returns: &["return_statement"],
+    wrappers: &[],
     lambdas: &["lambda"],
     parens: &["parenthesized_expression"],
     logical,
     exempt,
+    tail: |_| false,
     scope,
 };
 
