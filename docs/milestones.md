@@ -1,10 +1,5 @@
 # Milestones
 
-Built: milestones 0-25 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
-`commit`, the reports, the tuned defaults, Rust, operators and accesses, JavaScript, Go, depth on the structure
-only, parameters, cases and arguments, conditions, the defaults tuned on pairs, macros, nested ternaries and default cases, assignments, constructors, a constructor category, every operator counted, the
-defaults tuned again by rule, a row of accesses, the defaults tuned without a grid).
-
 0. (built) The repo: `Cargo.toml`, `README.md` (usage, the weights file), the MIT license, GitHub Actions (`cargo fmt
    --check`, `clippy -D warnings`, `test`).
 1. (built) The skeleton: the CLI, the config with its embedded defaults, `init`.
