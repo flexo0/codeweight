@@ -48,7 +48,8 @@ as a command, no `git2` / `gix`.
   grammar, the node kind → category list, the nesting constructs (each with its body: the children it nests, by
   field name or node kind, either listed or all but those listed, or by their place among the named children; and
   its chain, the children of its own kind that stay at its depth, for `else if`), the return, lambda and parenthesis
-  kinds, the wrappers (the statement kinds a return is looked through for its place: Rust's expression statement,
+  kinds, the cast, pattern and number kinds (for the `[conditions]`, the number ones for a negative literal too),
+  the wrappers (the statement kinds a return is looked through for its place: Rust's expression statement,
   Go's labeled one), the lists (a list of statements a grammar puts between a body and its statements, a return the
   last of it being its body's last: Go's `statement_list`),
   `operator` (a node's operator, by its run: `&&`, `+` / `-`, a comparison, a unary one, ...; a logical one is a

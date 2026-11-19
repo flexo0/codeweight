@@ -17,6 +17,9 @@ pub static JAVA: Lang = Lang {
     lists: &[],
     lambdas: &["lambda_expression"],
     parens: &["parenthesized_expression"],
+    casts: &["cast_expression"],
+    patterns: &[],
+    numbers: NUMBERS,
     operator,
     exempt,
     also_statement: |node| {
@@ -84,7 +87,7 @@ const NESTING: &[Nesting] = &[
     Nesting::body("lambda_expression"),
 ];
 
-/// The number literals, which a `-` makes a negative number, no operator.
+/// The number literals.
 const NUMBERS: &[&str] = &[
     "decimal_integer_literal",
     "hex_integer_literal",
@@ -688,5 +691,21 @@ mod tests {
             function(&weighed, "A.f"),
             100.0 + 19.0 + 13.0 + 1.0 + 18.0 + 11.0
         );
+    }
+
+    #[test]
+    fn the_conditions_weigh_casts_magic_numbers_and_each_unary() {
+        let added = testing::conditions_add(
+            &JAVA,
+            "class A {
+               void f() {
+                 int a = (int) x;      // a cast: operator 7
+                 boolean b = !!c;      // each unary: the second ! 7
+                 int d = 42 + 1;       // 42 magic: access 9; 1 not
+                 int e = -1;           // a negative 1: no operator, not magic
+               }
+             }",
+        );
+        assert_eq!(added, 7.0 + 7.0 + 9.0);
     }
 }

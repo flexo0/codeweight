@@ -17,6 +17,9 @@ pub static GO: Lang = Lang {
     lists: &["statement_list"],
     lambdas: &["func_literal"],
     parens: &["parenthesized_expression"],
+    casts: &["type_assertion_expression"],
+    patterns: &[],
+    numbers: NUMBERS,
     operator,
     exempt,
     also_statement,
@@ -75,7 +78,7 @@ const NESTING: &[Nesting] = &[
     Nesting::body("func_literal"),
 ];
 
-/// The number literals, which a `-` makes a negative number, no operator.
+/// The number literals.
 const NUMBERS: &[&str] = &["int_literal", "float_literal", "imaginary_literal"];
 
 /// A binary operator (`&^`, and not, as a bitwise and), a compound assignment, `-x` / `+x` / `!x` / `^x`, `i++` /
@@ -521,5 +524,20 @@ mod tests {
              }",
         );
         assert_eq!(function(&weighed, "f"), 100.0 + 13.0 + 7.0 + 7.0);
+    }
+
+    #[test]
+    fn the_conditions_weigh_type_assertions_magic_numbers_and_each_unary() {
+        let added = testing::conditions_add(
+            &GO,
+            "package p
+
+             func f() {
+               s := v.(string)   // a type assertion: operator 7
+               b := !!c          // the second ! 7
+               n := 0x10 + 1     // 0x10 magic: access 9
+             }",
+        );
+        assert_eq!(added, 7.0 + 7.0 + 9.0);
     }
 }

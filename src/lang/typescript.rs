@@ -14,6 +14,12 @@ pub static TYPESCRIPT: Lang = Lang {
     extensions: &["ts", "mts", "cts"],
     grammar: || tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
     kinds: kinds!(),
+    casts: &[
+        "as_expression",
+        "satisfies_expression",
+        "non_null_expression",
+        "type_assertion",
+    ],
     ..BASE
 };
 
@@ -24,6 +30,12 @@ pub static TSX: Lang = Lang {
     grammar: || tree_sitter_typescript::LANGUAGE_TSX.into(),
     // A JSX element is a call: it compiles to one (`jsx(...)`, `React.createElement(...)`).
     kinds: kinds!(("jsx_element", Call), ("jsx_self_closing_element", Call),),
+    // `<T>x` is JSX in TSX: its grammar has no type assertion.
+    casts: &[
+        "as_expression",
+        "satisfies_expression",
+        "non_null_expression",
+    ],
     ..BASE
 };
 
@@ -41,6 +53,10 @@ pub(super) const BASE: Lang = Lang {
     lists: &[],
     lambdas: LAMBDAS,
     parens: &["parenthesized_expression"],
+    // JavaScript's grammar has none; TypeScript and TSX set theirs.
+    casts: &[],
+    patterns: &[],
+    numbers: NUMBERS,
     operator,
     exempt,
     also_statement: |node| {
@@ -50,6 +66,9 @@ pub(super) const BASE: Lang = Lang {
     scope,
     tests: None,
 };
+
+/// The number literal.
+const NUMBERS: &[&str] = &["number"];
 
 /// The kind → category table both grammars share, TypeScript's type kinds over JavaScript's, and a grammar's own
 /// entries after it.
@@ -145,7 +164,7 @@ fn operator(node: Node) -> Option<Operator> {
     match node.kind() {
         "binary_expression" => Operator::of(token()?),
         "augmented_assignment_expression" => Operator::of_assignment(token()?),
-        "unary_expression" => Operator::unary(node.child_by_field_name("argument")?, &["number"]),
+        "unary_expression" => Operator::unary(node.child_by_field_name("argument")?, NUMBERS),
         "update_expression" => Some(Operator::Unary),
         _ => None,
     }
@@ -549,5 +568,19 @@ mod tests {
              }",
         );
         assert_eq!(function(&weighed, "f"), 100.0 + 19.0 + 13.0 + 11.0);
+    }
+
+    #[test]
+    fn the_conditions_weigh_casts_nullish_magic_numbers_and_each_unary() {
+        let added = testing::conditions_add(
+            &TYPESCRIPT,
+            "const a = x as T;        // a cast: operator 7
+             const b = <T>x;          // 7
+             const c = d!;            // 7
+             const e = f satisfies T; // 7
+             const g = h ?? i ?? 2;   // one run of ??, an operator 7, no bool_op 5; 2 magic: access 9
+             const j = !!k;           // the second ! 7",
+        );
+        assert_eq!(added, 28.0 + (7.0 - 5.0) + 9.0 + 7.0);
     }
 }

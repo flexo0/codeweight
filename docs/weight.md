@@ -84,3 +84,23 @@ total        = Σ weight(node) over the nodes that have a category
   heavier function, not a new one), and (path, kind, name) is unique, so the sort is total. A class and a method of
   the same name stay apart.
 - A weight is an `f64`; the text report shows at most two decimals.
+
+## The conditions
+
+The `[conditions]` table's rules weigh what a node's kind alone doesn't tell, each as an existing category, so they
+add no weight of their own. All are off by default: the pairs of milestone 15 asked for them, a tuning turns them on.
+
+- `casts`: a cast or type assertion is an `operator`, one per cast (no run): Java's `(T) x`, TS's `x as T`,
+  `x satisfies T`, `x!` and `<T>x` (TS only: TSX reads it as JSX), Rust's `x as T`, Go's `x.(T)`. A cast is
+  something to read and check, as an arithmetic operator is; without the rule an unneeded cast weighs nothing.
+  JavaScript and Python have none (Python's `cast(T, x)` is a call); Go's conversion `T(x)` is a call already.
+- `let_patterns`: Rust's `let` condition, the pattern `if let` / `while let` (or a let chain's `let`) tests, is an
+  `operator`, as the comparison it stands for (`if let Ok(_) = x` as `x.is_ok()` is a call) would be.
+- `magic_numbers`: a number literal whose value is neither 0 nor 1 is an `access`, as the named constant in its
+  place (`math.pi`) would be. The value is read past `_` separators, a radix prefix and a type suffix (`1_000`,
+  `0x1`, `1u8`, `1.0f`, `1L`, `1j`); a negative one (`-2`) is its literal's, the `-` no operator. Every literal
+  counts, a constant's definition and a case's label too.
+- `each_unary`: each unary operator counts, no run of them: `!!x` and `not not x` are 2 (as `Boolean(x)` is a call
+  and its argument), `-x` still 1.
+- `nullish_operator`: `??` and `??=` are an `operator` run, not a `bool_op`: a default value (as `unwrap_or` is a
+  call), not a branch of control flow; `a ?? b ?? c` is still one run.

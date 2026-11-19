@@ -188,4 +188,14 @@ mod tests {
         );
         assert_eq!(cases.file, 13.0 + 7.0);
     }
+
+    #[test]
+    fn the_conditions_weigh_as_typescript_s_but_casts() {
+        let added = testing::conditions_add(
+            &JAVASCRIPT,
+            "const g = h ?? 3;   // ??, an operator 7, no bool_op 5; 3 magic: access 9
+             const j = !!k;     // the second ! 7",
+        );
+        assert_eq!(added, (7.0 - 5.0) + 9.0 + 7.0);
+    }
 }

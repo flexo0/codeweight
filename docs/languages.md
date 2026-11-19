@@ -19,7 +19,8 @@ which are Java's as they stand.
   (`memo(() => ...)`, `(() => ...) as F`) and `export default () => ...` are lambdas.
 - `if` nests its consequence; its `else` is a clause beside it, whose block is deeper but whose `if` (`else if`)
   stays at the depth. `switch` cases as in Java. `for`, `for ... in / of`, `while`, `do` are loops.
-- `bool_op` counts runs of `&&`, `||` and `??` (a run of `??` is one, as of `&&`), `&&=`, `||=` and `??=` too.
+- `bool_op` counts runs of `&&`, `||` and `??` (a run of `??` is one, as of `&&`), `&&=`, `||=` and `??=` too;
+  `??` and `??=` are an `operator` under `[conditions] nullish_operator` ([weight.md](weight.md)).
 - `operator` counts `===` / `!==`, `in` and `instanceof` as comparisons, `typeof`, `void` and `delete` as unary
   operators. `access` counts a member (`a.b`, `a?.b`) and a subscript (`a[i]`).
 - A decorator weighs nothing of its own, as a Java annotation; a call in it (`@Input()`, `@Component({...})`) is a

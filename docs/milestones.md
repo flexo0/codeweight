@@ -1,8 +1,8 @@
 # Milestones
 
-Built: milestones 0-14 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
+Built: milestones 0-15 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
 `commit`, the reports, the tuned defaults, Rust, operators and accesses, JavaScript, Go, depth on the structure
-only, parameters, cases and arguments).
+only, parameters, cases and arguments, conditions).
 
 0. (built) The repo: `Cargo.toml`, `README.md` (usage, the weights file), the MIT license, GitHub Actions (`cargo fmt
    --check`, `clippy -D warnings`, `test`).
@@ -99,3 +99,19 @@ only, parameters, cases and arguments).
     for a `function` against a `lambda`, already two weights (function 1.5 alone fixes ESLint's
     `object-shorthand`). Seen and left: Rust's `if let Ok(_) = x` → `x.is_ok()` (the pattern weighs nothing), a
     slice weighing one access, `??` a `bool_op`, Rust's `as` casts weighing nothing, `!!x` one run of operators.
+15. (built) Conditions, for the same pairs: `[conditions]` ([weight.md](weight.md)), rules that weigh what a node's
+    kind alone doesn't tell, each as an existing category, all off by default so the defaults weigh as before until
+    a tuning turns them on. Each candidate was counted apart in a throwaway build and scored on part 3's objective
+    (3 per pair whose good side weighs more, 1 per tie; lower is better) over the 8,940 generated pairs, under the
+    defaults and under a rough tuning (call 0.2, operator 0.5, argument 0.2, case 1.5, jump 1.5, function 1.5):
+    `casts` −218 / −230 (typescript-eslint's `no-unnecessary-type-assertion`, Clippy's `unnecessary_cast`,
+    `zero_ptr`, `ptr_eq`), `let_patterns` −21 / −276 (Clippy's `redundant_pattern_matching`, 90 pairs no weight
+    could fix), `magic_numbers` −148 / −95 (Ruff's `FURB152`, Clippy's `from_str_radix_10`, `manual_div_ceil`),
+    `each_unary` −47 / −29 (ESLint's `no-extra-boolean-cast`, Ruff's `SIM208`), `nullish_operator` −28 / −24
+    (typescript-eslint's `no-unnecessary-boolean-literal-compare`); the last two break no pair. All five on: −469
+    under the defaults, the ok pairs 4,392 → 4,765. Left out: a `default` / `_` case weighing nothing, as an `else`
+    (−22 under the defaults but +39 tuned: Error Prone's `IfChainToSwitch` wants it, Clippy's `single_match` and
+    `match_single_binding` don't); a logical expression as a statement (`a || f();`) weighing a branch (−9, mixed);
+    an assignment repeating its target (`x = x + 1`) weighing an operator more (+18: ESLint tests both of its
+    rules' options). Seen and not a condition: ESLint's `one-var` and Ruff's `RET503` are options both ways, a
+    comprehension's `for` weighing a loop (Ruff's `FURB122`) a weight's matter.

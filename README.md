@@ -178,6 +178,13 @@ flat = ["call", "argument", "bool_op", "operator", "access", "parameter"]
 step = 0.2              # 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, then 1.0 each: a long list weighs more than its count
 max = 2.0
 
+[conditions]            # rules that weigh what a node's kind alone doesn't tell, as an existing category; all off
+casts = false           # a cast or type assertion (x as T, (T) x, x!, <T>x, x.(T)) is an operator
+let_patterns = false    # Rust's `if let` / `while let` pattern is an operator, as a comparison is
+magic_numbers = false   # a number literal but 0 and 1 is an access, as the named constant in its place would be
+each_unary = false      # each unary operator counts, no run of them: !!x is 2
+nullish_operator = false  # ?? and ??= are an operator, not a bool_op: a default value, no branch
+
 [weights]               # the base weight of each category, for every language
 statement = 1
 call      = 0.5
@@ -227,7 +234,9 @@ count, but a signature stays below its body. A function's own weight is a lambda
 weighs 3, its signature not most of it, and a class of getters and setters stays below one of logic. A `try` weighs
 1 (its body's nesting is its weight), a `catch` 2 (the other path, as a branch). A `switch` / `match` case weighs a
 branch's 2, and a call's arguments nothing of their own (`argument` 0, what is in them weighs): each is a category
-of its own, so a tuning can weigh a case apart from an `if` and a call by what it is passed.
+of its own, so a tuning can weigh a case apart from an `if` and a call by what it is passed. The `[conditions]` are
+rules that weigh what a node's kind alone doesn't tell (a cast, Rust's `if let` pattern, a magic number, `!!x`,
+`??`), each as an existing category; they are all off by default, so the defaults weigh as the categories alone.
 
 ### The weight
 

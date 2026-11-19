@@ -20,6 +20,9 @@ pub static RUST: Lang = Lang {
     lists: &[],
     lambdas: &["closure_expression"],
     parens: &["parenthesized_expression"],
+    casts: &["type_cast_expression"],
+    patterns: &["let_condition"],
+    numbers: NUMBERS,
     operator,
     exempt,
     also_statement: |node| tail(node) || value(node),
@@ -27,6 +30,9 @@ pub static RUST: Lang = Lang {
     scope,
     tests: Some(tests),
 };
+
+/// The number literals.
+const NUMBERS: &[&str] = &["integer_literal", "float_literal"];
 
 const KINDS: &[(&str, Category)] = &[
     // An `impl` block is a class's too (`scope`), but weighs nothing of its own: its type's declaration does.
@@ -130,9 +136,7 @@ fn operator(node: Node) -> Option<Operator> {
         "let_chain" => Some(Operator::And),
         "compound_assignment_expr" => Operator::of_assignment(token()?),
         "unary_expression" => match node.child(0)?.kind() {
-            "-" | "!" => {
-                Operator::unary(node.named_child(0)?, &["integer_literal", "float_literal"])
-            }
+            "-" | "!" => Operator::unary(node.named_child(0)?, NUMBERS),
             _ => None,
         },
         _ => None,
@@ -577,5 +581,20 @@ mod tests {
              }",
         );
         assert_eq!(function(&weighed, "f"), 100.0 + 9.0 + 9.0);
+    }
+
+    #[test]
+    fn the_conditions_weigh_casts_let_patterns_magic_numbers_and_each_unary() {
+        let added = testing::conditions_add(
+            &RUST,
+            "fn f() {
+               let a = b as u8;                 // a cast: operator 7
+               if let Some(_) = c {}            // a let pattern: operator 7
+               while let Some(x) = it.next() {} // 7
+               let d = !!e;                     // the second ! 7
+               let g = 255u8 + 1u8;             // 255 magic: access 9
+             }",
+        );
+        assert_eq!(added, 7.0 + 14.0 + 7.0 + 9.0);
     }
 }

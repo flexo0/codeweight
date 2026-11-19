@@ -78,6 +78,7 @@ pub struct Weigher<'c> {
     weights: &'c LangConfig,
     nesting: &'c config::Nesting,
     parameters: &'c config::Parameters,
+    conditions: &'c config::Conditions,
     grammar: tree_sitter::Language,
     /// By node kind id: its category, the language's table with the weights file's `node_kinds` over it.
     categories: Vec<Option<Category>>,
@@ -87,6 +88,8 @@ pub struct Weigher<'c> {
     lists: Vec<bool>,
     lambdas: Vec<bool>,
     parens: Vec<bool>,
+    /// By node kind id: a number literal, which may be a magic one (`[conditions] magic_numbers`).
+    numbers: Vec<bool>,
 }
 
 impl<'c> Weigher<'c> {
@@ -96,11 +99,21 @@ impl<'c> Weigher<'c> {
         let weights = config.lang(lang);
 
         let mut categories = vec![None; count];
+        let conditions = &config.conditions;
+        // The kinds a condition weighs, as an operator: the table's entries first, the user's over all.
+        let conditional = [
+            (conditions.casts, lang.casts),
+            (conditions.let_patterns, lang.patterns),
+        ]
+        .into_iter()
+        .filter(|(on, _)| *on)
+        .flat_map(|(_, kinds)| kinds.iter().map(|k| (*k, Some(Category::Operator))));
         let overrides = weights.node_kinds.iter().map(|(k, c)| (k.as_str(), *c));
         for (kind, category) in lang
             .kinds
             .iter()
             .map(|(k, c)| (*k, Some(*c)))
+            .chain(conditional)
             .chain(overrides)
         {
             for id in lang::named_kind_ids(&grammar, kind) {
@@ -127,12 +140,14 @@ impl<'c> Weigher<'c> {
         let lists = flags(lang.lists);
         let lambdas = flags(lang.lambdas);
         let parens = flags(lang.parens);
+        let numbers = flags(lang.numbers);
 
         Weigher {
             lang,
             weights,
             nesting: &config.nesting,
             parameters: &config.parameters,
+            conditions,
             grammar,
             categories,
             constructs,
@@ -141,6 +156,7 @@ impl<'c> Weigher<'c> {
             lists,
             lambdas,
             parens,
+            numbers,
         }
     }
 
@@ -207,9 +223,19 @@ impl<'c> Weigher<'c> {
 
             let operator = (self.lang.operator)(node);
             let category = match operator {
+                Some(Operator::Unary) if self.conditions.each_unary => Some(Category::Operator),
                 Some(op) if frame.operator == Some(op) => None,
+                Some(Operator::Nullish) if self.conditions.nullish_operator => {
+                    Some(Category::Operator)
+                }
                 Some(op) if op.is_logical() => Some(Category::BoolOp),
                 Some(_) => Some(Category::Operator),
+                None if self.conditions.magic_numbers
+                    && flag(&self.numbers, id)
+                    && is_magic(&lang::text(node, source)) =>
+                {
+                    Some(Category::Access)
+                }
                 None if (self.lang.exempt)(node, source) => None,
                 None => self.categories.get(id).copied().flatten().map(|category| {
                     if flag(&self.returns, id) && self.is_early_return(node, source) {
@@ -353,6 +379,46 @@ impl<'c> Weigher<'c> {
     }
 }
 
+/// Whether a number literal is a magic one: its value neither 0 nor 1 (`_` separators, a radix prefix and a type
+/// suffix aside: `1_000`, `0x1`, `1u8`, `1.0f`, `1L`, `1j`).
+fn is_magic(literal: &str) -> bool {
+    let text: String = literal
+        .chars()
+        .filter(|c| *c != '_')
+        .collect::<String>()
+        .to_ascii_lowercase();
+    let radix = match text.get(..2) {
+        Some("0x") => 16,
+        Some("0o") => 8,
+        Some("0b") => 2,
+        _ => 10,
+    };
+    let value = if radix == 10 {
+        // The mantissa and its exponent; what follows is a type suffix.
+        let end = text
+            .char_indices()
+            .find(|&(i, c)| {
+                !(c.is_ascii_digit()
+                    || c == '.'
+                    || (c == 'e'
+                        && text[i + 1..]
+                            .starts_with(|n: char| n.is_ascii_digit() || n == '-' || n == '+'))
+                    || ((c == '-' || c == '+') && text[..i].ends_with('e')))
+            })
+            .map_or(text.len(), |(i, _)| i);
+        text[..end].parse::<f64>().ok()
+    } else {
+        let digits = &text[2..];
+        let end = digits
+            .find(|c: char| !c.is_digit(radix))
+            .unwrap_or(digits.len());
+        u64::from_str_radix(&digits[..end], radix)
+            .ok()
+            .map(|v| v as f64)
+    };
+    value.is_none_or(|v| v != 0.0 && v != 1.0)
+}
+
 /// A kind's flag; `false` for a kind past the grammar's own (tree-sitter's error node).
 fn flag(flags: &[bool], id: usize) -> bool {
     flags.get(id).copied().unwrap_or(false)
@@ -371,4 +437,24 @@ struct Frame<'t> {
     operator: Option<Operator>,
     /// Whether it is test code, or inside some.
     test: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_magic;
+
+    #[test]
+    fn a_magic_number_is_one_but_0_and_1() {
+        for literal in [
+            "0", "1", "0.0", "1.", "1.0", "1_0e-1", "0x1", "0b0", "0o1", "1u8", "1.0f64", "1L",
+            "1d", "1j", "01",
+        ] {
+            assert!(!is_magic(literal), "{literal}");
+        }
+        for literal in [
+            "2", "3.14", "42u32", "1e3", "0x1f", "1_000", "0.5", ".5", "100L", "2j",
+        ] {
+            assert!(is_magic(literal), "{literal}");
+        }
+    }
 }

@@ -153,6 +153,23 @@ impl Parameters {
     }
 }
 
+/// The `[conditions]` table: rules that weigh what a node's kind alone doesn't tell, each weighing as an existing
+/// category. All off by default, so a file without the table weighs as the categories alone do.
+#[derive(Clone, Debug, Default, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Conditions {
+    /// A cast or type assertion (`x as T`, `(T) x`, `x!`, `<T>x`, `x.(T)`) is an `operator`.
+    pub casts: bool,
+    /// A pattern tested in a condition (Rust's `if let`, `while let`) is an `operator`, as a comparison is.
+    pub let_patterns: bool,
+    /// A number literal but 0 and 1 is an `access`, as the named constant in its place would be.
+    pub magic_numbers: bool,
+    /// Each unary operator counts, no run of them: `!!x` is 2.
+    pub each_unary: bool,
+    /// `??` and `??=` are an `operator`, not a `bool_op`: a default value, no branch.
+    pub nullish_operator: bool,
+}
+
 /// The `[files]` table: which files a folder walk weighs, and which are tests.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -180,6 +197,7 @@ impl LangConfig {
 pub struct Config {
     pub nesting: Nesting,
     pub parameters: Parameters,
+    pub conditions: Conditions,
     pub files: Files,
     languages: BTreeMap<&'static str, LangConfig>,
 }
@@ -291,6 +309,7 @@ impl Config {
         Ok(Config {
             nesting: raw.nesting,
             parameters: raw.parameters,
+            conditions: raw.conditions,
             files: raw.files,
             languages,
         })
@@ -332,6 +351,8 @@ pub fn repo_root(path: &Path) -> Option<PathBuf> {
 struct RawConfig {
     nesting: Nesting,
     parameters: Parameters,
+    #[serde(default)]
+    conditions: Conditions,
     weights: BTreeMap<String, f64>,
     #[serde(default)]
     languages: BTreeMap<String, RawLang>,
@@ -537,6 +558,21 @@ mod tests {
         assert!(error_of("[nesting]\nmodel = \"cubic\"\n").contains("cubic"));
         assert!(error_of("[nesting]\nflat = [\"calls\"]\n").contains("calls"));
         assert!(error_of("[parameters]\nstep = -0.1\n").contains("[parameters] step"));
+    }
+
+    #[test]
+    fn the_defaults_hold_every_condition_off() {
+        let defaults = parse_toml(DEFAULTS).unwrap();
+        let table = defaults["conditions"].as_table().unwrap();
+        assert_eq!(table.len(), 5);
+        assert!(table.values().all(|v| v.as_bool() == Some(false)));
+        assert_eq!(
+            Config::defaults().unwrap().conditions,
+            Conditions::default()
+        );
+        let mine = Config::from_str_over_defaults("[conditions]\ncasts = true\n").unwrap();
+        assert!(mine.conditions.casts && !mine.conditions.each_unary);
+        assert!(error_of("[conditions]\ncast = true\n").contains("cast"));
     }
 
     #[test]

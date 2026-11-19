@@ -33,6 +33,10 @@ Built (`config`, `config::find`):
   and that change would silently do nothing for that language. Tuning (milestone 7, [milestones.md](milestones.md))
   needed none; should one ever be wanted, the merge must first drop a default per-language key whose base key the
   user's file sets.
+- `[conditions]` are switches, `true` or `false`, all `false` in the defaults; a file on its own may leave the
+  table out (all off), as the engine's tests do. Each weighs a node as an existing category, so it adds no weight of
+  its own; a cast or pattern kind it makes an `operator` is the language's table's, under the user's `node_kinds`
+  (a kind mapped there wins). What each one weighs is [weight.md](weight.md)'s.
 - `[files]` is for what is weighed ([architecture.md](architecture.md), `source`).
 
 ```toml
@@ -46,6 +50,13 @@ flat = ["call", "argument", "bool_op", "operator", "access", "parameter"]
 [parameters]            # the parameter at place k (from 0) weighs parameter * min(1 + step * k, max)
 step = 0.2              # 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, then 1.0 each: a long list weighs more than its count
 max = 2.0
+
+[conditions]            # rules that weigh what a node's kind alone doesn't tell, as an existing category; all off
+casts = false           # a cast or type assertion (x as T, (T) x, x!, <T>x, x.(T)) is an operator
+let_patterns = false    # Rust's `if let` / `while let` pattern is an operator, as a comparison is
+magic_numbers = false   # a number literal but 0 and 1 is an access, as the named constant in its place would be
+each_unary = false      # each unary operator counts, no run of them: !!x is 2
+nullish_operator = false  # ?? and ??= are an operator, not a bool_op: a default value, no branch
 
 [weights]               # the base weight of each category, for every language
 statement = 1

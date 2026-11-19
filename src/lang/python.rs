@@ -20,6 +20,9 @@ pub static PYTHON: Lang = Lang {
     lists: &[],
     lambdas: &["lambda"],
     parens: &["parenthesized_expression"],
+    casts: &[],
+    patterns: &[],
+    numbers: NUMBERS,
     operator,
     exempt,
     also_statement,
@@ -27,6 +30,9 @@ pub static PYTHON: Lang = Lang {
     scope,
     tests: None,
 };
+
+/// The number literals.
+const NUMBERS: &[&str] = &["integer", "float"];
 
 const KINDS: &[(&str, Category)] = &[
     ("class_definition", Class),
@@ -135,9 +141,7 @@ fn operator(node: Node) -> Option<Operator> {
         "boolean_operator" | "binary_operator" => Operator::of(token()?),
         "augmented_assignment" => Operator::of_assignment(token()?),
         "comparison_operator" => Some(Operator::Comparison),
-        "unary_operator" => {
-            Operator::unary(node.child_by_field_name("argument")?, &["integer", "float"])
-        }
+        "unary_operator" => Operator::unary(node.child_by_field_name("argument")?, NUMBERS),
         "not_operator" => Some(Operator::Unary),
         _ => None,
     }
@@ -420,5 +424,18 @@ if x:                  # branch 10
 ",
         );
         assert_eq!(weighed.file, 13.0 + 9.0 + 12.0);
+    }
+
+    #[test]
+    fn the_conditions_weigh_magic_numbers_and_each_unary() {
+        let added = testing::conditions_add(
+            &PYTHON,
+            "
+a = not not b      # the second not 7
+c = d * 3.14       # 3.14 magic: access 9
+e = x[0] + 1       # 0 and 1 not
+",
+        );
+        assert_eq!(added, 7.0 + 9.0);
     }
 }

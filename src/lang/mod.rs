@@ -51,6 +51,14 @@ pub struct Lang {
     pub lambdas: &'static [&'static str],
     /// The kinds of a parenthesized expression, which a run of like operators goes through.
     pub parens: &'static [&'static str],
+    /// The kinds of a cast or type assertion: an `operator` under `[conditions] casts`.
+    pub casts: &'static [&'static str],
+    /// The kinds of a pattern tested in a condition (Rust's `let` in `if let`): an `operator` under
+    /// `[conditions] let_patterns`.
+    pub patterns: &'static [&'static str],
+    /// The kinds of a number literal: a `-` before one makes a negative number, no operator, and one but 0 and 1 is
+    /// an `access` under `[conditions] magic_numbers`.
+    pub numbers: &'static [&'static str],
     /// The operator of an expression, if the node is one: a binary or unary operator, a compound assignment, `++`.
     pub operator: fn(Node) -> Option<Operator>,
     /// Whether a node weighs nothing although its kind has a category: the cases its kind can't tell (a docstring,
@@ -323,7 +331,8 @@ pub fn text(node: Node, source: &[u8]) -> String {
 /// nest(depth) = 1 + depth, depth capped at 3), each sum worked out by hand: `weight × nest(depth)` per element. The
 /// snippets about operators and accesses are weighed with those at 7 and 9 (`weigh_expressions`), those about
 /// parameters with `parameter` 10 (`weigh_parameters`): 10, 15, 20, then 20 each, by their place; those about
-/// arguments with `argument` 4 (`weigh_arguments`), those about cases with `case` 7 (`weigh_cases`).
+/// arguments with `argument` 4 (`weigh_arguments`), those about cases with `case` 7 (`weigh_cases`), those about
+/// the `[conditions]` with every one on and `operator` 7, `access` 9 (`conditions_add`).
 #[cfg(test)]
 pub mod testing {
     use super::{Lang, ScopeKind};
@@ -374,6 +383,22 @@ pub mod testing {
         let weighed = weigh_under(lang, &weights, text);
         assert!(weighed.clean, "syntax errors in {text}");
         weighed
+    }
+
+    /// What every `[conditions]` rule on adds to a snippet's total, under the test weights with `operator` 7 and
+    /// `access` 9 (the categories the conditions weigh as).
+    pub fn conditions_add(lang: &'static Lang, text: &str) -> f64 {
+        let off = weigh_expressions(lang, text);
+        let on = WEIGHTS
+            .replacen("operator  = 0", "operator  = 7", 1)
+            .replacen("access    = 0", "access    = 9", 1)
+            + "\n[conditions]\ncasts = true\nlet_patterns = true\nmagic_numbers = true\neach_unary = true\n\
+               nullish_operator = true\n";
+        let config = Config::from_str_alone(&on).unwrap();
+        assert!(config.conditions.casts && config.conditions.nullish_operator);
+        let on = weigh_under(lang, &on, text);
+        assert!(on.clean, "syntax errors in {text}");
+        on.total - off.total
     }
 
     /// A snippet that parses cleanly, weighed under the test weights with `argument` 4.
@@ -454,7 +479,10 @@ mod tests {
                 .chain(lang.wrappers.iter().copied())
                 .chain(lang.lists.iter().copied())
                 .chain(lang.lambdas.iter().copied())
-                .chain(lang.parens.iter().copied());
+                .chain(lang.parens.iter().copied())
+                .chain(lang.casts.iter().copied())
+                .chain(lang.patterns.iter().copied())
+                .chain(lang.numbers.iter().copied());
             for kind in kinds {
                 assert!(is_named_kind(&grammar, kind), "{}: {kind}", lang.name);
             }
