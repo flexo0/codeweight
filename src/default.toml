@@ -32,10 +32,10 @@ assignments = true        # a plain = is an operator, as += is; a declaration's 
 
 [weights]               # the base weight of each category, for every language; tuned on the example pairs
 statement = 1
-call      = 0.55        # a call: a chain of getters is long, not hard
-macro     = 1.75        # a macro (Rust's `println!(...)`): what is in it is tokens, unparsed
-constructor = 0.9       # new Foo(), new int[3], this(...), a struct literal: a new object, a bit above a call
-argument  = 0.05        # each argument of a call: little of its own, what is in it weighs
+call      = 0.49        # a call: a chain of getters is long, not hard
+macro     = 1.6         # a macro (Rust's `println!(...)`): what is in it is tokens, unparsed
+constructor = 0.949     # new Foo(), new int[3], this(...), a struct literal: a new object, above a call
+argument  = 0.316       # each argument of a call, besides what is in it: f(a, b) is 1.1
 branch    = 3           # if, ternary
 case      = 2.4         # each switch / match case, `default` too: below a branch, as a switch has one more
 loop      = 3
@@ -44,9 +44,9 @@ catch     = 2
 lambda    = 1.65
 function  = 1.55        # a declaration, below a lambda: a getter is 2.55, not mostly its signature
 class     = 5
-bool_op   = 0.55        # each && / || operator: a && b is 1, a && b && c and a && b || c are 2
+bool_op   = 0.544       # each && / || operator: a && b is 1, a && b && c and a && b || c are 2
 jump      = 1.35        # break, continue, an early return, throw
-operator  = 0.6         # each operator: a + b is 1, a + b - c and (a + b) * c are 2; x += 1, i++, -x, !x; !!x is 2
+operator  = 0.556       # each operator: a + b is 1, a + b - c and (a + b) * c are 2; x += 1, i++, -x, !x; !!x is 2
 access    = 0.5         # each field access or index, by its place in a row ([accesses]): a.b.c is 0.5 + 1; not a
                         # call's callee, nor this.x
 parameter = 1.65        # a function's or lambda's parameter, the first; not self / this / a receiver

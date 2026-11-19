@@ -68,8 +68,8 @@ total        = Σ weight(node) over the nodes that have a category
 - `argument`: each argument of a node that is a `call` or a `constructor`, at its depth (flat by default): the items of its
   `arguments` field's list, or one for a lone argument in its place (Python's `f(x for x in xs)`, a tagged
   template's string); none of a call without the field (a Rust macro, whose arguments are tokens; a JSX element;
-  `new A` without parentheses), nor of what is no call (Java's enum constant `X(1)`, Python's class bases). It is 0.05
-  by default, little of its own, what is in an argument weighs (milestone 13); it is a category for the pairs, where a call lighter than the operators it replaces has 0 or 1 arguments (`f.is_some()`
+  `new A` without parentheses), nor of what is no call (Java's enum constant `X(1)`, Python's class bases). It is 0.316
+  by default (0.05 from milestone 13 to 24), besides what is in an argument; it is a category for the pairs, where a call lighter than the operators it replaces has 0 or 1 arguments (`f.is_some()`
   for `f != None`) and a heavier one 2 (`Objects.equals(a, b)` for `a == b`). The engine counts them
   (`lang::arguments`), the same for every language.
 - `macro`: a macro invocation (Rust's `println!(...)`, `vec![...]`, `matches!(...)`), apart from `call`. Its

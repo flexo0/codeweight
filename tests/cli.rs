@@ -46,23 +46,23 @@ fn init_writes_the_defaults_and_never_overwrites() {
 fn scan_reports_a_java_file_s_functions_and_classes() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("A.java"), JAVA).unwrap();
-    // Under the defaults: A.f is function 1.55, statement 1 and call 0.55; A is class 5.
+    // Under the defaults: A.f is function 1.55, statement 1 and call 0.49; A is class 5.
     let output = codeweight(dir.path(), &["scan", "A.java"]);
     assert!(output.status.success(), "{}", stderr(&output));
-    assert_eq!(stdout(&output), "8.1\n");
+    assert_eq!(stdout(&output), "8.04\n");
 
     let verbose = codeweight(dir.path(), &["scan", "A.java", "--verbose"]);
     assert_eq!(
         stdout(&verbose),
-        "total 8.1\n  5  A.java  A (class)\n3.1  A.java  A.f\n"
+        "total 8.04\n   5  A.java  A (class)\n3.04  A.java  A.f\n"
     );
     let short = codeweight(dir.path(), &["scan", "-v", "A.java"]);
     assert_eq!(stdout(&short), stdout(&verbose));
 
     let by_file = codeweight(dir.path(), &["scan", "A.java", "--by", "file"]);
-    assert_eq!(stdout(&by_file), "total 8.1\n8.1  A.java\n");
+    assert_eq!(stdout(&by_file), "total 8.04\n8.04  A.java\n");
     let top = codeweight(dir.path(), &["scan", "A.java", "--top", "1"]);
-    assert_eq!(stdout(&top), "total 8.1\n5  A.java  A (class)\n");
+    assert_eq!(stdout(&top), "total 8.04\n5  A.java  A (class)\n");
 }
 
 #[test]
@@ -124,17 +124,17 @@ fn the_weights_file_is_looked_up_in_order() {
         stdout(&output).lines().next().unwrap().to_string()
     };
 
-    assert_eq!(total(&elsewhere, &[]), "total 8.1");
+    assert_eq!(total(&elsewhere, &[]), "total 8.04");
     fs::write(repo.join("codeweight.toml"), "[weights]\nclass = 100\n").unwrap();
-    assert_eq!(total(&elsewhere, &[]), "total 103.1");
+    assert_eq!(total(&elsewhere, &[]), "total 103.04");
     fs::write(
         elsewhere.join("codeweight.toml"),
         "[weights]\nclass = 1000\n",
     )
     .unwrap();
-    assert_eq!(total(&elsewhere, &[]), "total 1003.1");
+    assert_eq!(total(&elsewhere, &[]), "total 1003.04");
     fs::write(elsewhere.join("given.toml"), "[weights]\nfunction = 0\n").unwrap();
-    assert_eq!(total(&elsewhere, &["--config", "given.toml"]), "total 6.55");
+    assert_eq!(total(&elsewhere, &["--config", "given.toml"]), "total 6.49");
 }
 
 #[test]
@@ -142,13 +142,13 @@ fn scan_walks_a_folder_its_excludes_and_tests_left_out_and_scan_tests_weighs_the
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     for (file, text) in [
-        // Under the defaults: f is function 1.55, statement 1, call 0.55.
+        // Under the defaults: f is function 1.55, statement 1, call 0.49.
         ("src/a.py", "def f():\n    g()\n"),
-        // h is function 1.55, its call 0.55 and its body's statement 1; the file's declaration statement 1.
+        // h is function 1.55, its call 0.49 and its body's statement 1; the file's declaration statement 1.
         ("src/b.ts", "export const h = () => g();\n"),
-        // A test: t is 3.1.
+        // A test: t is 3.04.
         ("tests/test_a.py", "def t():\n    g()\n"),
-        // c is 3.1, its test u 3.1 (a class 5 and a function 1.55 of the tests, each with a statement and a call).
+        // c is 3.04, its test u 3.04 (a class 5 and a function 1.55 of the tests, each with a statement and a call).
         (
             "src/c.rs",
             "fn c() { g(); }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn u() { c(); }\n}\n",
@@ -163,34 +163,34 @@ fn scan_walks_a_folder_its_excludes_and_tests_left_out_and_scan_tests_weighs_the
 
     let output = codeweight(root, &["scan", "."]);
     assert!(output.status.success(), "{}", stderr(&output));
-    assert_eq!(stdout(&output), "10.3\n");
+    assert_eq!(stdout(&output), "10.12\n");
 
     let verbose = codeweight(root, &["scan", ".", "--verbose"]);
     assert_eq!(
         stdout(&verbose),
-        "total 10.3\n\
-         3.1  src/a.py  f\n\
-         3.1  src/b.ts  h\n\
-         3.1  src/c.rs  c\n\
-         \x20 1  src/b.ts  (file)\n"
+        "total 10.12\n\
+         3.04  src/a.py  f\n\
+         3.04  src/b.ts  h\n\
+         3.04  src/c.rs  c\n\
+         \x20  1  src/b.ts  (file)\n"
     );
 
     let by_file = codeweight(root, &["scan", "src", "tests", "--by", "file"]);
     assert_eq!(
         stdout(&by_file),
-        "total 10.3\n4.1  src/b.ts\n3.1  src/a.py\n3.1  src/c.rs\n"
+        "total 10.12\n4.04  src/b.ts\n3.04  src/a.py\n3.04  src/c.rs\n"
     );
 
     let tests = codeweight(root, &["scan-tests", "."]);
     assert!(tests.status.success(), "{}", stderr(&tests));
-    assert_eq!(stdout(&tests), "11.2\n");
+    assert_eq!(stdout(&tests), "11.08\n");
     let tests = codeweight(root, &["scan-tests", ".", "-v"]);
     assert_eq!(
         stdout(&tests),
-        "total 11.2\n\
-         \x20 5  src/c.rs  tests (class)\n\
-         3.1  src/c.rs  tests.u\n\
-         3.1  tests/test_a.py  t\n"
+        "total 11.08\n\
+         \x20  5  src/c.rs  tests (class)\n\
+         3.04  src/c.rs  tests.u\n\
+         3.04  tests/test_a.py  t\n"
     );
 }
 
@@ -199,9 +199,9 @@ fn scan_weighs_go_its_test_files_and_vendor_and_generated_files_left_out() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     for (file, text) in [
-        // Under the defaults: the method S.m is function 1.55, statement 1, call 0.55 (its receiver no parameter).
+        // Under the defaults: the method S.m is function 1.55, statement 1, call 0.49 (its receiver no parameter).
         ("pkg/a.go", "package pkg\n\nfunc (s *S) m() { g() }\n"),
-        // A test file: TestM is 3.1 and its parameter 1.65.
+        // A test file: TestM is 3.04 and its parameter 1.65.
         (
             "pkg/a_test.go",
             "package pkg\n\nfunc TestM(t *testing.T) { g() }\n",
@@ -217,9 +217,9 @@ fn scan_weighs_go_its_test_files_and_vendor_and_generated_files_left_out() {
 
     let output = codeweight(root, &["scan", ".", "-v"]);
     assert!(output.status.success(), "{}", stderr(&output));
-    assert_eq!(stdout(&output), "total 3.1\n3.1  pkg/a.go  S.m\n");
+    assert_eq!(stdout(&output), "total 3.04\n3.04  pkg/a.go  S.m\n");
     let tests = codeweight(root, &["scan-tests", ".", "-v"]);
-    assert_eq!(stdout(&tests), "total 4.75\n4.75  pkg/a_test.go  TestM\n");
+    assert_eq!(stdout(&tests), "total 4.69\n4.69  pkg/a_test.go  TestM\n");
 }
 
 /// A throwaway git repo, isolated from the user's and the system's git config.
@@ -318,7 +318,7 @@ fn commit_weighs_the_root_commit_against_the_empty_tree() {
     // The total delta alone, without `-v`.
     let output = codeweight(repo.path(), &["commit", "HEAD"]);
     assert!(output.status.success(), "{}", stderr(&output));
-    assert_eq!(stdout(&output), "+3.1\n");
+    assert_eq!(stdout(&output), "+3.04\n");
 }
 
 #[test]
@@ -416,19 +416,19 @@ fn commit_leaves_out_the_excludes_and_its_tests_and_commit_tests_weighs_the_test
         assert!(output.status.success(), "{}", stderr(&output));
         stdout(&output)
     };
-    // Under the defaults: f, c and u are 3.1 (function 1.55, statement 1, call 0.55), the class of the tests 5.
+    // Under the defaults: f, c and u are 3.04 (function 1.55, statement 1, call 0.49), the class of the tests 5.
     assert_eq!(
         run(&["commit", "HEAD"]),
-        "total +6.2\n\
-         +3.1  added    a.py  f\n\
-         +3.1  added    c.rs  c\n"
+        "total +6.08\n\
+         +3.04  added    a.py  f\n\
+         +3.04  added    c.rs  c\n"
     );
     assert_eq!(
         run(&["commit-tests", "HEAD"]),
-        "total +11.2\n\
-         \x20 +5  added    c.rs  tests (class)\n\
-         +3.1  added    c.rs  tests.u\n\
-         +3.1  added    tests/test_a.py  f\n"
+        "total +11.08\n\
+         \x20  +5  added    c.rs  tests (class)\n\
+         +3.04  added    c.rs  tests.u\n\
+         +3.04  added    tests/test_a.py  f\n"
     );
 
     // The uncommitted changes: a test heavier by a statement and a call.
@@ -436,7 +436,7 @@ fn commit_leaves_out_the_excludes_and_its_tests_and_commit_tests_weighs_the_test
     assert_eq!(run(&["pre-commit"]), "total 0\n");
     assert_eq!(
         run(&["pre-commit-tests"]),
-        "total +1.55\n+1.55  heavier  tests/test_a.py  f\n"
+        "total +1.49\n+1.49  heavier  tests/test_a.py  f\n"
     );
 }
 
@@ -596,11 +596,11 @@ fn scan_s_json_lists_the_rows_of_its_text() {
     );
     assert!(output.status.success(), "{}", stderr(&output));
     let json: serde_json::Value = serde_json::from_str(&stdout(&output)).unwrap();
-    // Under the defaults, as in the text: A is 5, A.f 3.1.
+    // Under the defaults, as in the text: A is 5, A.f 3.04.
     assert_eq!(
         json,
         serde_json::json!({
-            "total": 8.1,
+            "total": 8.04,
             "by": "function",
             "rows": [{"path": "A.java", "kind": "class", "name": "A", "line": 1, "weight": 5.0}],
             "warnings": []

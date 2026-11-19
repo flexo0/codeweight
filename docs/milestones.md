@@ -1,9 +1,9 @@
 # Milestones
 
-Built: milestones 0-24 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
+Built: milestones 0-25 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
 `commit`, the reports, the tuned defaults, Rust, operators and accesses, JavaScript, Go, depth on the structure
 only, parameters, cases and arguments, conditions, the defaults tuned on pairs, macros, nested ternaries and default cases, assignments, constructors, a constructor category, every operator counted, the
-defaults tuned again by rule, a row of accesses).
+defaults tuned again by rule, a row of accesses, the defaults tuned without a grid).
 
 0. (built) The repo: `Cargo.toml`, `README.md` (usage, the weights file), the MIT license, GitHub Actions (`cargo fmt
    --check`, `clippy -D warnings`, `test`).
@@ -243,3 +243,13 @@ defaults tuned again by rule, a row of accesses).
     `PERF403`, typescript-eslint's `prefer-string-starts-ends-with`, Clippy's `unnecessary_operation`: `l[:]` at
     0.5 now below `l.copy()`); `step` and `max` move no pair (with `access` at 1: 33). Clippy's `unnecessary_fold`
     `L224` now better. The corpora not re-checked.
+25. (built) The defaults tuned by a search without a grid. `pairs/tune.py` had kept every weight on a grid of 0.05
+    and mutated one or two genes at a time; it now shakes every real value at once, x to x × U(0.9, 1.1) +
+    U(-0.1, 0.1), the shake falling to a hundredth by the last of 3000 generations, to 0.001 (a generation on
+    every core, about 30 s a search). A difference up to 0.01, a report's last digit, is now a tie (it was 1e-6:
+    the search had split ties by 0.001, `bool_op` 0.548 against `operator` 0.549, which the reports show the
+    same). With `access` kept at 0.5 (as asked in milestone 24; free, it goes to 1.1): `call` 0.55 → 0.49, `macro`
+    1.75 → 1.6, `constructor` 0.9 → 0.949, `argument` 0.05 → 0.316, `bool_op` 0.55 → 0.544, `operator` 0.6 →
+    0.556. On the pairs: worse 39 → 35, ties 13 → 5. On five folds of the rules it holds out as the old search
+    does (42 worse; ties 10 → 6): the better fit is mostly the pairs' own (`pairs/README.md`). The corpora not
+    re-checked.

@@ -193,10 +193,10 @@ assignments = true        # a plain = is an operator, as += is; a declaration's 
 
 [weights]               # the base weight of each category, for every language
 statement = 1
-call      = 0.55
-macro     = 1.75
-constructor = 0.9
-argument  = 0.05
+call      = 0.49
+macro     = 1.6
+constructor = 0.949
+argument  = 0.316
 branch    = 3
 case      = 2.4
 loop      = 3
@@ -205,9 +205,9 @@ catch     = 2
 lambda    = 1.65
 function  = 1.55
 class     = 5
-bool_op   = 0.55
+bool_op   = 0.544
 jump      = 1.35
-operator  = 0.6
+operator  = 0.556
 access    = 0.5
 parameter = 1.65
 
@@ -232,12 +232,12 @@ test_globs = [
 The defaults were first tuned on real Java, TypeScript and Python code (and re-checked on Rust) so that the heaviest
 functions are the hardest ones, then on 8,971 example pairs, a bad snippet and its fix from the linters' tests, so
 that the fix weighs less (milestone 16 of [docs/milestones.md](docs/milestones.md)), and again on those pairs
-thinned to 1,453, each rule weighing alike (milestone 23). A call weighs about half a statement (a long chain of
+thinned to 1,453, each rule weighing alike (milestone 23), by a search without a grid (milestone 25). A call weighs about half a statement (a long chain of
 getters or a flat run of setters is long, not hard), and each level of nesting adds one and a half base weights (`factor = 1.5`), so nested control flow outweighs flat code. Nesting multiplies the
 structure only (statements, branches, loops, jumps, lambdas, ...): a statement's parts, its calls, operators,
 accesses and `&&` / `||` (`[nesting] flat`), weigh the same at any depth, since their statement already weighs its
 depth; a long statement in a loop is long, not harder for the loop. A branch weighs 3, a loop 3, a jump 1.35 (an
-early return or a `break` is a path to follow). An operator weighs 0.6. A field access or an index weighs 0.5, 1, then 1.5 by
+early return or a `break` is a path to follow). An operator weighs 0.556, a `&&` / `||` 0.544. A field access or an index weighs 0.5, 1, then 1.5 by
 its place in a row (`[accesses]`): `a.b` 0.5, `a.b.c.d` 0.5 + 1 + 1.5, so reaching deep through objects weighs more
 than its count. A parameter weighs 1.65 to
 3.3 by its place (each next 0.3 times more, from the fifth on 3.3): three weigh 6.4, seven 19.5, so a long list
@@ -245,9 +245,9 @@ weighs more than its count. A function's own weight is 1.55, below a lambda's 1.
 signature not most of it, and a class of getters and setters stays below one of logic. A `try` weighs 0.95 (its
 body's nesting is its weight), a `catch` 2 (the other path, as a branch). A `switch` / `match` case weighs 2.4, below
 an `if`'s 3, and its default nothing, as an `else`: a switch weighs less than the if-chain it replaces. A ternary
-chained in a ternary's alternative (`a ? x : b ? y : z`) nests, where an `else if` doesn't. A call's argument 0.05,
-what is in it weighs. A Rust macro (`println!(...)`) weighs 1.75, about three calls: what is in it isn't parsed,
-so it weighs for its content. A constructor (`new Foo()`, `new int[3]`, a struct literal) weighs 0.9, a bit above
+chained in a ternary's alternative (`a ? x : b ? y : z`) nests, where an `else if` doesn't. A call weighs 0.49 and each of its
+arguments 0.316 besides what is in it: `f(a, b)` is 1.1. A Rust macro (`println!(...)`) weighs 1.6, about three calls: what is in it isn't parsed,
+so it weighs for its content. A constructor (`new Foo()`, `new int[3]`, a struct literal) weighs 0.949, above
 a call: it makes a new object, where a call asks one. The `[conditions]` are rules that weigh what a node's kind alone doesn't tell (a cast, Rust's
 `if let` pattern, a magic number, `!!x`, `??`, a nested ternary, a default case), each as an existing category; the
 defaults turn on all but `??` as an operator, and a weights file on its own that leaves the table out weighs as the categories alone.
