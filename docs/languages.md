@@ -1,7 +1,7 @@
 # The languages
 
 What each language's elements are, where it adds to or differs from the general rules ([weight.md](weight.md)),
-which are Java's as they stand. Every constructor is a `constructor` (milestone 21): Java's `new Foo()`, an array's `new int[3]` /
+which are Java's as they stand. Every constructor is a `constructor`: Java's `new Foo()`, an array's `new int[3]` /
 `new Integer[] {1, 2}` (a bare `{1, 2}` initializer is none) and `this(...)` / `super(...)`, TS's and JS's `new`,
 Rust's struct literal, Go's composite literal; Python's `Foo()` stays a `call`, no syntax telling it from a
 function's.

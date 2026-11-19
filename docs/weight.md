@@ -30,12 +30,12 @@ total        = Σ weight(node) over the nodes that have a category
   nests its body; a member class or method doesn't, whatever the depth of classes around it. Depth isn't reset at a
   function: a method of a class in an `if` in a method counts both.
 - `case`: each case of a `switch` or a `match` (`default` and `_` too), apart from `branch` (an `if`, a ternary),
-  so a tuning on pairs of code (a snippet and its refactoring, milestone 14) can weigh the two apart. By default it
+  so a tuning on pairs of code (a snippet and its refactoring) can weigh the two apart. By default it
   weighs less than a branch, and the default case nothing (`[conditions] free_default`), as an `else`: a switch
   weighs less than the if-chain it replaces.
 - `bool_op`: one per `&&` / `||` operator: `a && b` is 1, `a && b && c` and `a && b || c` are 2,
   `(a && b) || (c && d)` is 3. Every logical operator counts, in a condition or not; like operators in a row are no
-  run that counts once (milestone 22: every operator is something to read). Java's `&` / `|` are not logical (they can't be told from bitwise ones without types): they are bitwise
+  run that counts once (every operator is something to read). Java's `&` / `|` are not logical (they can't be told from bitwise ones without types): they are bitwise
   operators. The rule is the language's `operator` hook, whatever its node kind's table entry is.
 - `operator`: one per operator, by the `bool_op` rule: `a + b` is 1, `a + b + c` and `(b + c) * d` are 2,
   `a * b + c * d` is 3. The operators are the arithmetic ones (`+ -`, `* / %`, Python's `//` and `@`, `**`), the
@@ -69,17 +69,17 @@ total        = Σ weight(node) over the nodes that have a category
   `arguments` field's list, or one for a lone argument in its place (Python's `f(x for x in xs)`, a tagged
   template's string); none of a call without the field (a Rust macro, whose arguments are tokens; a JSX element;
   `new A` without parentheses), nor of what is no call (Java's enum constant `X(1)`, Python's class bases). It is 0.316
-  by default (0.05 from milestone 13 to 24), besides what is in an argument; it is a category for the pairs, where a call lighter than the operators it replaces has 0 or 1 arguments (`f.is_some()`
+  by default, besides what is in an argument; it is a category for the pairs, where a call lighter than the operators it replaces has 0 or 1 arguments (`f.is_some()`
   for `f != None`) and a heavier one 2 (`Objects.equals(a, b)` for `a == b`). The engine counts them
   (`lang::arguments`), the same for every language.
 - `macro`: a macro invocation (Rust's `println!(...)`, `vec![...]`, `matches!(...)`), apart from `call`. Its
   arguments are a token tree tree-sitter doesn't parse, so what is in it weighs nothing, nor does it count any
-  `argument`: the macro weighs for its content. It is flat by default, as `call`. The pairs (milestone 17) replace
+  `argument`: the macro weighs for its content. It is flat by default, as `call`. The example pairs replace
   `matches!(x, P)` by a call (`x.is_ipv4()`), which with a macro weighing a call's 0.55 came out heavier.
 - `constructor`: a constructor, apart from `call`: Java's `new Foo()`, an array's `new int[3]` / `new T[] {...}`
   and `this(...)` / `super(...)`, TS's and JS's `new`, Rust's struct literal (`P { x: 1 }`), Go's composite
   literal (`P{X: 1}`, `[]int{1}`). It makes a new object where a method call asks one, so it weighs a bit more,
-  0.9 against 0.55 (milestone 21, by judgment: for Java's, TS's and Go's the pairs score the same for any weight
+  0.9 against 0.55 (by judgment: for Java's, TS's and Go's the pairs score the same for any weight
   from 0.25 to 5). Its
   arguments count as a call's; it is flat by default, as `call`. A bare initializer (`int[] a = {1, 2}`, a Go
   element's own `{...}`) is none, and Python's `Foo()` and Rust's tuple struct `P(1)` stay calls: no syntax tells
@@ -106,9 +106,9 @@ total        = Σ weight(node) over the nodes that have a category
 ## The conditions
 
 The `[conditions]` table's rules weigh what a node's kind alone doesn't tell, each as an existing category, so they
-add no weight of their own. The pairs of milestone 15 asked for them; the tuning on them (milestone 16) turned on all
-but `nullish_operator`, which there only ties 11 pairs more; `nested_ternaries` and `free_default` were asked for
-(milestone 18), `assignments` too (milestone 19). A file on its own that leaves the table out has them all off.
+add no weight of their own. The example pairs asked for them; the tuning on them ([milestones.md](milestones.md)) turned on
+all but `nullish_operator`, which there only ties 11 pairs more; `nested_ternaries`, `free_default` and
+`assignments` were asked for later, once the tuned pairs were read. A file on its own that leaves the table out has them all off.
 
 - `casts`: a cast or type assertion is an `operator`, one per cast (no run): Java's `(T) x`, TS's `x as T`,
   `x satisfies T`, `x!` and `<T>x` (TS only: TSX reads it as JSX), Rust's `x as T`, Go's `x.(T)`. A cast is
