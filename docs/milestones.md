@@ -1,8 +1,8 @@
 # Milestones
 
-Built: milestones 0-15 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
+Built: milestones 0-16 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
 `commit`, the reports, the tuned defaults, Rust, operators and accesses, JavaScript, Go, depth on the structure
-only, parameters, cases and arguments, conditions).
+only, parameters, cases and arguments, conditions, the defaults tuned on pairs).
 
 0. (built) The repo: `Cargo.toml`, `README.md` (usage, the weights file), the MIT license, GitHub Actions (`cargo fmt
    --check`, `clippy -D warnings`, `test`).
@@ -115,3 +115,32 @@ only, parameters, cases and arguments, conditions).
     an assignment repeating its target (`x = x + 1`) weighing an operator more (+18: ESLint tests both of its
     rules' options). Seen and not a condition: ESLint's `one-var` and Ruff's `RET503` are options both ways, a
     comprehension's `for` weighing a loop (Ruff's `FURB122`) a weight's matter.
+16. (built) The defaults tuned on the example pairs, the 8,940 generated ones and the 31 picked by hand, by the
+    objective of milestones 14 and 15 (3 per pair whose good side weighs more, 1 per tie; lower is better), with a
+    simple evolutionary algorithm: `pairs/tune.py`, outside the repo beside the pairs. A snippet's weight is linear
+    in its counts, so codeweight runs once per count, not per candidate: a run per category and depth cap, per
+    parameter cap and per flat category under each of the 32 sets of conditions give each pair's difference, from
+    which any candidate's objective is exact (checked against codeweight's own totals). The search, a (40 + 80)
+    one on a grid of 0.05 from the defaults, tunes every base weight (`statement` fixed at 1), the nesting, the
+    parameters and the conditions; among candidates of one objective the closest to the defaults wins, and what no
+    pair asks for is moved back. 6077 → 4890: 764 pairs whose good side weighs more → 561, 3785 ties → 3207 (3172
+    pairs tie under any weights, no count differs), the ok ones 4,422 → 5,203; every source gained but ESLint's
+    worse ones, 58 → 65 (Clippy 1950 → 1343, Error Prone 1239 → 1062, typescript-eslint 1149 → 950, Ruff 533 →
+    419). Held out, 30% of the pairs fit on the rest: 1818 → 1474, as much as the fit. Seeds differ by 4889 to
+    4925 and trade weights the pairs barely tell apart: they fix ratios only where a rule's pairs trade two
+    categories. What moved, with what putting it back costs: `operator` 0.25 → 0.6 (+402; an operator replaced by
+    a call: Clippy's `redundant_pattern_matching`, `partialeq_to_none`, `manual_div_ceil`), `argument` 0 → 0.05
+    (+157, mostly ties: a call of fewer arguments), `parameter` 0.5 → 1.65 with `step` 0.3 (+72 and +12, mostly
+    Error Prone's `SingleValueTestParameter` and Clippy's `unnecessary_fold`), `branch` 2 → 3 (+64, Error Prone's
+    `IfChainToSwitch`), `access` 0.25 → 1.85 (+61: an index, a slice or a field-by-field copy replaced by a call,
+    Error Prone's `StringSplitter`, staticcheck's `S1016`, Ruff's `FURB131`), `jump` 1 → 1.55 (+58, Error Prone's
+    `RefactorSwitch`), `bool_op` 1 → 0.55 (+33), `call` 0.5 → 0.55 (+25), `function` 2 → 1.55 (+21), `try` 1 →
+    0.95 (+3); four conditions on, `let_patterns` (+277 off), `casts` (+238), `magic_numbers` (+145),
+    `each_unary` (+38), and `nullish_operator` off (on: 11 ties more). The nesting factor is the corpora's choice,
+    not the pairs': any factor from 1.05 to 1.5 scores 4890 (1.0 scores 4892, 2.65 4889), and against the former
+    defaults GraphHopper's, OptaPlanner's and jsprit's top 200 functions keep their order best at 1.5 (Spearman
+    0.957 to 0.966, at 1.05 about 0.94; codeweight's own 0.989), 18 or 19 of their top 20 kept. A re-tune that
+    moves each gene back to the defaults while the pairs allow it takes the factor to 1.05: check the corpora
+    first. The totals rise by ×1.3 (codeweight) to ×1.7, ×1.4 to ×1.5 on the Java corpora. The hand-picked
+    pairs are as before: 30 hold, `java/nested_ternary_to_switch` still doesn't. This repo's own `codeweight.toml`
+    keeps its weights, as its commits' weights were measured by them.

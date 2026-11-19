@@ -55,7 +55,7 @@ total        = Σ weight(node) over the nodes that have a category
   qualified name in a type or an import is no access: the grammars parse those as other kinds (`scoped_identifier`,
   `nested_type_identifier`, `dotted_name`), and a Python annotation's, which is an expression, is exempt. Both are the language's `exempt` hook.
 - `parameter`: a function's or lambda's parameter weighs by its place, from 0: `parameter × min(1 + step × place,
-  max)` (`[parameters]`), so with the defaults 0.5, 0.6, ..., 1.0 from the sixth on. A long list weighs more than
+  max)` (`[parameters]`), so with the defaults 1.65, 2.15, 2.64, 3.14, then 3.3 from the fifth on. A long list weighs more than
   its count, as each next parameter is one more to keep in mind and to pass in order. A receiver is none (Java's
   `A this`, TS's `this: T`, Python's first `self` / `cls`, Rust's `self`, Go's receiver), as an access to it is none,
   and neither is a function type's (`(a: A) => B`, `fn(i32)`, Go's `func(int)`), which declares no function. Each
@@ -88,7 +88,8 @@ total        = Σ weight(node) over the nodes that have a category
 ## The conditions
 
 The `[conditions]` table's rules weigh what a node's kind alone doesn't tell, each as an existing category, so they
-add no weight of their own. All are off by default: the pairs of milestone 15 asked for them, a tuning turns them on.
+add no weight of their own. The pairs of milestone 15 asked for them; the tuning on them (milestone 16) turned on all
+but `nullish_operator`, which there only ties 11 pairs more. A file on its own that leaves the table out has them all off.
 
 - `casts`: a cast or type assertion is an `operator`, one per cast (no run): Java's `(T) x`, TS's `x as T`,
   `x satisfies T`, `x!` and `<T>x` (TS only: TSX reads it as JSX), Rust's `x as T`, Go's `x.(T)`. A cast is

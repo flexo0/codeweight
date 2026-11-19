@@ -183,8 +183,9 @@ fn rows_of(
     rows
 }
 
-/// The rows of a report, those that weigh (or change) nothing left out, sorted by `key` (the heaviest first),
-/// then by path and name, the first `top` kept.
+/// The rows of a report, those that weigh (or change) nothing left out, sorted by `key` as shown (the heaviest
+/// first; two weights a float's hair apart that print the same are equal), then by path and name, the first `top`
+/// kept.
 fn sorted(mut rows: Vec<Row>, key: fn(&Row) -> f64, top: Option<usize>) -> Vec<Row> {
     rows.retain(|row| rounded(key(row)) != 0.0);
     let mut keyed: Vec<(Row, String)> = rows
@@ -195,7 +196,7 @@ fn sorted(mut rows: Vec<Row>, key: fn(&Row) -> f64, top: Option<usize>) -> Vec<R
         })
         .collect();
     keyed.sort_by(|(a, a_label), (b, b_label)| {
-        let (ka, kb) = (key(a), key(b));
+        let (ka, kb) = (rounded(key(a)), rounded(key(b)));
         kb.abs()
             .partial_cmp(&ka.abs())
             .unwrap_or(Ordering::Equal)
@@ -566,6 +567,29 @@ mod tests {
         assert_eq!(signed(0.001), "0");
         assert_eq!(rounded(-0.001), 0.0);
         assert!(rounded(-0.001).is_sign_positive());
+    }
+
+    #[test]
+    fn weights_that_print_the_same_sort_by_path() {
+        let row = |path: &str, after: f64| Row {
+            path: path.into(),
+            old_path: None,
+            kind: None,
+            name: None,
+            line: None,
+            was: false,
+            is: true,
+            before: 0.0,
+            after,
+        };
+        // 0.1 + 0.2 is a float's hair above 0.3; both show as 0.3.
+        let rows = sorted(
+            vec![row("b.py", 0.1 + 0.2), row("a.py", 0.3)],
+            |r| r.after,
+            None,
+        );
+        let paths: Vec<&str> = rows.iter().map(|r| r.path.as_str()).collect();
+        assert_eq!(paths, ["a.py", "b.py"]);
     }
 
     fn weighed(file: f64, entries: &[(ScopeKind, &str, f64)]) -> Weighed {

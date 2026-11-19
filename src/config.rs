@@ -154,7 +154,8 @@ impl Parameters {
 }
 
 /// The `[conditions]` table: rules that weigh what a node's kind alone doesn't tell, each weighing as an existing
-/// category. All off by default, so a file without the table weighs as the categories alone do.
+/// category. All off when a file on its own leaves the table out, so it weighs as the categories alone do; the
+/// defaults turn four on (the tuning on the example pairs).
 #[derive(Clone, Debug, Default, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Conditions {
@@ -561,17 +562,22 @@ mod tests {
     }
 
     #[test]
-    fn the_defaults_hold_every_condition_off() {
+    fn the_defaults_hold_every_condition_four_on() {
         let defaults = parse_toml(DEFAULTS).unwrap();
         let table = defaults["conditions"].as_table().unwrap();
         assert_eq!(table.len(), 5);
-        assert!(table.values().all(|v| v.as_bool() == Some(false)));
         assert_eq!(
             Config::defaults().unwrap().conditions,
-            Conditions::default()
+            Conditions {
+                casts: true,
+                let_patterns: true,
+                magic_numbers: true,
+                each_unary: true,
+                nullish_operator: false,
+            }
         );
-        let mine = Config::from_str_over_defaults("[conditions]\ncasts = true\n").unwrap();
-        assert!(mine.conditions.casts && !mine.conditions.each_unary);
+        let mine = Config::from_str_over_defaults("[conditions]\ncasts = false\n").unwrap();
+        assert!(!mine.conditions.casts && mine.conditions.each_unary);
         assert!(error_of("[conditions]\ncast = true\n").contains("cast"));
     }
 

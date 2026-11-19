@@ -7,39 +7,39 @@
 
 [nesting]
 model = "linear"        # linear: 1 + factor * depth; exponential: factor ^ depth
-factor = 1.0
+factor = 1.5            # each level of nesting adds one and a half base weights
 max_depth = 10          # depth is capped here, so one deep method can't explode the total
 # weigh the same at any depth: a statement's or a declaration's parts, which it already weighs the depth of
 flat = ["call", "argument", "bool_op", "operator", "access", "parameter"]
 
 [parameters]            # the parameter at place k (from 0) weighs parameter * min(1 + step * k, max)
-step = 0.2              # 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, then 1.0 each: a long list weighs more than its count
+step = 0.3              # 1.65, 2.15, 2.64, 3.14, then 3.3 each: a long list weighs more than its count
 max = 2.0
 
-[conditions]            # rules that weigh what a node's kind alone doesn't tell, as an existing category; all off
-casts = false           # a cast or type assertion (x as T, (T) x, x!, <T>x, x.(T)) is an operator
-let_patterns = false    # Rust's `if let` / `while let` pattern is an operator, as a comparison is
-magic_numbers = false   # a number literal but 0 and 1 is an access, as the named constant in its place would be
-each_unary = false      # each unary operator counts, no run of them: !!x is 2
+[conditions]            # rules that weigh what a node's kind alone doesn't tell, as an existing category
+casts = true            # a cast or type assertion (x as T, (T) x, x!, <T>x, x.(T)) is an operator
+let_patterns = true     # Rust's `if let` / `while let` pattern is an operator, as a comparison is
+magic_numbers = true    # a number literal but 0 and 1 is an access, as the named constant in its place would be
+each_unary = true       # each unary operator counts, no run of them: !!x is 2
 nullish_operator = false  # ?? and ??= are an operator, not a bool_op: a default value, no branch
 
-[weights]               # the base weight of each category, for every language
+[weights]               # the base weight of each category, for every language; tuned on the example pairs
 statement = 1
-call      = 0.5         # a call, `new`: a chain of getters is long, not hard
-argument  = 0           # each argument of a call: none of their own by default, what is in them weighs
-branch    = 2           # if, ternary
-case      = 2           # each switch / match case, `default` too: by default a branch's
+call      = 0.55        # a call, `new`: a chain of getters is long, not hard
+argument  = 0.05        # each argument of a call: little of its own, what is in it weighs
+branch    = 3           # if, ternary
+case      = 2           # each switch / match case, `default` too: below a branch, as a switch has one more
 loop      = 3
-try       = 1           # the body's nesting is its weight; a catch is the other path
+try       = 0.95        # the body's nesting is its weight; a catch is the other path
 catch     = 2
 lambda    = 2
-function  = 2           # a declaration, as a lambda: a getter is 3, not mostly its signature
+function  = 1.55        # a declaration, below a lambda: a getter is 2.55, not mostly its signature
 class     = 5
-bool_op   = 1           # each run of like && / || operators: a && b && c is 1, a && b || c is 2
-jump      = 1           # break, continue, an early return, throw
-operator  = 0.25        # each run of like operators: a + b - c is 1, (a + b) * c is 2; x += 1, i++, -x, !x
-access    = 0.25        # each field access or index: a.b.c is 2, a[i] is 1; not a call's callee, nor this.x
-parameter = 0.5         # a function's or lambda's parameter, the first; not self / this / a receiver
+bool_op   = 0.55        # each run of like && / || operators: a && b && c is 1, a && b || c is 2
+jump      = 1.55        # break, continue, an early return, throw
+operator  = 0.6         # each run of like operators: a + b - c is 1, (a + b) * c is 2; x += 1, i++, -x, !x
+access    = 1.85        # each field access or index: a.b.c is 2, a[i] is 1; not a call's callee, nor this.x
+parameter = 1.65        # a function's or lambda's parameter, the first; not self / this / a receiver
 
 # A file of your own may also override [weights] for one language, and map a node kind to a category. The defaults
 # hold none of these, so a [weights] key you set reaches every language.

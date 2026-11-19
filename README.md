@@ -169,39 +169,39 @@ you set reaches every language):
 ```toml
 [nesting]
 model = "linear"        # linear: 1 + factor * depth; exponential: factor ^ depth
-factor = 1.0
+factor = 1.5            # each level of nesting adds one and a half base weights
 max_depth = 10          # depth is capped here, so one deep method can't explode the total
 # weigh the same at any depth: a statement's or a declaration's parts, which it already weighs the depth of
 flat = ["call", "argument", "bool_op", "operator", "access", "parameter"]
 
 [parameters]            # the parameter at place k (from 0) weighs parameter * min(1 + step * k, max)
-step = 0.2              # 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, then 1.0 each: a long list weighs more than its count
+step = 0.3              # 1.65, 2.15, 2.64, 3.14, then 3.3 each: a long list weighs more than its count
 max = 2.0
 
-[conditions]            # rules that weigh what a node's kind alone doesn't tell, as an existing category; all off
-casts = false           # a cast or type assertion (x as T, (T) x, x!, <T>x, x.(T)) is an operator
-let_patterns = false    # Rust's `if let` / `while let` pattern is an operator, as a comparison is
-magic_numbers = false   # a number literal but 0 and 1 is an access, as the named constant in its place would be
-each_unary = false      # each unary operator counts, no run of them: !!x is 2
+[conditions]            # rules that weigh what a node's kind alone doesn't tell, as an existing category
+casts = true            # a cast or type assertion (x as T, (T) x, x!, <T>x, x.(T)) is an operator
+let_patterns = true     # Rust's `if let` / `while let` pattern is an operator, as a comparison is
+magic_numbers = true    # a number literal but 0 and 1 is an access, as the named constant in its place would be
+each_unary = true       # each unary operator counts, no run of them: !!x is 2
 nullish_operator = false  # ?? and ??= are an operator, not a bool_op: a default value, no branch
 
 [weights]               # the base weight of each category, for every language
 statement = 1
-call      = 0.5
-argument  = 0
-branch    = 2
+call      = 0.55
+argument  = 0.05
+branch    = 3
 case      = 2
 loop      = 3
-try       = 1
+try       = 0.95
 catch     = 2
 lambda    = 2
-function  = 2
+function  = 1.55
 class     = 5
-bool_op   = 1
-jump      = 1
-operator  = 0.25
-access    = 0.25
-parameter = 0.5
+bool_op   = 0.55
+jump      = 1.55
+operator  = 0.6
+access    = 1.85
+parameter = 1.65
 
 [languages.java.weights]            # yours only: a language's overrides of [weights]
 lambda = 3
@@ -221,22 +221,24 @@ test_globs = [
 ]
 ```
 
-The defaults were tuned on real Java, TypeScript and Python code (and re-checked on Rust) so that the heaviest functions are the hardest
-ones: a call weighs half a statement (a long chain of getters or a flat run of setters is long, not hard), and each
-level of nesting adds a whole base weight (`factor = 1.0`), so nested control flow outweighs flat code. Nesting
-multiplies the structure only (statements, branches, loops, jumps, lambdas, ...): a statement's parts, its calls,
-operators, accesses and `&&` / `||` (`[nesting] flat`), weigh the same at any depth, since their statement already
-weighs its depth; a long statement in a loop is long, not harder for the loop. An
-operator and a field access weigh a quarter: `a = (b + c) * d` weighs more than `a = b`, `obj.a.b` more than
-`obj.a`, but an expression's detail stays below its control flow. A parameter weighs 0.5 to 1 by its place (the
-first 0.5, each next 0.1 more, from the sixth on 1): three weigh 1.8, seven 5.5, so a long list weighs more than its
-count, but a signature stays below its body. A function's own weight is a lambda's, 2: a getter
-weighs 3, its signature not most of it, and a class of getters and setters stays below one of logic. A `try` weighs
-1 (its body's nesting is its weight), a `catch` 2 (the other path, as a branch). A `switch` / `match` case weighs a
-branch's 2, and a call's arguments nothing of their own (`argument` 0, what is in them weighs): each is a category
-of its own, so a tuning can weigh a case apart from an `if` and a call by what it is passed. The `[conditions]` are
-rules that weigh what a node's kind alone doesn't tell (a cast, Rust's `if let` pattern, a magic number, `!!x`,
-`??`), each as an existing category; they are all off by default, so the defaults weigh as the categories alone.
+The defaults were first tuned on real Java, TypeScript and Python code (and re-checked on Rust) so that the heaviest
+functions are the hardest ones, then on 8,971 example pairs, a bad snippet and its fix from the linters' tests, so
+that the fix weighs less (milestone 16 of [docs/milestones.md](docs/milestones.md)). A call weighs about half a
+statement (a long chain of getters or a flat run of setters is long, not hard), and each level of nesting adds one
+and a half base weights (`factor = 1.5`), so nested control flow outweighs flat code. Nesting multiplies the
+structure only (statements, branches, loops, jumps, lambdas, ...): a statement's parts, its calls, operators,
+accesses and `&&` / `||` (`[nesting] flat`), weigh the same at any depth, since their statement already weighs its
+depth; a long statement in a loop is long, not harder for the loop. A branch weighs 3, a loop 3, a jump 1.55 (an
+early return or a `break` is a path to follow). An operator weighs 0.6 and a field access or an index 1.85: the
+pairs replace an index, a slice or a field-by-field copy by a call (`s[0] === "a"` by `s.startsWith("a")`). A parameter weighs 1.65 to
+3.3 by its place (each next 0.3 times more, from the fifth on 3.3): three weigh 6.4, seven 19.5, so a long list
+weighs more than its count. A function's own weight is 1.55, below a lambda's 2: a getter weighs 2.55, its
+signature not most of it, and a class of getters and setters stays below one of logic. A `try` weighs 0.95 (its
+body's nesting is its weight), a `catch` 2 (the other path, as a branch). A `switch` / `match` case weighs 2, below
+an `if`'s 3, as a switch has one case more than the if-chain it replaces (its default); a call's argument 0.05,
+what is in it weighs. The `[conditions]` are rules that weigh what a node's kind alone doesn't tell (a cast, Rust's
+`if let` pattern, a magic number, `!!x`, `??`), each as an existing category; the defaults turn on all but `??` as
+an operator, and a weights file on its own that leaves the table out weighs as the categories alone.
 
 ### The weight
 
