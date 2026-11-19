@@ -1,8 +1,8 @@
 # Milestones
 
-Built: milestones 0-21 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
+Built: milestones 0-22 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
 `commit`, the reports, the tuned defaults, Rust, operators and accesses, JavaScript, Go, depth on the structure
-only, parameters, cases and arguments, conditions, the defaults tuned on pairs, macros, nested ternaries and default cases, assignments, constructors, a constructor category).
+only, parameters, cases and arguments, conditions, the defaults tuned on pairs, macros, nested ternaries and default cases, assignments, constructors, a constructor category, every operator counted).
 
 0. (built) The repo: `Cargo.toml`, `README.md` (usage, the weights file), the MIT license, GitHub Actions (`cargo fmt
    --check`, `clippy -D warnings`, `test`).
@@ -206,3 +206,13 @@ only, parameters, cases and arguments, conditions, the defaults tuned on pairs, 
     (`T { 0: v }` against `T(v)`, a constructor against a call) now better. Its arguments count as a call's, it is flat as `call`;
     `tests/weights.toml` sets it to a call's 2, with a snippet test per language at its own value; this repo's own
     `codeweight.toml` to its call's 0.5.
+22. (built) Every operator counts, as asked after a chained assignment (`x = (x.field = new Foo())`) was seen to
+    weigh one `=`: like operators in a row were one run (milestone 9's rule, after Cognitive Complexity's for
+    `&&` / `||`), now each is one, `bool_op` and `operator` alike: `a && b && c` is 2, `a + b - c` 2, `!!x` 2,
+    `a = b = c` 2, Python's chained `a < b < c` 2 and a Rust let chain a `&&` per link (`Lang::chains`, an operator
+    per operand after the first). `[conditions] each_unary`, which counted each unary operator out of its run, is
+    gone with the runs, and so are `Lang::parens` and the engine's operator of the enclosing expression; the
+    `Operator` enum keeps only what tells the categories apart (logical, `??`, other, a plain `=`). On the pairs:
+    124 → 123 (worse 37 → 36, ties 13 → 15), Error Prone's `RefactorSwitch` `L209-8` now better (4 `=` against 2),
+    Staticcheck's `QF1005` (`math.Pow(x*2, 2)` against `x * 2 * x * 2`) now worse; the weights stay (`operator`
+    0.6 is still the best, `bool_op` 0.2 would score 120). The corpora not re-checked.

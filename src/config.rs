@@ -175,8 +175,6 @@ pub struct Conditions {
     pub let_patterns: bool,
     /// A number literal but 0 and 1 is an `access`, as the named constant in its place would be.
     pub magic_numbers: bool,
-    /// Each unary operator counts, no run of them: `!!x` is 2.
-    pub each_unary: bool,
     /// `??` and `??=` are an `operator`, not a `bool_op`: a default value, no branch.
     pub nullish_operator: bool,
     /// A ternary chained in a ternary's alternative (`a ? x : b ? y : z`) nests, as one in its consequence does,
@@ -584,14 +582,13 @@ mod tests {
     fn the_defaults_hold_their_conditions() {
         let defaults = parse_toml(DEFAULTS).unwrap();
         let table = defaults["conditions"].as_table().unwrap();
-        assert_eq!(table.len(), 8);
+        assert_eq!(table.len(), 7);
         assert_eq!(
             Config::defaults().unwrap().conditions,
             Conditions {
                 casts: true,
                 let_patterns: true,
                 magic_numbers: true,
-                each_unary: true,
                 nullish_operator: false,
                 nested_ternaries: true,
                 free_default: true,
@@ -599,7 +596,7 @@ mod tests {
             }
         );
         let mine = Config::from_str_over_defaults("[conditions]\ncasts = false\n").unwrap();
-        assert!(!mine.conditions.casts && mine.conditions.each_unary);
+        assert!(!mine.conditions.casts && mine.conditions.magic_numbers);
         assert!(error_of("[conditions]\ncast = true\n").contains("cast"));
     }
 

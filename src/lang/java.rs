@@ -16,7 +16,7 @@ pub static JAVA: Lang = Lang {
     wrappers: &[],
     lists: &[],
     lambdas: &["lambda_expression"],
-    parens: &["parenthesized_expression"],
+    chains: &[],
     casts: &["cast_expression"],
     patterns: &[],
     numbers: NUMBERS,
@@ -128,8 +128,8 @@ fn operator(node: Node) -> Option<Operator> {
         "binary_expression" => Operator::of(token()?),
         "assignment_expression" => Operator::of_assignment(token()?),
         "unary_expression" => Operator::unary(node.child_by_field_name("operand")?, NUMBERS),
-        "update_expression" => Some(Operator::Unary),
-        "instanceof_expression" => Some(Operator::Comparison),
+        "update_expression" => Some(Operator::Other),
+        "instanceof_expression" => Some(Operator::Other),
         _ => None,
     }
 }
@@ -262,42 +262,43 @@ mod tests {
     }
 
     #[test]
-    fn a_run_of_like_logical_operators_is_one_bool_op() {
+    fn each_logical_operator_is_one_bool_op() {
         let weighed = weigh(
             "class A {
                void f() {
-                 boolean r = a && b && c;    // statement 1, one run: 5
-                 r = a && b || c;            // 1, two runs: 10
-                 r = (a && b) || (c && d);   // 1, three runs: 15
-                 r = !(a && b) && c;         // 1, a negation starts a run: 10
-                 r = a || g(b || c);         // 1, a call's argument starts a run: 10, call 2
+                 boolean r = a && b && c;    // statement 1, two: 10
+                 r = a && b || c;            // 1, two: 10
+                 r = (a && b) || (c && d);   // 1, three: 15
+                 r = !(a && b) && c;         // 1, two: 10
+                 r = a || g(b || c);         // 1, two: 10, call 2
                  r = a & b | c;              // 1, not logical: 0
                }
              }",
         );
         assert_eq!(
             function(&weighed, "A.f"),
-            100.0 + 6.0 + 11.0 + 16.0 + 11.0 + 13.0 + 1.0
+            100.0 + 11.0 + 11.0 + 16.0 + 11.0 + 13.0 + 1.0
         );
     }
 
     #[test]
-    fn a_run_of_like_operators_is_one_operator() {
+    fn each_operator_is_one_operator() {
         let weighed = testing::weigh_expressions(
             &JAVA,
             "class A {
                void f() {
                  int x = b;                // statement 1
-                 x = b + c;                // 1, one run: 7
-                 x = (b + c) * d;          // 1, two runs: 14
-                 x = a + b - c;            // 1, `+` and `-` are one run: 7
-                 x = a * b + c * d;        // 1, three runs: 21
-                 x += b + c;               // 1, a compound assignment and its like operand: 7
+                 x = b + c;                // 1, one: 7
+                 x = (b + c) * d;          // 1, two: 14
+                 x = a + b - c;            // 1, two: 14
+                 x = a * b + c * d;        // 1, three: 21
+                 x += b + c;               // 1, a compound assignment and its operand's: 14
                  x = -1;                   // 1, a negative number: 0
                  x = -y;                   // 1, 7
                  x++;                      // 1, 7
                  boolean r = a < b && !(c instanceof D);  // 1, bool_op 5, `<`, `!`, instanceof: 21
                  r = a & b | c;            // 1, bitwise: 14
+                 r = !!r;                  // 1, each !: 14
                  if (x > 0) {              // branch 10, 7 at 0
                    x = x * 2;              // (1 + 7) × 2 at 1
                  }
@@ -310,13 +311,14 @@ mod tests {
                 + 1.0
                 + 8.0
                 + 15.0
-                + 8.0
+                + 15.0
                 + 22.0
-                + 8.0
+                + 15.0
                 + 1.0
                 + 8.0
                 + 8.0
                 + 27.0
+                + 15.0
                 + 15.0
                 + 17.0
                 + 16.0
@@ -744,7 +746,7 @@ mod tests {
                  int y = 1;               // a declaration's initializer: none
                  y = 2;                   // operator 7 at 0
                  y += 3;                  // a compound one is an operator either way
-                 a = b = 4;               // one run: 7
+                 a = b = 4;               // each: 14
                  switch (x) {
                    case 1 -> y = 5;       // at 1: 14
                    default -> g();
@@ -752,7 +754,7 @@ mod tests {
                }
              }",
         );
-        assert_eq!(added, 7.0 + 7.0 + 14.0);
+        assert_eq!(added, 7.0 + 14.0 + 14.0);
     }
 
     #[test]
@@ -800,18 +802,17 @@ mod tests {
     }
 
     #[test]
-    fn the_conditions_weigh_casts_magic_numbers_and_each_unary() {
+    fn the_conditions_weigh_casts_and_magic_numbers() {
         let added = testing::conditions_add(
             &JAVA,
             "class A {
                void f() {
                  int a = (int) x;      // a cast: operator 7
-                 boolean b = !!c;      // each unary: the second ! 7
                  int d = 42 + 1;       // 42 magic: access 9; 1 not
                  int e = -1;           // a negative 1: no operator, not magic
                }
              }",
         );
-        assert_eq!(added, 7.0 + 7.0 + 9.0);
+        assert_eq!(added, 7.0 + 9.0);
     }
 }

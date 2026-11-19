@@ -87,7 +87,8 @@ pub struct Weigher<'c> {
     wrappers: Vec<bool>,
     lists: Vec<bool>,
     lambdas: Vec<bool>,
-    parens: Vec<bool>,
+    /// By node kind id: an operator chaining its operands, an operator per operand after the first.
+    chains: Vec<bool>,
     /// By node kind id: a number literal, which may be a magic one (`[conditions] magic_numbers`).
     numbers: Vec<bool>,
 }
@@ -139,7 +140,7 @@ impl<'c> Weigher<'c> {
         let wrappers = flags(lang.wrappers);
         let lists = flags(lang.lists);
         let lambdas = flags(lang.lambdas);
-        let parens = flags(lang.parens);
+        let chains = flags(lang.chains);
         let numbers = flags(lang.numbers);
 
         Weigher {
@@ -155,7 +156,7 @@ impl<'c> Weigher<'c> {
             wrappers,
             lists,
             lambdas,
-            parens,
+            chains,
             numbers,
         }
     }
@@ -184,7 +185,6 @@ impl<'c> Weigher<'c> {
             depth: 0,
             entry: None,
             in_function: false,
-            operator: None,
             test: false,
         }];
         let mut children = Vec::new();
@@ -221,20 +221,15 @@ impl<'c> Weigher<'c> {
                 in_function |= scope.kind == ScopeKind::Function;
             }
 
-            // A plain `=` weighs beside the node's own category (Go's assignment is a statement), never in its
-            // place; a run of them (`a = b = c`) is one.
-            let raw_operator = (self.lang.operator)(node);
-            let operator = raw_operator.filter(|op| *op != Operator::Assign);
-            let assigns = self.conditions.assignments
-                && raw_operator == Some(Operator::Assign)
-                && frame.operator != Some(Operator::Assign);
-            let category = match operator {
-                Some(Operator::Unary) if self.conditions.each_unary => Some(Category::Operator),
-                Some(op) if frame.operator == Some(op) => None,
+            // Each operator counts, one in a chain of them too (`a + b + c` is 2, `a = b = c` 2). A plain `=`
+            // weighs beside the node's own category (Go's assignment is a statement), never in its place.
+            let operator = (self.lang.operator)(node);
+            let assigns = self.conditions.assignments && operator == Some(Operator::Assign);
+            let category = match operator.filter(|op| *op != Operator::Assign) {
                 Some(Operator::Nullish) if self.conditions.nullish_operator => {
                     Some(Category::Operator)
                 }
-                Some(op) if op.is_logical() => Some(Category::BoolOp),
+                Some(Operator::Logical | Operator::Nullish) => Some(Category::BoolOp),
                 Some(_) => Some(Category::Operator),
                 None if self.conditions.magic_numbers
                     && flag(&self.numbers, id)
@@ -271,11 +266,20 @@ impl<'c> Weigher<'c> {
                         }
                     }),
             };
+            let times = match operator {
+                Some(_) if flag(&self.chains, id) => {
+                    lang::count_children(node, |_| true).saturating_sub(1)
+                }
+                _ => 1,
+            };
             let weight = category
+                .map(|c| (c, times))
                 .into_iter()
-                .chain((self.lang.also_statement)(node).then_some(Category::Statement))
-                .chain(assigns.then_some(Category::Operator))
-                .map(|c| self.weights.weight(c) * self.nesting.factor_of(c, frame.depth))
+                .chain((self.lang.also_statement)(node).then_some((Category::Statement, 1)))
+                .chain(assigns.then_some((Category::Operator, 1)))
+                .map(|(c, n)| {
+                    n as f64 * self.weights.weight(c) * self.nesting.factor_of(c, frame.depth)
+                })
                 .sum::<f64>()
                 + self.parameters((self.lang.parameters)(node, source), frame.depth)
                 + match category {
@@ -292,11 +296,6 @@ impl<'c> Weigher<'c> {
                 }
             }
 
-            let child_operator = match raw_operator {
-                Some(_) => raw_operator,
-                None if flag(&self.parens, id) => frame.operator,
-                None => None,
-            };
             // A node that declares a function or class (a named lambda) nests as one, not as its construct.
             let construct = match declares {
                 Some(_) => None,
@@ -340,7 +339,6 @@ impl<'c> Weigher<'c> {
                     depth: frame.depth + u32::from(deeper),
                     entry,
                     in_function,
-                    operator: child_operator,
                     test,
                 });
             }
@@ -460,8 +458,6 @@ struct Frame<'t> {
     entry: Option<usize>,
     /// Whether it is inside a function, so a function or class declared here nests.
     in_function: bool,
-    /// The operator of the expression it is an operand of (through parentheses), if any.
-    operator: Option<Operator>,
     /// Whether it is test code, or inside some.
     test: bool,
 }

@@ -19,7 +19,7 @@ pub static RUST: Lang = Lang {
     wrappers: &["expression_statement"],
     lists: &[],
     lambdas: &["closure_expression"],
-    parens: &["parenthesized_expression"],
+    chains: &["let_chain"],
     casts: &["type_cast_expression"],
     patterns: &["let_condition"],
     numbers: NUMBERS,
@@ -134,13 +134,13 @@ const BARE: &[&str] = &[
     "continue_expression",
 ];
 
-/// A binary operator, a let chain (`if let Some(x) = a && x > 0`, a run of `&&`), an assignment, `-x` /
+/// A binary operator, a let chain (`if let Some(x) = a && x > 0`, a `&&` per link), an assignment, `-x` /
 /// `!x`. A dereference (`*x`) and a borrow (`&x`) are none: plumbing, not arithmetic.
 fn operator(node: Node) -> Option<Operator> {
     let token = || node.child_by_field_name("operator").map(|op| op.kind());
     match node.kind() {
         "binary_expression" => Operator::of(token()?),
-        "let_chain" => Some(Operator::And),
+        "let_chain" => Some(Operator::Logical),
         "compound_assignment_expr" => Operator::of_assignment(token()?),
         "assignment_expression" => Some(Operator::Assign),
         "unary_expression" => match node.child(0)?.kind() {
@@ -368,7 +368,7 @@ mod tests {
                } else {
                  if x == 0 { k(); }             // branch 10 × 2 at 1; 3 × 3 at 2
                }
-               if let Some(y) = m(x) && y > 1 { // branch 10, bool_op 5 (a let chain), call 2
+               if let Some(y) = m(x) && y > 1 && y < 9 { // branch 10, a let chain's two &&: bool_op 10, call 2
                  return y;                      // an early return: jump 3 × 2 (its statement 0)
                }
                x + 1                            // the tail: statement 1, as `return x + 1;`
@@ -376,7 +376,7 @@ mod tests {
         );
         assert_eq!(
             function(&weighed, "f"),
-            100.0 + 17.0 + 6.0 + 10.0 + 6.0 + 20.0 + 9.0 + 17.0 + 6.0 + 1.0
+            100.0 + 17.0 + 6.0 + 10.0 + 6.0 + 20.0 + 9.0 + 22.0 + 6.0 + 1.0
         );
         assert_eq!(weighed.file, 0.0);
     }
@@ -478,11 +478,11 @@ mod tests {
     }
 
     #[test]
-    fn a_run_of_like_operators_is_one_operator() {
+    fn each_operator_is_one_operator() {
         let weighed = testing::weigh_expressions(
             &RUST,
             "fn f() {
-               let x = (b + c) * d;      // statement 1, two runs: 14
+               let x = (b + c) * d;      // statement 1, two: 14
                let y = -1;               // 1, a negative number: 0
                let z = !ok && -a < b;    // 1, `!` 7, bool_op 5, `<` 7, `-` 7
                let r = *p + &q;          // 1, a dereference and a borrow none, `+` 7
@@ -649,17 +649,16 @@ mod tests {
     }
 
     #[test]
-    fn the_conditions_weigh_casts_let_patterns_magic_numbers_and_each_unary() {
+    fn the_conditions_weigh_casts_let_patterns_and_magic_numbers() {
         let added = testing::conditions_add(
             &RUST,
             "fn f() {
                let a = b as u8;                 // a cast: operator 7
                if let Some(_) = c {}            // a let pattern: operator 7
                while let Some(x) = it.next() {} // 7
-               let d = !!e;                     // the second ! 7
                let g = 255u8 + 1u8;             // 255 magic: access 9
              }",
         );
-        assert_eq!(added, 7.0 + 14.0 + 7.0 + 9.0);
+        assert_eq!(added, 7.0 + 14.0 + 9.0);
     }
 }

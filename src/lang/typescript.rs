@@ -52,7 +52,7 @@ pub(super) const BASE: Lang = Lang {
     wrappers: &[],
     lists: &[],
     lambdas: LAMBDAS,
-    parens: &["parenthesized_expression"],
+    chains: &[],
     // JavaScript's grammar has none; TypeScript and TSX set theirs.
     casts: &[],
     patterns: &[],
@@ -168,7 +168,7 @@ fn operator(node: Node) -> Option<Operator> {
         "augmented_assignment_expression" => Operator::of_assignment(token()?),
         "assignment_expression" => Some(Operator::Assign),
         "unary_expression" => Operator::unary(node.child_by_field_name("argument")?, NUMBERS),
-        "update_expression" => Some(Operator::Unary),
+        "update_expression" => Some(Operator::Other),
         _ => None,
     }
 }
@@ -338,14 +338,14 @@ mod tests {
             "let y = 1;                    // a declaration's initializer: none
              y = 2;                        // operator 7 at 0
              y ||= 3;                      // a logical compound one is a bool_op either way
-             a = b = 4;                    // one run: 7
+             a = b = 4;                    // each: 14
              if (c) { y = 5; }             // at 1: 14",
         );
-        assert_eq!(added, 7.0 + 7.0 + 14.0);
+        assert_eq!(added, 7.0 + 14.0 + 14.0);
     }
 
     #[test]
-    fn branches_an_else_if_chain_and_logical_runs() {
+    fn branches_an_else_if_chain_and_logical_operators() {
         let weighed = weigh(
             "function f(x: number) {
                if (x > 0 && ok()) {      // branch 10, bool_op 5, call 2, at 0
@@ -355,12 +355,12 @@ mod tests {
                } else {
                  if (x === 0) k();       // branch 10 × 2 at 1; 3 × 3 at 2
                }
-               return x ?? y ?? z;       // the last statement: statement 1; one run of ??: 5
+               return x ?? y ?? z;       // the last statement: statement 1; two ??: 10
              }",
         );
         assert_eq!(
             function(&weighed, "f"),
-            100.0 + 17.0 + 6.0 + 10.0 + 6.0 + 20.0 + 9.0 + 1.0 + 5.0
+            100.0 + 17.0 + 6.0 + 10.0 + 6.0 + 20.0 + 9.0 + 1.0 + 10.0
         );
         assert_eq!(weighed.file, 0.0);
     }
@@ -492,24 +492,24 @@ mod tests {
     }
 
     #[test]
-    fn a_run_of_like_operators_is_one_operator() {
+    fn each_operator_is_one_operator() {
         let weighed = testing::weigh_expressions(
             &TYPESCRIPT,
             "function f() {
-               let x = (b + c) * d;        // statement 1, two runs: 14
-               x = a ** b ** c;            // 1, one run: 7
+               let x = (b + c) * d;        // statement 1, two: 14
+               x = a ** b ** c;            // 1, two: 14
                x = -1;                     // 1, a negative number: 0
-               x = !!y;                    // 1, one run: 7
+               x = !!y;                    // 1, two: 14
                x = typeof y === 's';       // 1, typeof, ===: 14
                x <<= 2;                    // 1, 7
-               x ??= y ?? z;               // 1, a logical compound assignment, one run of ??: bool_op 5
+               x ??= y ?? z;               // 1, a logical compound assignment and a ??: bool_op 10
                x = a in o || b;            // 1, in 7, bool_op 5
                i--;                        // 1, 7
              }",
         );
         assert_eq!(
             function(&weighed, "f"),
-            100.0 + 15.0 + 8.0 + 1.0 + 8.0 + 15.0 + 8.0 + 6.0 + 13.0 + 8.0
+            100.0 + 15.0 + 15.0 + 1.0 + 15.0 + 15.0 + 8.0 + 11.0 + 13.0 + 8.0
         );
     }
 
@@ -615,16 +615,15 @@ mod tests {
     }
 
     #[test]
-    fn the_conditions_weigh_casts_nullish_magic_numbers_and_each_unary() {
+    fn the_conditions_weigh_casts_nullish_and_magic_numbers() {
         let added = testing::conditions_add(
             &TYPESCRIPT,
             "const a = x as T;        // a cast: operator 7
              const b = <T>x;          // 7
              const c = d!;            // 7
              const e = f satisfies T; // 7
-             const g = h ?? i ?? 2;   // one run of ??, an operator 7, no bool_op 5; 2 magic: access 9
-             const j = !!k;           // the second ! 7",
+             const g = h ?? i ?? 2;   // each ??, an operator 7, no bool_op 5; 2 magic: access 9",
         );
-        assert_eq!(added, 28.0 + (7.0 - 5.0) + 9.0 + 7.0);
+        assert_eq!(added, 28.0 + 2.0 * (7.0 - 5.0) + 9.0);
     }
 }

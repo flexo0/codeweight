@@ -22,7 +22,7 @@ function's.
   (`memo(() => ...)`, `(() => ...) as F`) and `export default () => ...` are lambdas.
 - `if` nests its consequence; its `else` is a clause beside it, whose block is deeper but whose `if` (`else if`)
   stays at the depth. `switch` cases as in Java. `for`, `for ... in / of`, `while`, `do` are loops.
-- `bool_op` counts runs of `&&`, `||` and `??` (a run of `??` is one, as of `&&`), `&&=`, `||=` and `??=` too;
+- `bool_op` counts each `&&`, `||` and `??`, `&&=`, `||=` and `??=` too;
   `??` and `??=` are an `operator` under `[conditions] nullish_operator` ([weight.md](weight.md)).
 - `operator` counts `===` / `!==`, `in` and `instanceof` as comparisons, `typeof`, `void` and `delete` as unary
   operators. `access` counts a member (`a.b`, `a?.b`) and a subscript (`a[i]`).
@@ -77,7 +77,7 @@ function's.
   (`else if`) at the depth. `match` is no nesting construct; each arm is a `case`, its pattern and guard at the arm's
   depth, its value deeper and a statement when it is no block (`=> f(x)` weighs as `=> { f(x) }`), nor an
   expression ending in one (`if`, `match`, a loop) or a jump. `for`, `while` (`while let`), `loop` are loops; a label (`'outer:`) weighs nothing.
-- `&&` / `||` are the logical operators; a let chain (`if let Some(x) = a && x > 0`) is a run of `&&`. `-x` and
+- `&&` / `||` are the logical operators; a let chain (`if let Some(x) = a && x > 0`) is a `&&` per link. `-x` and
   `!x` are unary operators; `*x` and `&x` are none. `access` counts a field (`a.b`, `a.0`) and an index (`a[i]`); a
   method call's callee (`a.f()`) is the call's, a path (`a::b`) no access.
 - A call is a `call` (a tuple struct's `P(1)` too, which parses as one); a struct literal (`P { x: 1 }`) is a

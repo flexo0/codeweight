@@ -19,7 +19,7 @@ pub static PYTHON: Lang = Lang {
     wrappers: &[],
     lists: &[],
     lambdas: &["lambda"],
-    parens: &["parenthesized_expression"],
+    chains: &["comparison_operator"],
     casts: &[],
     patterns: &[],
     numbers: NUMBERS,
@@ -147,16 +147,16 @@ fn parameters(node: Node, source: &[u8]) -> usize {
     all - usize::from(receiver)
 }
 
-/// `and` / `or`, a binary or unary operator (`not` too), a comparison (a chained one, `a < b < c`, is one run), a
-/// compound assignment.
+/// `and` / `or`, a binary or unary operator (`not` too), a comparison (a chained one, `a < b < c`, an operator per
+/// comparison), a compound assignment.
 fn operator(node: Node) -> Option<Operator> {
     let token = || node.child_by_field_name("operator").map(|op| op.kind());
     match node.kind() {
         "boolean_operator" | "binary_operator" => Operator::of(token()?),
         "augmented_assignment" => Operator::of_assignment(token()?),
-        "comparison_operator" => Some(Operator::Comparison),
+        "comparison_operator" => Some(Operator::Other),
         "unary_operator" => Operator::unary(node.child_by_field_name("argument")?, NUMBERS),
-        "not_operator" => Some(Operator::Unary),
+        "not_operator" => Some(Operator::Other),
         _ => None,
     }
 }
@@ -267,15 +267,15 @@ def f(x):
     }
 
     #[test]
-    fn a_run_of_like_boolean_operators_is_one_bool_op() {
+    fn each_boolean_operator_is_one_bool_op() {
         let weighed = weigh(
-            "r = a and b and c          # statement 1, one run: 5
-r = a and b or c           # 1, two runs: 10
-r = (a and b) or (c and d) # 1, three runs: 15
-r = not (a and b) and c    # 1, a negation starts a run: 10
+            "r = a and b and c          # statement 1, two: 10
+r = a and b or c           # 1, two: 10
+r = (a and b) or (c and d) # 1, three: 15
+r = not (a and b) and c    # 1, two: 10
 ",
         );
-        assert_eq!(weighed.file, 6.0 + 11.0 + 16.0 + 11.0);
+        assert_eq!(weighed.file, 11.0 + 11.0 + 16.0 + 11.0);
     }
 
     #[test]
@@ -344,22 +344,22 @@ class A:                             # class 1000; a bare decorator 0
     }
 
     #[test]
-    fn a_run_of_like_operators_is_one_operator() {
+    fn each_operator_is_one_operator() {
         let weighed = testing::weigh_expressions(
             &PYTHON,
             "def f():
-    x = (b + c) * d     # statement 1, two runs: 14
-    x = a < b <= c      # 1, a chained comparison, one run: 7
+    x = (b + c) * d     # statement 1, two: 14
+    x = a < b <= c      # 1, a chained comparison, each of its two: 14
     x = k not in y      # 1, 7
     x = not a and b     # 1, `not` 7, bool_op 5
     x //= 2             # 1, 7
     x = -1              # 1, a negative number: 0
-    x = -y @ z          # 1, two runs: 14
+    x = -y @ z          # 1, two: 14
 ",
         );
         assert_eq!(
             function(&weighed, "f"),
-            100.0 + 15.0 + 8.0 + 8.0 + 13.0 + 8.0 + 1.0 + 15.0
+            100.0 + 15.0 + 15.0 + 8.0 + 13.0 + 8.0 + 1.0 + 15.0
         );
     }
 
@@ -467,15 +467,14 @@ if x:                  # branch 10
     }
 
     #[test]
-    fn the_conditions_weigh_magic_numbers_and_each_unary() {
+    fn the_conditions_weigh_magic_numbers() {
         let added = testing::conditions_add(
             &PYTHON,
             "
-a = not not b      # the second not 7
 c = d * 3.14       # 3.14 magic: access 9
 e = x[0] + 1       # 0 and 1 not
 ",
         );
-        assert_eq!(added, 7.0 + 9.0);
+        assert_eq!(added, 9.0);
     }
 }

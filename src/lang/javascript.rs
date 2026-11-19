@@ -121,7 +121,7 @@ mod tests {
         let weighed = testing::weigh_expressions(
             &JAVASCRIPT,
             "function f() {
-               let x = (b + c) * d;        // statement 1, two runs: 14
+               let x = (b + c) * d;        // statement 1, two: 14
                x = typeof y === 's';       // 1, typeof, ===: 14
                x = -1;                     // 1, a negative number: 0
                x ??= y;                    // 1, a logical compound assignment: bool_op 5
@@ -193,9 +193,8 @@ mod tests {
     fn the_conditions_weigh_as_typescript_s_but_casts() {
         let added = testing::conditions_add(
             &JAVASCRIPT,
-            "const g = h ?? 3;   // ??, an operator 7, no bool_op 5; 3 magic: access 9
-             const j = !!k;     // the second ! 7",
+            "const g = h ?? 3;   // ??, an operator 7, no bool_op 5; 3 magic: access 9",
         );
-        assert_eq!(added, (7.0 - 5.0) + 9.0 + 7.0);
+        assert_eq!(added, (7.0 - 5.0) + 9.0);
     }
 }

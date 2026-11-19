@@ -23,7 +23,6 @@ max = 2.0
 casts = false           # a cast or type assertion (x as T, (T) x, x!, <T>x, x.(T)) is an operator
 let_patterns = false    # Rust's `if let` / `while let` pattern is an operator, as a comparison is
 magic_numbers = false   # a number literal but 0 and 1 is an access, as the named constant in its place would be
-each_unary = false      # each unary operator counts, no run of them: !!x is 2
 nullish_operator = false  # ?? and ??= are an operator, not a bool_op: a default value, no branch
 nested_ternaries = false  # a ternary in a ternary's alternative nests (milestone 18), off here
 free_default = false      # a default case weighs nothing (milestone 18), off here
@@ -43,9 +42,9 @@ catch     = 2
 lambda    = 2
 function  = 2           # a declaration, as a lambda: a getter is 3, not mostly its signature
 class     = 5
-bool_op   = 1           # each run of like && / || operators: a && b && c is 1, a && b || c is 2
+bool_op   = 1           # each && / || operator: a && b is 1, a && b && c and a && b || c are 2
 jump      = 1           # break, continue, an early return, throw
-operator  = 0.25        # each run of like operators: a + b - c is 1, (a + b) * c is 2; x += 1, i++, -x, !x
+operator  = 0.25        # each operator: a + b is 1, a + b - c and (a + b) * c are 2; x += 1, i++, -x, !x; !!x is 2
 access    = 0.25        # each field access or index: a.b.c is 2, a[i] is 1; not a call's callee, nor this.x
 parameter = 0.5         # a function's or lambda's parameter, the first; not self / this / a receiver
 

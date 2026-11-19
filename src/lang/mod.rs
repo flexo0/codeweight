@@ -49,8 +49,9 @@ pub struct Lang {
     pub lists: &'static [&'static str],
     /// The kinds of a lambda, whose last statement isn't an early return either.
     pub lambdas: &'static [&'static str],
-    /// The kinds of a parenthesized expression, which a run of like operators goes through.
-    pub parens: &'static [&'static str],
+    /// The kinds of an operator node that chains its operands (Python's `a < b < c`, Rust's let chain): an operator
+    /// for each operand after the first.
+    pub chains: &'static [&'static str],
     /// The kinds of a cast or type assertion: an `operator` under `[conditions] casts`.
     pub casts: &'static [&'static str],
     /// The kinds of a pattern tested in a condition (Rust's `let` in `if let`): an `operator` under
@@ -177,28 +178,16 @@ impl Children {
     }
 }
 
-/// An operator, by its run: like operators in a row are one run (`a && b && c`, `a + b - c`, `a < b < c`).
+/// An operator, by the category it weighs. Each one counts, a chain of them too: `a + b + c` is 2, `a && b && c` 2.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Operator {
-    And,
-    Or,
-    /// TypeScript's and JavaScript's `??`.
+    /// `&&`, `||`, `and`, `or`, a let chain's `&&`: a `bool_op`.
+    Logical,
+    /// TypeScript's and JavaScript's `??`: a `bool_op`, an `operator` under `[conditions] nullish_operator`.
     Nullish,
-    /// `+`, `-`.
-    Additive,
-    /// `*`, `/`, `%`, Python's `//` and `@`.
-    Multiplicative,
-    /// `**`.
-    Power,
-    /// `<<`, `>>`, `>>>`.
-    Shift,
-    /// `==`, `<`, ..., `instanceof`, `in`, `is`.
-    Comparison,
-    BitAnd,
-    BitOr,
-    BitXor,
-    /// `-x`, `!x`, `not x`, `~x`, `typeof x`, `++`, `--`.
-    Unary,
+    /// Any other: arithmetic, comparison (`instanceof`, `in`, `is` too), bitwise, unary (`-x`, `!x`, `not x`,
+    /// `typeof x`), `++` / `--`, a compound assignment's (`+=` is `+`): an `operator`.
+    Other,
     /// A plain `=` assignment, a declaration's initializer aside: an `operator` beside the node's own weight under
     /// `[conditions] assignments`, else nothing.
     Assign,
@@ -208,18 +197,11 @@ impl Operator {
     /// A binary operator by its token.
     pub fn of(token: &str) -> Option<Operator> {
         Some(match token {
-            "&&" | "and" => Operator::And,
-            "||" | "or" => Operator::Or,
+            "&&" | "||" | "and" | "or" => Operator::Logical,
             "??" => Operator::Nullish,
-            "+" | "-" => Operator::Additive,
-            "*" | "/" | "%" | "//" | "@" => Operator::Multiplicative,
-            "**" => Operator::Power,
-            "<<" | ">>" | ">>>" => Operator::Shift,
-            "==" | "!=" | "===" | "!==" | "<" | "<=" | ">" | ">=" | "<>" | "instanceof" | "in"
-            | "not in" | "is" | "is not" => Operator::Comparison,
-            "&" => Operator::BitAnd,
-            "|" => Operator::BitOr,
-            "^" => Operator::BitXor,
+            "+" | "-" | "*" | "/" | "%" | "//" | "@" | "**" | "<<" | ">>" | ">>>" | "==" | "!="
+            | "===" | "!==" | "<" | "<=" | ">" | ">=" | "<>" | "instanceof" | "in" | "not in"
+            | "is" | "is not" | "&" | "|" | "^" => Operator::Other,
             _ => return None,
         })
     }
@@ -234,12 +216,7 @@ impl Operator {
 
     /// A unary operator on `operand`; none on a number (`-1` is a literal).
     pub fn unary(operand: Node, numbers: &[&str]) -> Option<Operator> {
-        (!numbers.contains(&operand.kind())).then_some(Operator::Unary)
-    }
-
-    /// Whether it is `&&` / `||` / `??`, a `bool_op`, not an `operator`.
-    pub fn is_logical(self) -> bool {
-        matches!(self, Operator::And | Operator::Or | Operator::Nullish)
+        (!numbers.contains(&operand.kind())).then_some(Operator::Other)
     }
 }
 
@@ -418,7 +395,7 @@ pub mod testing {
         let on = WEIGHTS
             .replacen("operator  = 0", "operator  = 7", 1)
             .replacen("access    = 0", "access    = 9", 1)
-            + "\n[conditions]\ncasts = true\nlet_patterns = true\nmagic_numbers = true\neach_unary = true\n\
+            + "\n[conditions]\ncasts = true\nlet_patterns = true\nmagic_numbers = true\n\
                nullish_operator = true\n";
         let config = Config::from_str_alone(&on).unwrap();
         assert!(config.conditions.casts && config.conditions.nullish_operator);
@@ -554,7 +531,7 @@ mod tests {
                 .chain(lang.wrappers.iter().copied())
                 .chain(lang.lists.iter().copied())
                 .chain(lang.lambdas.iter().copied())
-                .chain(lang.parens.iter().copied())
+                .chain(lang.chains.iter().copied())
                 .chain(lang.casts.iter().copied())
                 .chain(lang.patterns.iter().copied())
                 .chain(lang.numbers.iter().copied());

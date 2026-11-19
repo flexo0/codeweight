@@ -16,7 +16,7 @@ pub static GO: Lang = Lang {
     wrappers: &["labeled_statement"],
     lists: &["statement_list"],
     lambdas: &["func_literal"],
-    parens: &["parenthesized_expression"],
+    chains: &[],
     casts: &["type_assertion_expression"],
     patterns: &[],
     numbers: NUMBERS,
@@ -91,18 +91,18 @@ fn operator(node: Node) -> Option<Operator> {
     let token = || node.child_by_field_name("operator").map(|op| op.kind());
     match node.kind() {
         "binary_expression" => match token()? {
-            "&^" => Some(Operator::BitAnd),
+            "&^" => Some(Operator::Other),
             token => Operator::of(token),
         },
         "assignment_statement" => match token()? {
-            "&^=" => Some(Operator::BitAnd),
+            "&^=" => Some(Operator::Other),
             token => Operator::of_assignment(token),
         },
         "unary_expression" => match token()? {
             "-" | "+" | "!" | "^" => Operator::unary(node.child_by_field_name("operand")?, NUMBERS),
             _ => None,
         },
-        "inc_statement" | "dec_statement" => Some(Operator::Unary),
+        "inc_statement" | "dec_statement" => Some(Operator::Other),
         _ => None,
     }
 }
@@ -476,12 +476,12 @@ mod tests {
     }
 
     #[test]
-    fn a_run_of_like_operators_is_one_operator() {
+    fn each_operator_is_one_operator() {
         let weighed = testing::weigh_expressions(
             &GO,
             "package p
              func f() {
-               x := (b + c) * d          // statement 1, two runs: 14
+               x := (b + c) * d          // statement 1, two: 14
                y := -1                   // 1, a negative number: 0
                r := !ok && -a < b        // 1, `!` 7, bool_op 5, `<` 7, `-` 7
                m := a &^ b | ^c          // 1, `&^` 7, `|` 7, `^` 7
@@ -602,17 +602,16 @@ mod tests {
     }
 
     #[test]
-    fn the_conditions_weigh_type_assertions_magic_numbers_and_each_unary() {
+    fn the_conditions_weigh_type_assertions_and_magic_numbers() {
         let added = testing::conditions_add(
             &GO,
             "package p
 
              func f() {
                s := v.(string)   // a type assertion: operator 7
-               b := !!c          // the second ! 7
                n := 0x10 + 1     // 0x10 magic: access 9
              }",
         );
-        assert_eq!(added, 7.0 + 7.0 + 9.0);
+        assert_eq!(added, 7.0 + 9.0);
     }
 }

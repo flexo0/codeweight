@@ -33,18 +33,15 @@ total        = Σ weight(node) over the nodes that have a category
   so a tuning on pairs of code (a snippet and its refactoring, milestone 14) can weigh the two apart. By default it
   weighs less than a branch, and the default case nothing (`[conditions] free_default`), as an `else`: a switch
   weighs less than the if-chain it replaces.
-- `bool_op`: one per run of like `&&` / `||` operators, the first run counted too, not one per operator: `a && b`
-  and `a && b && c` are 1, `a && b || c` is 2, `(a && b) || (c && d)` is 3. A logical expression counts one when its
-  operator differs from that of the logical expression it is an operand of, or it is no operand of one; parentheses
-  are see-through, anything else (`!`, a call) starts a new run. Every logical expression counts, in a condition or
-  not. Java's `&` / `|` are not logical (they can't be told from bitwise ones without types): they are bitwise
+- `bool_op`: one per `&&` / `||` operator: `a && b` is 1, `a && b && c` and `a && b || c` are 2,
+  `(a && b) || (c && d)` is 3. Every logical operator counts, in a condition or not; like operators in a row are no
+  run that counts once (milestone 22: every operator is something to read). Java's `&` / `|` are not logical (they can't be told from bitwise ones without types): they are bitwise
   operators. The rule is the language's `operator` hook, whatever its node kind's table entry is.
-- `operator`: one per run of like operators, by the `bool_op` rule (parentheses see-through), so a long flat sum is
-  one and a mix of precedences is more: `a = b` is none, `a + b + c` and `a + b - c` are 1, `(b + c) * d` and
-  `a * b + c` are 2, `a * b + c * d` is 3. Like operators are those of one precedence level: `+ -`, `* / %` (Python's
-  `//` and `@`), `**`, the shifts, the comparisons (`==`, `<`, ..., `instanceof`, `in`, `is`; a chained Python
-  comparison `a < b < c` is one), `&`, `|`, `^`, and the unary ones (`-x`, `!x`, `not x`, `~x`, TS's `typeof`, `++`
-  and `--`). A compound assignment (`x += 1`) is its operator, so `x += b + c` is one run; a plain `=` is none, the
+- `operator`: one per operator, by the `bool_op` rule: `a + b` is 1, `a + b + c` and `(b + c) * d` are 2,
+  `a * b + c * d` is 3. The operators are the arithmetic ones (`+ -`, `* / %`, Python's `//` and `@`, `**`), the
+  shifts, the comparisons (`==`, `<`, ..., `instanceof`, `in`, `is`; a chained Python comparison `a < b < c` is one
+  per comparison, 2), `&`, `|`, `^`, and the unary ones (`-x`, `!x`, `not x`, `~x`, TS's `typeof`, `++` and `--`;
+  `!!x` is 2). A compound assignment (`x += 1`) is its operator, so `x += b + c` is 2; a plain `=` is none, the
   statement already weighing it, but under `[conditions] assignments` (on by default), where it is one too. A negative number (`-1`) is a literal, no operator. A Rust
   dereference (`*x`) and a borrow (`&x`) are none, and so are Go's (`*p`, `&x`) and its receive (`<-ch`). `&&=`,
   `||=`, `??=` are logical: `bool_op`.
@@ -116,10 +113,8 @@ but `nullish_operator`, which there only ties 11 pairs more; `nested_ternaries` 
   place (`math.pi`) would be. The value is read past `_` separators, a radix prefix and a type suffix (`1_000`,
   `0x1`, `1u8`, `1.0f`, `1L`, `1j`); a negative one (`-2`) is its literal's, the `-` no operator. Every literal
   counts, a constant's definition and a case's label too.
-- `each_unary`: each unary operator counts, no run of them: `!!x` and `not not x` are 2 (as `Boolean(x)` is a call
-  and its argument), `-x` still 1.
-- `nullish_operator`: `??` and `??=` are an `operator` run, not a `bool_op`: a default value (as `unwrap_or` is a
-  call), not a branch of control flow; `a ?? b ?? c` is still one run.
+- `nullish_operator`: `??` and `??=` are an `operator`, not a `bool_op`: a default value (as `unwrap_or` is a
+  call), not a branch of control flow; `a ?? b ?? c` is 2.
 - `nested_ternaries`: a ternary chained in a ternary's alternative (`a ? x : b ? y : z`, Python's `x if a else y if
   b else z`) nests, as one in its consequence does, rather than being a sibling, as an `else if` is: a nested
   ternary is one expression to unravel, where an `else if` chain is a list of statements. On by default.
@@ -130,7 +125,7 @@ but `nullish_operator`, which there only ties 11 pairs more; `nested_ternaries` 
   default.
 - `assignments`: a plain `=` assignment is an `operator` too, as a compound one (`x += 1`) is, beside its
   statement: writing a variable is something to follow, so `case 1 -> x = f();` weighs more than the switch
-  expression's `case 1 -> f();`, and `int x; x = 1;` more than `int x = 1;`. A run of them (`a = b = c`) is one. A
+  expression's `case 1 -> f();`, and `int x; x = 1;` more than `int x = 1;`. Each counts: `a = b = c` is 2. A
   declaration's initializer is none: Java's `int x = 1`, TS's and JS's `let` / `const` / `var`, Rust's `let`, Go's
   `:=` and `var x = 1`; nor is Python's `=`, which is its declaration too (only `+=` and its like weigh). Go's
   assignment is a statement of its own and stays one. On by default.

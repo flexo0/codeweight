@@ -182,7 +182,6 @@ max = 2.0
 casts = true            # a cast or type assertion (x as T, (T) x, x!, <T>x, x.(T)) is an operator
 let_patterns = true     # Rust's `if let` / `while let` pattern is an operator, as a comparison is
 magic_numbers = true    # a number literal but 0 and 1 is an access, as the named constant in its place would be
-each_unary = true       # each unary operator counts, no run of them: !!x is 2
 nullish_operator = false  # ?? and ??= are an operator, not a bool_op: a default value, no branch
 nested_ternaries = true   # a ternary in a ternary's alternative (a ? x : b ? y : z) nests, no else-if sibling
 free_default = true       # a switch's or match's default case (default, a bare _) weighs nothing, as an else
@@ -281,19 +280,18 @@ node kind is a tree-sitter one, as the language's grammar names it.
 | `lambda` | a lambda | an arrow or function expression not bound to a name at the file's level or as a field | a `lambda` | a closure | a `func` literal |
 | `function` | a method or constructor | a function, method, signature, an arrow bound to a name at the file's level or as a field | a `def` | a `fn`, a trait's signature | a function, a method, a named interface's method |
 | `class` | a class, interface, enum, record or annotation type | a class, interface, enum, namespace | a `class` | a struct, enum, union, trait, `mod`; an `impl` is its type's class, weighing nothing of its own | a type definition (`type T struct {...}`, `interface`, `type C float64`), not an alias |
-| `bool_op` | each run of like `&&` / `\|\|` | each run of like `&&` / `\|\|` / `??` | each run of like `and` / `or` | each run of like `&&` / `\|\|`, a let chain | each run of like `&&` / `\|\|` |
+| `bool_op` | each `&&` / `\|\|` | each `&&` / `\|\|` / `??` | each `and` / `or` | each `&&` / `\|\|`, a let chain's | each `&&` / `\|\|` |
 | `jump` | `break`, `continue`, `throw`, an early `return` | `break`, `continue`, `throw`, an early `return` | `break`, `continue`, `raise`, an early `return` | `break`, `continue`, `?`, an early `return` | `break`, `continue`, `goto`, `fallthrough`, an early `return` |
-| `operator` | each run of like arithmetic, comparison (`instanceof` too), bitwise or unary operators, a compound assignment (a plain `=` under `assignments`), `++` / `--` | the same (`in`, `typeof`, `void`, `delete` too) | the same (`not`, `in`, `is` too) | the same (not `*x`, `&x`) | the same (`&^` too; not `*p`, `&x`, `<-ch`) |
+| `operator` | each arithmetic, comparison (`instanceof` too), bitwise or unary operator, a compound assignment (a plain `=` under `assignments`), `++` / `--` | the same (`in`, `typeof`, `void`, `delete` too) | the same (`not`, `in`, `is` too) | the same (not `*x`, `&x`) | the same (`&^` too; not `*p`, `&x`, `<-ch`) |
 | `access` | a field access, an array index | a member (`a.b`, `a?.b`), a subscript | an attribute, a subscript | a field (`a.b`, `a.0`), an index | a selector (`a.b`), an index, a slice (`a[i:j]`) |
 | `parameter` | a method's, constructor's or lambda's parameter (a record's component too), not a receiver (`A this`) | a function's, method's, signature's or arrow's parameter, not a `this` one nor a function type's | a function's or lambda's parameter (`*args`, `**kwargs` too), not the first `self` / `cls` nor a bare `*` / `/` | a function's or closure's parameter, not `self` nor a `fn(...)` type's | each name of a function's, method's, literal's or interface method's parameters (an unnamed one once), not the receiver, the results nor a function type's |
 
 JavaScript's elements are TypeScript's but for the type ones (an interface, an enum, a namespace, a signature, an
 interface's property, a `type` alias); a `using` declaration is a statement, as `let`.
 
-A run of `bool_op`: `a && b && c` is 1, `a && b || c` is 2; parentheses don't break a run, a negation or a call does.
-A run of `operator` is the same, its like operators those of one precedence level: `a + b - c` is 1, `(b + c) * d`
-is 2, `a * b + c * d` is 3; `x += b + c` is 1, a plain `=` 1 under `[conditions] assignments` (a declaration's initializer none), a negative
-number (`-1`) none. An `access` is one
+Every operator counts: `a && b && c` is 2 `bool_op`, `a + b - c` 2 `operator`, `a * b + c * d` 3, `x += b + c` 2,
+`!!x` 2, Python's `a < b < c` 2; a plain `=` is 1 under `[conditions] assignments` (a declaration's initializer
+none, `a = b = c` 2), a negative number (`-1`) none. An `access` is one
 per `.` or `[]`: `a.b.c` is 2. A call's callee is the call's (`a.f()` is a call, `a.b.f()` a call and an access), an
 access to `this` / `super` / `self` / `cls` or a Go method's receiver is none (`this.x`, a receiver's `r.x` weigh as
 a bare `x`), a qualified name in a type or an import (`java.util.List`, `a::b`, a Python annotation's `os.PathLike`)
