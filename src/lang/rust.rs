@@ -516,6 +516,19 @@ mod tests {
     }
 
     #[test]
+    fn an_access_weighs_more_the_further_it_is_in_a_row() {
+        let weighed = testing::weigh_accesses(
+            &RUST,
+            "fn f() {
+                 let x = o.a.b.c.d;        // statement 1, accesses 9 + 18 + 27 + 27
+                 let x = arr[i][j];        // 1, 9 + 18
+                 let x = o.f().a.b;        // 1, call 2, the call ends the row: 9 + 18
+             }",
+        );
+        assert_eq!(function(&weighed, "f"), 100.0 + 82.0 + 28.0 + 30.0);
+    }
+
+    #[test]
     fn an_arm_s_value_and_a_closure_s_body_weigh_as_a_block_ending_in_them() {
         let weighed = weigh(
             "fn e(x: i32) -> i32 { match x { 1 => g(x), _ => k(|y| y) } }

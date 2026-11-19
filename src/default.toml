@@ -16,6 +16,11 @@ flat = ["call", "macro", "constructor", "argument", "bool_op", "operator", "acce
 step = 0.3              # 1.65, 2.15, 2.64, 3.14, then 3.3 each: a long list weighs more than its count
 max = 2.0
 
+[accesses]              # an access at place k (from 0) in a row weighs access * min(1 + step * k, max);
+                        # a.b.c.d: .b at 0, .c at 1, .d at 2
+step = 1                # 0.5, 1, then 1.5 each: reaching deep through objects weighs more than its count
+max = 3.0
+
 [conditions]            # rules that weigh what a node's kind alone doesn't tell, as an existing category
 casts = true            # a cast or type assertion (x as T, (T) x, x!, <T>x, x.(T)) is an operator
 let_patterns = true     # Rust's `if let` / `while let` pattern is an operator, as a comparison is
@@ -42,7 +47,8 @@ class     = 5
 bool_op   = 0.55        # each && / || operator: a && b is 1, a && b && c and a && b || c are 2
 jump      = 1.35        # break, continue, an early return, throw
 operator  = 0.6         # each operator: a + b is 1, a + b - c and (a + b) * c are 2; x += 1, i++, -x, !x; !!x is 2
-access    = 1.85        # each field access or index: a.b.c is 2, a[i] is 1; not a call's callee, nor this.x
+access    = 0.5         # each field access or index, by its place in a row ([accesses]): a.b.c is 0.5 + 1; not a
+                        # call's callee, nor this.x
 parameter = 1.65        # a function's or lambda's parameter, the first; not self / this / a receiver
 
 # A file of your own may also override [weights] for one language, and map a node kind to a category. The defaults

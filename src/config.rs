@@ -159,8 +159,42 @@ impl Parameters {
     /// The multiplier of the `parameter` weight for the parameter at `place`, from 0: `1 + step * place`, capped at
     /// `max`.
     pub fn factor_at(&self, place: usize) -> f64 {
-        (1.0 + self.step * place as f64).min(self.max)
+        grown(self.step, self.max, place)
     }
+}
+
+/// The `[accesses]` table: how an access's weight grows with its place in a row of them (`a.b.c.d`: `.b` at 0,
+/// `.c` at 1, `.d` at 2), so reaching deep through objects weighs more than its count. Flat (`step` 0) when a
+/// file on its own leaves the table out, so it weighs each access alike, as before the table.
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Accesses {
+    /// What each place adds to the multiplier.
+    pub step: f64,
+    /// The multiplier's cap.
+    pub max: f64,
+}
+
+impl Default for Accesses {
+    fn default() -> Accesses {
+        Accesses {
+            step: 0.0,
+            max: 1.0,
+        }
+    }
+}
+
+impl Accesses {
+    /// The multiplier of the `access` weight for the access at `place` in its row, from 0: `1 + step * place`,
+    /// capped at `max`.
+    pub fn factor_at(&self, place: usize) -> f64 {
+        grown(self.step, self.max, place)
+    }
+}
+
+/// `1 + step * place`, capped at `max`: a weight's multiplier by its place in a list or a row.
+fn grown(step: f64, max: f64, place: usize) -> f64 {
+    (1.0 + step * place as f64).min(max)
 }
 
 /// The `[conditions]` table: rules that weigh what a node's kind alone doesn't tell, each weighing as an existing
@@ -215,6 +249,7 @@ impl LangConfig {
 pub struct Config {
     pub nesting: Nesting,
     pub parameters: Parameters,
+    pub accesses: Accesses,
     pub conditions: Conditions,
     pub files: Files,
     languages: BTreeMap<&'static str, LangConfig>,
@@ -262,6 +297,8 @@ impl Config {
         check_non_negative("[nesting] factor", raw.nesting.factor)?;
         check_non_negative("[parameters] step", raw.parameters.step)?;
         check_non_negative("[parameters] max", raw.parameters.max)?;
+        check_non_negative("[accesses] step", raw.accesses.step)?;
+        check_non_negative("[accesses] max", raw.accesses.max)?;
         for glob in &raw.files.exclude {
             source::glob(glob).with_context(|| format!("[files] exclude `{glob}`"))?;
         }
@@ -327,6 +364,7 @@ impl Config {
         Ok(Config {
             nesting: raw.nesting,
             parameters: raw.parameters,
+            accesses: raw.accesses,
             conditions: raw.conditions,
             files: raw.files,
             languages,
@@ -369,6 +407,8 @@ pub fn repo_root(path: &Path) -> Option<PathBuf> {
 struct RawConfig {
     nesting: Nesting,
     parameters: Parameters,
+    #[serde(default)]
+    accesses: Accesses,
     #[serde(default)]
     conditions: Conditions,
     weights: BTreeMap<String, f64>,
@@ -645,6 +685,18 @@ mod tests {
         for (factor, expected) in factors.iter().zip(expected) {
             assert!((factor - expected).abs() < 1e-9, "{factors:?}");
         }
+    }
+
+    #[test]
+    fn an_access_s_factor_grows_with_its_place_in_a_row_flat_when_a_file_leaves_it_out() {
+        let defaults = Config::defaults().unwrap();
+        let factors: Vec<f64> = (0..5).map(|p| defaults.accesses.factor_at(p)).collect();
+        assert_eq!(factors, [1.0, 2.0, 3.0, 3.0, 3.0]);
+        let alone = Config::from_str_alone(include_str!("../tests/weights.toml")).unwrap();
+        assert_eq!(alone.accesses, Accesses::default());
+        assert_eq!(alone.accesses.factor_at(4), 1.0);
+        assert!(error_of("[accesses]\nstep = -1\n").contains("[accesses] step"));
+        assert!(error_of("[accesses]\nsteps = 1\n").contains("steps"));
     }
 
     #[test]

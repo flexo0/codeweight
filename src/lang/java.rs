@@ -351,6 +351,28 @@ mod tests {
     }
 
     #[test]
+    fn an_access_weighs_more_the_further_it_is_in_a_row() {
+        let weighed = testing::weigh_accesses(
+            &JAVA,
+            "class A {
+               int v;                      // statement 1
+               void f() {
+                 x = o.a.b.c.d;            // statement 1, accesses 9 + 18 + 27 + 27
+                 x = this.v.w.u;           // 1, `this.v` 0, then 9 + 18
+                 x = arr[i][j];            // 1, 9 + 18
+                 x = o.f().a.b;            // 1, call 2, the call ends the row: 9 + 18
+                 x = o.a[i.j];             // 1, 9 + 18, the index a row of its own: 9
+               }
+             }",
+        );
+        assert_eq!(class(&weighed, "A"), 1001.0);
+        assert_eq!(
+            function(&weighed, "A.f"),
+            100.0 + 82.0 + 28.0 + 28.0 + 30.0 + 37.0
+        );
+    }
+
+    #[test]
     fn loops() {
         let weighed = weigh(
             "class A {

@@ -178,6 +178,10 @@ flat = ["call", "macro", "constructor", "argument", "bool_op", "operator", "acce
 step = 0.3              # 1.65, 2.15, 2.64, 3.14, then 3.3 each: a long list weighs more than its count
 max = 2.0
 
+[accesses]              # an access at place k (from 0) in a row weighs access * min(1 + step * k, max)
+step = 1
+max = 3.0
+
 [conditions]            # rules that weigh what a node's kind alone doesn't tell, as an existing category
 casts = true            # a cast or type assertion (x as T, (T) x, x!, <T>x, x.(T)) is an operator
 let_patterns = true     # Rust's `if let` / `while let` pattern is an operator, as a comparison is
@@ -204,7 +208,7 @@ class     = 5
 bool_op   = 0.55
 jump      = 1.35
 operator  = 0.6
-access    = 1.85
+access    = 0.5
 parameter = 1.65
 
 [languages.java.weights]            # yours only: a language's overrides of [weights]
@@ -233,8 +237,9 @@ getters or a flat run of setters is long, not hard), and each level of nesting a
 structure only (statements, branches, loops, jumps, lambdas, ...): a statement's parts, its calls, operators,
 accesses and `&&` / `||` (`[nesting] flat`), weigh the same at any depth, since their statement already weighs its
 depth; a long statement in a loop is long, not harder for the loop. A branch weighs 3, a loop 3, a jump 1.35 (an
-early return or a `break` is a path to follow). An operator weighs 0.6 and a field access or an index 1.85: the
-pairs replace an index, a slice or a field-by-field copy by a call (`s[0] === "a"` by `s.startsWith("a")`). A parameter weighs 1.65 to
+early return or a `break` is a path to follow). An operator weighs 0.6. A field access or an index weighs 0.5, 1, then 1.5 by
+its place in a row (`[accesses]`): `a.b` 0.5, `a.b.c.d` 0.5 + 1 + 1.5, so reaching deep through objects weighs more
+than its count. A parameter weighs 1.65 to
 3.3 by its place (each next 0.3 times more, from the fifth on 3.3): three weigh 6.4, seven 19.5, so a long list
 weighs more than its count. A function's own weight is 1.55, below a lambda's 1.65: a getter weighs 2.55, its
 signature not most of it, and a class of getters and setters stays below one of logic. A `try` weighs 0.95 (its
@@ -292,7 +297,7 @@ interface's property, a `type` alias); a `using` declaration is a statement, as 
 Every operator counts: `a && b && c` is 2 `bool_op`, `a + b - c` 2 `operator`, `a * b + c * d` 3, `x += b + c` 2,
 `!!x` 2, Python's `a < b < c` 2; a plain `=` is 1 under `[conditions] assignments` (a declaration's initializer
 none, `a = b = c` 2), a negative number (`-1`) none. An `access` is one
-per `.` or `[]`: `a.b.c` is 2. A call's callee is the call's (`a.f()` is a call, `a.b.f()` a call and an access), an
+per `.` or `[]`, each next in a row heavier (`[accesses]`): `a.b.c` is 0.5 + 1. A call's callee is the call's (`a.f()` is a call, `a.b.f()` a call and an access), an
 access to `this` / `super` / `self` / `cls` or a Go method's receiver is none (`this.x`, a receiver's `r.x` weigh as
 a bare `x`), a qualified name in a type or an import (`java.util.List`, `a::b`, a Python annotation's `os.PathLike`)
 is none.

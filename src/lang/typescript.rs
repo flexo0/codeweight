@@ -535,6 +535,26 @@ mod tests {
     }
 
     #[test]
+    fn an_access_weighs_more_the_further_it_is_in_a_row() {
+        let weighed = testing::weigh_accesses(
+            &TYPESCRIPT,
+            "class A {
+               f() {
+                 x = o.a.b.c.d;            // statement 1, accesses 9 + 18 + 27 + 27
+                 x = this.v.w;             // 1, `this.v` 0, then 9
+                 x = arr[i][j];            // 1, 9 + 18
+                 x = o.f().a.b;            // 1, call 2, the call ends the row: 9 + 18
+                 x = o?.a?.b;              // 1, 9 + 18
+               }
+             }",
+        );
+        assert_eq!(
+            function(&weighed, "A.f"),
+            100.0 + 82.0 + 10.0 + 28.0 + 30.0 + 28.0
+        );
+    }
+
+    #[test]
     fn the_weights_file_s_typescript_table_is_tsx_s_too() {
         let weights = format!(
             "{WEIGHTS}

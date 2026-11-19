@@ -523,6 +523,21 @@ mod tests {
     }
 
     #[test]
+    fn an_access_weighs_more_the_further_it_is_in_a_row() {
+        let weighed = testing::weigh_accesses(
+            &GO,
+            "package p
+
+             func f() {
+                 x = o.a.b.c.d // statement 1, accesses 9 + 18 + 27 + 27
+                 x = arr[i][j] // 1, 9 + 18
+                 x = o.f().a.b // 1, call 2, the call ends the row: 9 + 18
+             }",
+        );
+        assert_eq!(function(&weighed, "f"), 100.0 + 82.0 + 28.0 + 30.0);
+    }
+
+    #[test]
     fn the_weights_file_s_go_table() {
         let weights = format!(
             "{WEIGHTS}

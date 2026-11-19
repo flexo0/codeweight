@@ -45,7 +45,14 @@ total        = Σ weight(node) over the nodes that have a category
   statement already weighing it, but under `[conditions] assignments` (on by default), where it is one too. A negative number (`-1`) is a literal, no operator. A Rust
   dereference (`*x`) and a borrow (`&x`) are none, and so are Go's (`*p`, `&x`) and its receive (`<-ch`). `&&=`,
   `||=`, `??=` are logical: `bool_op`.
-- `access`: one per field access or index, so `obj.a` is 1, `obj.a.b` and `a[i][j]` are 2. A call's callee is the
+- `access`: one per field access or index, so `obj.a` is 1, `obj.a.b` and `a[i][j]` are 2, each weighed by its
+  place in a row of them, from 0: `access × min(1 + step × place, max)` (`[accesses]`). The place is how many
+  accesses its object is in a row of: `obj.a.b.c`'s `.a` is at 0, `.b` at 1, `.c` at 2; a call, `this` or
+  anything else that is no access ends the row (`o.f().a.b`'s `.a` is at 0, `this.v.w`'s `.w` too), and an index's
+  own expression is a row of its own (`o.a[i.j]`: `[...]` at 1, `.j` at 0). With the defaults (0.5, `step` 1, `max`
+  3) that is 0.5, 1, then 1.5 each: reaching deep through objects, past what is at hand, weighs more than its count
+  (a magic number, an `access` by `[conditions]`, is at 0). A file on its own that leaves the table out weighs
+  every access alike (`step` 0). A call's callee is the
   call's, no access: `obj.f()` is a call, `obj.a.f()` a call and an access (`obj.a`), as Java's grammar has it (its
   method call holds its object, no field access around the name); TS's `new a.B()` and a JSX element's `<a.B />`
   the same. An access to `this` / `super` (Java, TS), `self` / `cls` (Python), `self` (Rust) or a method's receiver

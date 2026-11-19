@@ -33,6 +33,8 @@ Built (`config`, `config::find`):
   and that change would silently do nothing for that language. Tuning (milestone 7, [milestones.md](milestones.md))
   needed none; should one ever be wanted, the merge must first drop a default per-language key whose base key the
   user's file sets.
+- `[accesses]` is `[parameters]`'s form for an access's place in a row ([weight.md](weight.md)); a file on its own
+  may leave it out (`step` 0, `max` 1: every access alike), as the engine's tests do.
 - `[conditions]` are switches, `true` or `false`; the defaults turn all but `nullish_operator` on (the tuning on
   the example pairs, milestones 16 and 18); a file on its own may leave the table out (all off), as the engine's
   tests do. Each weighs a node as an existing category, so it adds no weight of
@@ -51,6 +53,11 @@ flat = ["call", "macro", "constructor", "argument", "bool_op", "operator", "acce
 [parameters]            # the parameter at place k (from 0) weighs parameter * min(1 + step * k, max)
 step = 0.3              # 1.65, 2.15, 2.64, 3.14, then 3.3 each: a long list weighs more than its count
 max = 2.0
+
+[accesses]              # an access at place k (from 0) in a row weighs access * min(1 + step * k, max);
+                        # a.b.c.d: .b at 0, .c at 1, .d at 2
+step = 1                # 0.5, 1, then 1.5 each: reaching deep through objects weighs more than its count
+max = 3.0
 
 [conditions]            # rules that weigh what a node's kind alone doesn't tell, as an existing category
 casts = true            # a cast or type assertion (x as T, (T) x, x!, <T>x, x.(T)) is an operator
@@ -78,7 +85,8 @@ class     = 5
 bool_op   = 0.55        # each && / || operator: a && b is 1, a && b && c and a && b || c are 2
 jump      = 1.35        # break, continue, an early return, throw
 operator  = 0.6         # each operator: a + b is 1, a + b - c and (a + b) * c are 2; x += 1, i++, -x, !x; !!x is 2
-access    = 1.85        # each field access or index: a.b.c is 2, a[i] is 1; not a call's callee, nor this.x
+access    = 0.5         # each field access or index, by its place in a row ([accesses]): a.b.c is 0.5 + 1; not a
+                        # call's callee, nor this.x
 parameter = 1.65        # a function's or lambda's parameter, the first; not self / this / a receiver
 
 [languages.java.weights]            # a language's overrides of [weights]

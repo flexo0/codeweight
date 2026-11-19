@@ -335,7 +335,8 @@ pub fn text(node: Node, source: &[u8]) -> String {
 /// snippets about operators and accesses are weighed with those at 7 and 9 (`weigh_expressions`), those about
 /// parameters with `parameter` 10 (`weigh_parameters`): 10, 15, 20, then 20 each, by their place; those about
 /// arguments with `argument` 4 (`weigh_arguments`), those about cases with `case` 7 (`weigh_cases`), those about
-/// the `[conditions]` with every one on and `operator` 7, `access` 9 (`conditions_add`).
+/// the `[conditions]` with every one on and `operator` 7, `access` 9 (`conditions_add`), those about a row of
+/// accesses with `access` 9 growing by its place, 9, 18, 27, then 27 each (`weigh_accesses`).
 #[cfg(test)]
 pub mod testing {
     use super::{Lang, ScopeKind};
@@ -374,6 +375,20 @@ pub mod testing {
             ),
             (7.0, 9.0)
         );
+        assert!(weighed.clean, "syntax errors in {text}");
+        weighed
+    }
+
+    /// A snippet that parses cleanly, weighed under the test weights with `operator` 7, `access` 9 and
+    /// `[accesses] step = 1, max = 3`: an access in a row weighs 9, 18, 27, then 27 each, by its place.
+    pub fn weigh_accesses(lang: &'static Lang, text: &str) -> Weighed {
+        let weights = WEIGHTS
+            .replacen("operator  = 0", "operator  = 7", 1)
+            .replacen("access    = 0", "access    = 9", 1)
+            + "\n[accesses]\nstep = 1\nmax = 3\n";
+        let config = Config::from_str_alone(&weights).unwrap();
+        assert_eq!(config.accesses.factor_at(2), 3.0);
+        let weighed = weigh_under(lang, &weights, text);
         assert!(weighed.clean, "syntax errors in {text}");
         weighed
     }

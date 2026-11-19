@@ -1,9 +1,9 @@
 # Milestones
 
-Built: milestones 0-23 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
+Built: milestones 0-24 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
 `commit`, the reports, the tuned defaults, Rust, operators and accesses, JavaScript, Go, depth on the structure
 only, parameters, cases and arguments, conditions, the defaults tuned on pairs, macros, nested ternaries and default cases, assignments, constructors, a constructor category, every operator counted, the
-defaults tuned again by rule).
+defaults tuned again by rule, a row of accesses).
 
 0. (built) The repo: `Cargo.toml`, `README.md` (usage, the weights file), the MIT license, GitHub Actions (`cargo fmt
    --check`, `clippy -D warnings`, `test`).
@@ -232,3 +232,14 @@ defaults tuned again by rule).
     frozen copy of the defaults before milestone 16 so that its commits weighed on one scale, is gone: the engine's
     changes since had moved that scale anyway, and the repo now weighs itself by the defaults it ships (its commits'
     `[+N]` up to this one are on the old scale).
+24. (built) A row of accesses, as asked: each next access in a row weighs more, the first 0.5, the second 1, the
+    third and on 1.5. `[accesses]` is `[parameters]`'s form, `access × min(1 + step × place, max)`, `access` 0.5,
+    `step` 1, `max` 3; an access's place is how many accesses its object is in a row of (`a.b.c.d`: `.b` 0, `.c` 1,
+    `.d` 2), a call, `this` or any other node ending the row ([weight.md](weight.md)). A file on its own that leaves
+    the table out weighs every access alike (`step` 0, `max` 1), so the engine's tests stand; a snippet per
+    language (`lang::testing::weigh_accesses`) has `access` 9 grow 9, 18, 27. `pairs/tune.py` counts the accesses
+    by place and tunes `step` and `max` too. On the pairs: worse 32 → 39, ties 12 → 13, all of it the first
+    access's 1.85 → 0.5 (a lone index or slice replaced by a call, Ruff's `FURB131`, `FURB145`, `FURB187`,
+    `PERF403`, typescript-eslint's `prefer-string-starts-ends-with`, Clippy's `unnecessary_operation`: `l[:]` at
+    0.5 now below `l.copy()`); `step` and `max` move no pair (with `access` at 1: 33). Clippy's `unnecessary_fold`
+    `L224` now better. The corpora not re-checked.

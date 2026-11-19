@@ -78,6 +78,7 @@ pub struct Weigher<'c> {
     weights: &'c LangConfig,
     nesting: &'c config::Nesting,
     parameters: &'c config::Parameters,
+    accesses: &'c config::Accesses,
     conditions: &'c config::Conditions,
     grammar: tree_sitter::Language,
     /// By node kind id: its category, the language's table with the weights file's `node_kinds` over it.
@@ -148,6 +149,7 @@ impl<'c> Weigher<'c> {
             weights,
             nesting: &config.nesting,
             parameters: &config.parameters,
+            accesses: &config.accesses,
             conditions,
             grammar,
             categories,
@@ -266,6 +268,11 @@ impl<'c> Weigher<'c> {
                         }
                     }),
             };
+            // An access weighs more the further it is in a row of them (`[accesses]`): `a.b.c` is `.b` at 0, `.c` at 1.
+            let row = match category {
+                Some(Category::Access) => self.accesses.factor_at(self.access_place(node, source)),
+                _ => 1.0,
+            };
             let times = match operator {
                 Some(_) if flag(&self.chains, id) => {
                     lang::count_children(node, |_| true).saturating_sub(1)
@@ -273,13 +280,11 @@ impl<'c> Weigher<'c> {
                 _ => 1,
             };
             let weight = category
-                .map(|c| (c, times))
+                .map(|c| (c, times as f64 * row))
                 .into_iter()
-                .chain((self.lang.also_statement)(node).then_some((Category::Statement, 1)))
-                .chain(assigns.then_some((Category::Operator, 1)))
-                .map(|(c, n)| {
-                    n as f64 * self.weights.weight(c) * self.nesting.factor_of(c, frame.depth)
-                })
+                .chain((self.lang.also_statement)(node).then_some((Category::Statement, 1.0)))
+                .chain(assigns.then_some((Category::Operator, 1.0)))
+                .map(|(c, n)| n * self.weights.weight(c) * self.nesting.factor_of(c, frame.depth))
                 .sum::<f64>()
                 + self.parameters((self.lang.parameters)(node, source), frame.depth)
                 + match category {
@@ -352,6 +357,29 @@ impl<'c> Weigher<'c> {
             entries,
             clean: !root.has_error(),
         })
+    }
+
+    /// An access's place in its row: how many accesses its object is in a row of (`a.b.c`'s `.c` is at 1, its `.b`
+    /// at 0). A call, `this` or anything not weighed as an access ends the row: `a.f().b` is at 0.
+    fn access_place(&self, node: Node, source: &[u8]) -> usize {
+        let mut place = 0;
+        let mut node = node;
+        while let Some(object) = lang::first_child(node).filter(|o| self.is_access(*o, source)) {
+            place += 1;
+            node = object;
+        }
+        place
+    }
+
+    /// Whether a node weighs as an access by its kind: not an operator, not exempt (a call's callee, `this.x`).
+    fn is_access(&self, node: Node, source: &[u8]) -> bool {
+        self.categories
+            .get(node.kind_id() as usize)
+            .copied()
+            .flatten()
+            == Some(Category::Access)
+            && (self.lang.operator)(node).is_none()
+            && !(self.lang.exempt)(node, source)
     }
 
     /// The weight of `count` parameters at `depth`, each by its place.
