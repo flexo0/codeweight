@@ -8,7 +8,9 @@ Guidance for coding agents working in this repository.
 function, a class, ...) has a weight, set in a weights file; an element nested in branches, loops, lambdas and nested
 functions weighs more. The weight of a file, a folder or a function is the sum of its elements' weights; the weight of
 a git commit (or a range, or the uncommitted changes) is its net delta, after minus before, positive or negative. It
-reads Java, TypeScript (TS, TSX), JavaScript, Python, Rust and Go, parsed by tree-sitter.
+reads Java, TypeScript (TS, TSX), JavaScript, Python, Rust and Go, parsed by tree-sitter. It weighs docs too: a
+Markdown file's docs weight is its words and symbol runs, a number of its own (`scan-docs`, `commit-docs`,
+`pre-commit-docs`), never summed with the code's or the tests'.
 
 The design is `docs/`, a file per subject (its index `docs/README.md`); `docs/milestones.md` is how it was built,
 milestone by milestone, and how the defaults were tuned. Keep those docs in step with what is built (a decision made
@@ -31,7 +33,8 @@ while building goes into its subject's file, in the same commit).
 ## Invariants
 
 - The engine is pure: text and a language in, weights out. It knows nothing of files, folders or git; `source`
-  turns every input into `(path, language, text)` items.
+  turns every input into `(path, kind, text)` items, a kind a language's code or Markdown; Markdown's docs weight
+  (`markdown`) is as pure.
 - Every weight and factor comes from the weights file. The defaults are a TOML file in the repo
   (`src/default.toml`), embedded with `include_str!` and written out by `codeweight init`: no weight is a literal in
   the code. A user's file is merged over the defaults; an unknown key, category or node kind is an error, not ignored.
@@ -53,6 +56,8 @@ while building goes into its subject's file, in the same commit).
   function is named), its default weights' overrides in `src/default.toml` if any, its tests.
 - A category: `src/default.toml` (its default weight), the languages' tables, the README's list.
 - A command or option: `src/cli.rs`, the README's usage, the skill (`skills/codeweight/SKILL.md`).
+- The docs weight (what a Markdown file's words and symbol runs are): `src/markdown.rs`, its `[docs]` weights in
+  `src/default.toml`, `docs/weight.md`; which files are docs: `[files] docs_globs`, `src/source.rs`.
 
 ## Style
 

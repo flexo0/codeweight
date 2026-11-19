@@ -43,7 +43,12 @@ Built (`config`, `config::find`):
 - `[docs]` is the weights of a Markdown file's docs weight ([weight.md](weight.md)): `word` for each word and
   `symbol` for each symbol run, 1 and 1 by default, each 0 or above. Its two keys are all it holds (an unknown one
   is an error); a file on its own must hold it, as the engine's tests' does (`word` 1, `symbol` 10).
-- `[files]` is for what is weighed ([architecture.md](architecture.md), `source`).
+- `[files]` is for what is weighed ([architecture.md](architecture.md), `source`). `docs_globs` are the Markdown
+  files, weighed for their docs weight by `scan-docs`, `commit-docs` and `pre-commit-docs` alone ([cli.md](cli.md)):
+  a file they match is docs and no test though a test glob matches it too (a `README.md` under `tests/`), and
+  Markdown whatever its extension; one they don't match is of no kind codeweight reads, as a `.txt`. The excludes
+  and hidden paths apply to docs as to code. A file on its own must hold the key, as it must `test_globs`; the
+  engine's tests' is `["**/*.md"]`.
 
 ```toml
 [nesting]
@@ -112,6 +117,7 @@ test_globs = [
     "**/*.test.ts", "**/*.spec.ts", "**/*.test.tsx", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py",
     "**/*.test.js", "**/*.spec.js", "**/*.test.jsx", "**/*.spec.jsx", "**/*_test.go",
 ]
+docs_globs = ["**/*.md", "**/*.markdown"]   # docs alone, weighed by [docs], though a test glob matches them too
 ```
 
 Folder walks honour `.gitignore` too (the `ignore` crate).

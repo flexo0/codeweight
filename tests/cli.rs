@@ -222,6 +222,66 @@ fn scan_weighs_go_its_test_files_and_vendor_and_generated_files_left_out() {
     assert_eq!(stdout(&tests), "total 4.69\n4.69  pkg/a_test.go  TestM\n");
 }
 
+#[test]
+fn scan_docs_weighs_the_markdown_files_alone_and_scan_and_scan_tests_never_see_them() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    for (file, text) in [
+        // Under the defaults (word 1, symbol 1): `Title`, `Some`, `words`, `here` and `#`, `.` are 6.
+        ("README.md", "# Title\n\nSome words here.\n"),
+        // `Hello`, `world`, `,` and `.`: 4.
+        ("docs/guide.markdown", "Hello, world.\n"),
+        // Under `tests/`, still docs alone: `-`, `a`, `b` are 3.
+        ("tests/notes.md", "- a b\n"),
+        ("node_modules/x/y.md", "# excluded\n"),
+        (".hidden/h.md", "# hidden\n"),
+        // The code and the tests: 3.04 each, as in the scans above.
+        ("src/a.py", "def f():\n    g()\n"),
+        ("tests/test_a.py", "def t():\n    g()\n"),
+    ] {
+        let path = root.join(file);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    }
+
+    let docs = codeweight(root, &["scan-docs", "."]);
+    assert!(docs.status.success(), "{}", stderr(&docs));
+    assert_eq!(stdout(&docs), "13\n");
+    let verbose = codeweight(root, &["scan-docs", ".", "-v"]);
+    assert_eq!(
+        stdout(&verbose),
+        "total 13\n\
+         6  README.md  (file)\n\
+         4  docs/guide.markdown  (file)\n\
+         3  tests/notes.md  (file)\n"
+    );
+    assert_eq!(
+        stdout(&codeweight(root, &["scan", ".", "-v"])),
+        "total 3.04\n3.04  src/a.py  f\n"
+    );
+    assert_eq!(
+        stdout(&codeweight(root, &["scan-tests", ".", "-v"])),
+        "total 3.04\n3.04  tests/test_a.py  t\n"
+    );
+    // A file given is weighed by its kind too: the code's scan of a Markdown file weighs nothing.
+    assert_eq!(stdout(&codeweight(root, &["scan", "README.md"])), "0\n");
+    assert_eq!(stdout(&codeweight(root, &["scan-docs", "src/a.py"])), "0\n");
+
+    // Docs globs of one's own: only the docs folder's.
+    fs::write(
+        root.join("own.toml"),
+        "[files]\ndocs_globs = [\"docs/**\"]\n",
+    )
+    .unwrap();
+    let own = codeweight(root, &["scan-docs", ".", "--config", "own.toml"]);
+    assert!(own.status.success(), "{}", stderr(&own));
+    assert_eq!(stdout(&own), "4\n");
+    fs::write(root.join("bad.toml"), "[files]\ndocs_globs = [\"a/[b\"]\n").unwrap();
+    let bad = codeweight(root, &["scan-docs", ".", "--config", "bad.toml"]);
+    assert_eq!(bad.status.code(), Some(2));
+    assert!(stderr(&bad).contains("docs_globs"), "{}", stderr(&bad));
+}
+
 /// A throwaway git repo, isolated from the user's and the system's git config.
 struct Repo {
     dir: tempfile::TempDir,
@@ -438,6 +498,62 @@ fn commit_leaves_out_the_excludes_and_its_tests_and_commit_tests_weighs_the_test
         run(&["pre-commit-tests"]),
         "total +1.49\n+1.49  heavier  tests/test_a.py  f\n"
     );
+}
+
+#[test]
+fn commit_docs_weighs_a_doc_added_edited_renamed_and_deleted() {
+    let repo = Repo::new();
+    // Under tests/weights.toml (word 1, symbol 10): `#` and 21 words are 31.
+    let doc = format!("# A\n{}", "word\n".repeat(20));
+    repo.commit(&[("doc.md", Some(&doc)), ("a.py", Some(F))]);
+    assert_eq!(
+        repo.run("commit-docs", &["HEAD"]),
+        "total +31\n+31  added    doc.md  (file)\n"
+    );
+    // The code's delta has no docs in it.
+    assert_eq!(
+        repo.weigh(&["HEAD"]),
+        "total +103\n+103  added    a.py  f\n"
+    );
+
+    // Two words and a `,`: 12.
+    let edited = format!("{doc}more, words\n");
+    repo.commit(&[("doc.md", Some(&edited))]);
+    assert_eq!(
+        repo.run("commit-docs", &["HEAD"]),
+        "total +12\n+12  heavier  doc.md  (file)\n"
+    );
+
+    // Renamed with a word more: git sees one file, its delta the word's.
+    repo.commit(&[
+        ("doc.md", None),
+        ("guide.md", Some(&format!("{edited}word\n"))),
+    ]);
+    assert_eq!(
+        repo.run("commit-docs", &["HEAD"]),
+        "total +1\n+1  heavier  doc.md -> guide.md  (file)\n"
+    );
+
+    repo.commit(&[("guide.md", None)]);
+    assert_eq!(
+        repo.run("commit-docs", &["HEAD"]),
+        "total -44\n-44  removed  guide.md  (file)\n"
+    );
+    // A range: the first commit's doc against none.
+    assert_eq!(
+        repo.run("commit-docs", &["HEAD~3..HEAD"]),
+        "total -31\n-31  removed  doc.md  (file)\n"
+    );
+
+    // The uncommitted changes: a doc untracked, a code file changed.
+    fs::write(repo.path().join("new.md"), "x\n").unwrap();
+    fs::write(repo.path().join("a.py"), FG).unwrap();
+    assert_eq!(
+        repo.run("pre-commit-docs", &[]),
+        "total +1\n+1  added    new.md  (file)\n"
+    );
+    repo.git(&["add", "a.py"]);
+    assert_eq!(repo.run("pre-commit-docs", &["--only-staged"]), "total 0\n");
 }
 
 #[test]

@@ -8,12 +8,13 @@ use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use rayon::prelude::*;
 
-use crate::config::{self, Config};
+use crate::config::{self, Config, Docs};
 use crate::engine::{Weighed, Weigher};
 use crate::git;
-use crate::lang::{self, Lang};
+use crate::lang;
+use crate::markdown;
 use crate::report::{self, By, Changed, Revisions, Weighted};
-use crate::source;
+use crate::source::{self, Kind, Mode};
 
 /// Weighs code: every element by its weight, heavier when nested.
 #[derive(Parser)]
@@ -52,16 +53,23 @@ enum Command {
     Scan(ScanArgs),
     /// The weight of the tests in files and folders (the test files, a Rust file's tests): the total alone
     ScanTests(ScanArgs),
+    /// The docs weight of the Markdown files in files and folders (those the docs globs match): the total alone
+    ScanDocs(ScanArgs),
     /// The net weight delta of a commit or between two revisions, its tests left out: the total alone
     Commit(CommitArgs),
     /// The net weight delta of a commit's tests or of the tests between two revisions: the total alone
     CommitTests(CommitArgs),
+    /// The net docs weight delta of a commit's Markdown files or of those between two revisions: the total alone
+    CommitDocs(CommitArgs),
     /// The net weight delta of the uncommitted changes (the untracked files too) against HEAD, their tests left
     /// out: the total alone
     PreCommit(PreCommitArgs),
     /// The net weight delta of the uncommitted changes' tests (the untracked files too) against HEAD: the total
     /// alone
     PreCommitTests(PreCommitArgs),
+    /// The net docs weight delta of the uncommitted changes' Markdown files (the untracked files too) against
+    /// HEAD: the total alone
+    PreCommitDocs(PreCommitArgs),
     /// Writes the default weights file
     Init {
         /// Where to write it
@@ -70,7 +78,7 @@ enum Command {
     },
 }
 
-/// The arguments of `scan` and `scan-tests`.
+/// The arguments of `scan`, `scan-tests` and `scan-docs`.
 #[derive(Args)]
 struct ScanArgs {
     /// A file or a folder, absolute or relative
@@ -81,7 +89,7 @@ struct ScanArgs {
     verbose: bool,
 }
 
-/// The arguments of `commit` and `commit-tests`.
+/// The arguments of `commit`, `commit-tests` and `commit-docs`.
 #[derive(Args)]
 struct CommitArgs {
     /// A revision (against its first parent) or a range A..B
@@ -94,7 +102,7 @@ struct CommitArgs {
     verbose: bool,
 }
 
-/// The arguments of `pre-commit` and `pre-commit-tests`.
+/// The arguments of `pre-commit`, `pre-commit-tests` and `pre-commit-docs`.
 #[derive(Args)]
 struct PreCommitArgs {
     /// Any path inside the repo
@@ -106,6 +114,13 @@ struct PreCommitArgs {
     /// The whole report: the total, the functions (or files), and the warnings
     #[arg(short, long)]
     verbose: bool,
+}
+
+impl CommitArgs {
+    /// The commit or range these arguments ask for.
+    fn changes(&self) -> Changes<'_> {
+        Changes::Rev(&self.rev)
+    }
 }
 
 impl PreCommitArgs {
@@ -127,35 +142,38 @@ enum Format {
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
     match &cli.command {
-        Command::Scan(a) => scan(&cli, &a.paths, a.verbose, false),
-        Command::ScanTests(a) => scan(&cli, &a.paths, a.verbose, true),
-        Command::Commit(a) => commit(&cli, Changes::Rev(&a.rev), &a.repo, a.verbose, false),
-        Command::CommitTests(a) => commit(&cli, Changes::Rev(&a.rev), &a.repo, a.verbose, true),
-        Command::PreCommit(a) => commit(&cli, a.changes(), &a.repo, a.verbose, false),
-        Command::PreCommitTests(a) => commit(&cli, a.changes(), &a.repo, a.verbose, true),
+        Command::Scan(a) => scan(&cli, a, Mode::Code),
+        Command::ScanTests(a) => scan(&cli, a, Mode::Tests),
+        Command::ScanDocs(a) => scan(&cli, a, Mode::Docs),
+        Command::Commit(a) => commit(&cli, a.changes(), &a.repo, a.verbose, Mode::Code),
+        Command::CommitTests(a) => commit(&cli, a.changes(), &a.repo, a.verbose, Mode::Tests),
+        Command::CommitDocs(a) => commit(&cli, a.changes(), &a.repo, a.verbose, Mode::Docs),
+        Command::PreCommit(a) => commit(&cli, a.changes(), &a.repo, a.verbose, Mode::Code),
+        Command::PreCommitTests(a) => commit(&cli, a.changes(), &a.repo, a.verbose, Mode::Tests),
+        Command::PreCommitDocs(a) => commit(&cli, a.changes(), &a.repo, a.verbose, Mode::Docs),
         Command::Init { file } => init(file),
     }
 }
 
-/// Weighs the code at `paths`, or its tests (`tests`), each at its full weight.
-fn scan(cli: &Cli, paths: &[PathBuf], verbose: bool, tests: bool) -> Result<()> {
-    let config = load_config(cli, paths.first().map(PathBuf::as_path))?;
-    let mut input = source::from_paths(paths, &config.files)?;
-    input.keep(tests);
+/// Weighs the code at the paths, its tests or its docs (`mode`), each at its full weight.
+fn scan(cli: &Cli, args: &ScanArgs, mode: Mode) -> Result<()> {
+    let config = load_config(cli, args.paths.first().map(PathBuf::as_path))?;
+    let mut input = source::from_paths(&args.paths, &config.files)?;
+    input.keep(mode);
     let weighers = Weighers::new(&config);
     // In parallel, each file read when weighed; `collect` keeps the input's order.
     let files = input
         .items
         .into_par_iter()
         .map(|item| {
-            let weighed = weighers.weigh(item.lang, &item.text()?, item.test, &item.path)?;
+            let weighed = weighers.weigh(item.kind, &item.text()?, item.test, &item.path, mode)?;
             Ok(Weighted {
                 path: item.path,
-                weighed: weighed.only(tests),
+                weighed,
             })
         })
         .collect::<Result<Vec<_>>>()?;
-    let report = cli.report(verbose);
+    let report = cli.report(args.verbose);
     print!(
         "{}",
         match cli.format {
@@ -183,9 +201,9 @@ enum Changes<'a> {
     Uncommitted { staged: bool },
 }
 
-/// Weighs the net delta of a commit, a range or the uncommitted changes: of the code, or of its tests (`tests`),
-/// each at its full weight.
-fn commit(cli: &Cli, changes: Changes, repo: &Path, verbose: bool, tests: bool) -> Result<()> {
+/// Weighs the net delta of a commit, a range or the uncommitted changes: of the code, its tests or its docs
+/// (`mode`), each at its full weight.
+fn commit(cli: &Cli, changes: Changes, repo: &Path, verbose: bool, mode: Mode) -> Result<()> {
     let config = load_config(cli, Some(repo))?;
     let range = match changes {
         Changes::Rev(rev) => git::resolve(repo, rev)?,
@@ -193,12 +211,12 @@ fn commit(cli: &Cli, changes: Changes, repo: &Path, verbose: bool, tests: bool) 
     };
     // The uncommitted changes' tree is no commit of the repo's.
     let to = matches!(changes, Changes::Rev(_)).then_some(range.to.as_str());
-    let changes = source::from_commit(repo, &range, &config.files, tests)?;
+    let changes = source::from_commit(repo, &range, &config.files, mode)?;
     let weighers = Weighers::new(&config);
     let side = |blob: Option<source::Blob>| -> Result<Option<(PathBuf, Weighed)>> {
         blob.map(|b| {
-            let weighed = weighers.weigh(b.lang, &b.text, b.test, &b.path)?;
-            Ok((b.path, weighed.only(tests)))
+            let weighed = weighers.weigh(b.kind, &b.text, b.test, &b.path, mode)?;
+            Ok((b.path, weighed))
         })
         .transpose()
     };
@@ -249,20 +267,34 @@ fn load_config(cli: &Cli, inside: Option<&Path>) -> Result<Config> {
     Config::load(found.as_deref())
 }
 
-/// A weigher per language.
+/// A weigher per language, and the docs weights for Markdown.
 struct Weighers<'c> {
     weighers: Vec<Weigher<'c>>,
+    docs: &'c Docs,
 }
 
 impl<'c> Weighers<'c> {
     fn new(config: &'c Config) -> Weighers<'c> {
         Weighers {
             weighers: lang::ALL.iter().map(|l| Weigher::new(l, config)).collect(),
+            docs: &config.docs,
         }
     }
 
-    /// A text of `lang` weighed, a test file's (`test`) all test code.
-    fn weigh(&self, lang: &'static Lang, text: &str, test: bool, path: &Path) -> Result<Weighed> {
+    /// A text of `kind` weighed for `mode`: Markdown its docs weight; code its tests alone or its code without
+    /// them, a test file's (`test`) all test code.
+    fn weigh(
+        &self,
+        kind: Kind,
+        text: &str,
+        test: bool,
+        path: &Path,
+        mode: Mode,
+    ) -> Result<Weighed> {
+        let lang = match kind {
+            Kind::Markdown => return Ok(markdown::weigh(text, self.docs)),
+            Kind::Code(lang) => lang,
+        };
         let weigher = self
             .weighers
             .iter()
@@ -271,7 +303,8 @@ impl<'c> Weighers<'c> {
         let weighed = weigher
             .weigh(text)
             .with_context(|| format!("weighing {}", path.display()))?;
-        Ok(if test { weighed.all_tests() } else { weighed })
+        let weighed = if test { weighed.all_tests() } else { weighed };
+        Ok(weighed.only(mode == Mode::Tests))
     }
 }
 

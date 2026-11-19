@@ -72,3 +72,4 @@ test_globs = [
     "**/*.test.ts", "**/*.spec.ts", "**/*.test.tsx", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py",
     "**/*.test.js", "**/*.spec.js", "**/*.test.jsx", "**/*.spec.jsx", "**/*_test.go",
 ]
+docs_globs = ["**/*.md", "**/*.markdown"]   # docs alone, weighed by [docs], though a test glob matches them too

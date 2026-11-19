@@ -3,13 +3,17 @@
 ```
 codeweight scan <path>... [-v]            a file or a folder, absolute or relative; several allowed; tests left out
 codeweight scan-tests <path>... [-v]      the same, of the tests alone
+codeweight scan-docs <path>... [-v]       the same, the docs weight of the Markdown files alone
 codeweight commit <rev>|<A>..<B> [-C <repo>] [-v]        the net weight delta of a commit or between two
                                                          revisions, its tests left out
 codeweight commit-tests <rev>|<A>..<B> [-C <repo>] [-v]  the same, of the tests alone
+codeweight commit-docs <rev>|<A>..<B> [-C <repo>] [-v]   the same, the docs weight of the Markdown files alone
 codeweight pre-commit [-C <repo>] [--only-staged] [-v]   the net weight delta of the uncommitted changes (or
                                                          the staged ones alone), their tests left out
 codeweight pre-commit-tests [-C <repo>] [--only-staged] [-v]
                                                          the same, of the tests alone
+codeweight pre-commit-docs [-C <repo>] [--only-staged] [-v]
+                                                         the same, the docs weight of the Markdown files alone
 codeweight init [<file>]                  writes the default weights file (default ./codeweight.toml)
 ```
 
@@ -22,24 +26,30 @@ and `--by file|function` (what the report lists).
 - A range `A..B` diffs the two trees directly, so a change made and undone inside it nets to zero.
 - `pre-commit`: the uncommitted changes, `HEAD` against the working tree, untracked files too
   (the commit `git add -A && git commit` would make), so the weight of a commit can be seen before it is made.
-  `--only-staged` (of `pre-commit` and `pre-commit-tests`): `HEAD` against the index, the commit `git commit` would
+  `--only-staged` (of `pre-commit`, `pre-commit-tests` and `pre-commit-docs`): `HEAD` against the index, the commit `git commit` would
   make, for a commit staged part by part (`git add -p`) or with other changes left in the working tree.
 - `commit` and `pre-commit` weigh the code, its tests left out; `commit-tests` and `pre-commit-tests` the tests
-  alone, each side kept as `scan` and `scan-tests` keep a file.
+  alone; `commit-docs` and `pre-commit-docs` the docs alone; each side kept as `scan`, `scan-tests` and
+  `scan-docs` keep a file.
 - Exit codes: 0 done, 2 an error (a bad path, revision or weights file). `main` prints the error with its context
   chain (`error: ...`) to stderr; clap's own usage errors exit 2 too.
 
 Built (`cli`, `report`): every command and option. A command of several words is kebab-case (`scan-tests`,
-`pre-commit`), as git's and cargo's are and as the options are. `init` never overwrites a file (it is created new, else an
+`pre-commit-docs`), as git's and cargo's are and as the options are. `init` never overwrites a file (it is created new, else an
 error). `--by` defaults to `function`; `--top` keeps the report's first N lines, whichever `--by` lists (so "the N
 heaviest functions", or files).
 
 - `scan` prints its total alone, a number, so a script or a person reads one value, and `commit` its net delta alone,
   signed (`+42.5`); `--verbose` (`-v`), `--top` or `--by` print the whole report (a list was asked for). `scan` weighs the code without its tests, `scan-tests`
-  the tests alone, and so `commit` / `pre-commit` and `commit-tests` / `pre-commit-tests` for a
-  delta: the code and the tests are always two numbers, never summed into one, so neither hides the other. Each
-  weighs at its full weight; there is no factor that mixes them.
-  The tests are the test files (by path) and the test code inside a source file (Rust's, see [languages.md](languages.md)). With the
+  the tests alone, `scan-docs` the docs alone, and so `commit` / `pre-commit`, `commit-tests` / `pre-commit-tests`
+  and `commit-docs` / `pre-commit-docs` for a delta: the code, the tests and the docs are always three numbers,
+  never summed into one, so none hides another (a word of prose and a statement are no one scale). Each weighs at
+  its full weight; there is no factor that mixes them.
+  The tests are the test files (by path) and the test code inside a source file (Rust's, see [languages.md](languages.md)). The docs
+  are the Markdown files, those the docs globs match (by path, `[files] docs_globs`, see [config.md](config.md)),
+  each weighed by its words and symbol runs ([weight.md](weight.md)); a file they match is docs alone, though it is
+  under `tests/` or the test globs match it, and the code's and the tests' commands never see it. A Markdown file
+  is one line of the report, its `(file)` (`--by function` too: it has no functions), and never has a warning. With the
   total alone, the warnings (syntax errors, unreadable folders) go to stderr. The JSON is the whole report,
   `--verbose` or not: a machine reads the fields it wants.
 - `scan`'s text with `--verbose`: the total, then one line per function or class (`<weight>  <path>  <name>`, a class as

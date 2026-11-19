@@ -232,12 +232,14 @@ pub struct Docs {
     pub symbol: f64,
 }
 
-/// The `[files]` table: which files a folder walk weighs, and which are tests.
+/// The `[files]` table: which files a folder walk weighs, which are tests, and which are docs.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Files {
     pub exclude: Vec<String>,
     pub test_globs: Vec<String>,
+    /// The Markdown files, weighed for their docs weight alone, though the test globs match them too.
+    pub docs_globs: Vec<String>,
 }
 
 /// A language's weights: `[weights]` with its `[languages.<name>.weights]` over them, and its node kinds remapped.
@@ -317,6 +319,9 @@ impl Config {
         }
         for glob in &raw.files.test_globs {
             source::glob(glob).with_context(|| format!("[files] test_globs `{glob}`"))?;
+        }
+        for glob in &raw.files.docs_globs {
+            source::glob(glob).with_context(|| format!("[files] docs_globs `{glob}`"))?;
         }
 
         let mut base = [0.0; Category::ALL.len()];
@@ -503,6 +508,10 @@ mod tests {
         );
         assert_eq!(config.files.exclude, vec!["a/**".to_string()]);
         assert_eq!(config.files.test_globs, defaults.files.test_globs);
+        assert_eq!(
+            config.files.docs_globs,
+            vec!["**/*.md".to_string(), "**/*.markdown".to_string()]
+        );
         assert_eq!(config.nesting, defaults.nesting);
     }
 
@@ -622,6 +631,8 @@ mod tests {
     fn a_bad_glob_is_an_error() {
         let error = error_of("[files]\nexclude = [\"a/[b\"]\n");
         assert!(error.contains("[files] exclude `a/[b`"), "{error}");
+        let error = error_of("[files]\ndocs_globs = [\"a/[b\"]\n");
+        assert!(error.contains("[files] docs_globs `a/[b`"), "{error}");
     }
 
     #[test]
@@ -683,7 +694,7 @@ mod tests {
     fn a_file_on_its_own_must_set_every_category() {
         let error = Config::from_str_alone(
             "[nesting]\nmodel = \"linear\"\nfactor = 1\nmax_depth = 3\nflat = []\n[parameters]\nstep = 0\nmax = 1\n[weights]\nstatement = 1\n\
-             [docs]\nword = 1\nsymbol = 1\n[files]\nexclude = []\ntest_globs = []\n",
+             [docs]\nword = 1\nsymbol = 1\n[files]\nexclude = []\ntest_globs = []\ndocs_globs = []\n",
         )
         .unwrap_err();
         assert!(format!("{error:#}").contains("no weight for `call`"));

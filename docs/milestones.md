@@ -248,3 +248,12 @@
     0.556. On the pairs: worse 39 → 35, ties 13 → 5. On five folds of the rules it holds out as the old search
     does (42 worse; ties 10 → 6): the better fit is mostly the pairs' own (`pairs/README.md`). The corpora not
     re-checked.
+26. (built) The docs weight, as asked: how much a change adds to or takes from the docs, a Markdown file's words and
+    symbol runs ([weight.md](weight.md), `markdown`, pure as the engine is, no tree-sitter), `[docs] word` 1 and
+    `symbol` 1: a word a run of letters and digits, a symbol run (`**`, `);`) one however long. Then its commands, `scan-docs`, `commit-docs` and `pre-commit-docs`, the `-tests` twins' arguments:
+    the docs are a third number, never summed with the code's or the tests' (a word and a statement are no one
+    scale). Which files are docs is `[files] docs_globs` (`**/*.md`, `**/*.markdown`), beside `test_globs`: a file
+    they match is docs alone, though under `tests/`, and the code's and the tests' commands never see it; the
+    excludes and hidden paths apply as to code. `source` tells a file's kind (`Kind`: a language's code or Markdown)
+    and keeps it for a `Mode` (the code, the tests or the docs); a Markdown file is one row of the report, its
+    `(file)`, and never has a warning.

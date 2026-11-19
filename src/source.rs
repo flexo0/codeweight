@@ -1,5 +1,6 @@
-//! The inputs as `(path, language, text)` items: the files and folders named on the command line, a folder walked
-//! with its `.gitignore` and the weights file's excludes; or a commit's changed files, both their sides' texts.
+//! The inputs as `(path, kind, text)` items, a kind a language's code or Markdown: the files and folders named on
+//! the command line, a folder walked with its `.gitignore` and the weights file's excludes; or a commit's changed
+//! files, both their sides' texts.
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -13,12 +14,27 @@ use crate::config::{self, Files};
 use crate::git::{self, Range};
 use crate::lang::{self, Lang};
 
+/// What is weighed: the code (its tests aside), the tests, or the docs; each its own number, never summed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Mode {
+    Code,
+    Tests,
+    Docs,
+}
+
+/// What a file is weighed as: a language's code, or Markdown for its docs weight.
+#[derive(Clone, Copy)]
+pub enum Kind {
+    Code(&'static Lang),
+    Markdown,
+}
+
 /// A file to weigh, its text read when it is weighed.
 pub struct Item {
     /// As given, or the folder given joined with the file's path in it; without a leading `./`.
     pub path: PathBuf,
-    pub lang: &'static Lang,
-    /// Whether the test globs match it.
+    pub kind: Kind,
+    /// Whether the test globs match it (never a Markdown file).
     pub test: bool,
 }
 
@@ -79,8 +95,8 @@ impl Unreadable {
 pub struct Blob {
     /// From the repo's root.
     pub path: PathBuf,
-    pub lang: &'static Lang,
-    /// Whether the test globs match it.
+    pub kind: Kind,
+    /// Whether the test globs match it (never a Markdown file).
     pub test: bool,
     pub text: String,
 }
@@ -92,10 +108,10 @@ pub struct Changed {
 }
 
 /// The files `range` changed in the repo at `repo`, as a walk of the repo's root would weigh them on each side, for
-/// the code or the tests (`tests`), as a scan keeps them: a side that is hidden (a part of its path starts with
-/// `.`), excluded, in no language codeweight reads, or not kept is left out, and a change with neither side left;
+/// the code, the tests or the docs (`mode`), as a scan keeps them: a side that is hidden (a part of its path starts
+/// with `.`), excluded, of no kind codeweight reads, or not kept is left out, and a change with neither side left;
 /// the rest (at least one side each) in git's order.
-pub fn from_commit(repo: &Path, range: &Range, files: &Files, tests: bool) -> Result<Vec<Changed>> {
+pub fn from_commit(repo: &Path, range: &Range, files: &Files, mode: Mode) -> Result<Vec<Changed>> {
     let matchers = Matchers::new(files)?;
     let mut kept = Vec::new();
     for change in git::changes(repo, range)? {
@@ -108,9 +124,8 @@ pub fn from_commit(repo: &Path, range: &Range, files: &Files, tests: bool) -> Re
             if hidden || matchers.exclude.is_match(&side.path) {
                 return None;
             }
-            let lang = lang::for_path(&side.path)?;
-            let test = matchers.tests.is_match(&side.path);
-            weighed_for(test, lang, tests).then_some((side, lang, test))
+            let (kind, test) = matchers.kind(&side.path, &side.path)?;
+            weighed_for(test, kind, mode).then_some((side, kind, test))
         };
         let before = keep(change.before);
         let after = keep(change.after);
@@ -130,8 +145,8 @@ pub fn from_commit(repo: &Path, range: &Range, files: &Files, tests: bool) -> Re
     }
     let wanted: Vec<&str> = uses.keys().map(String::as_str).collect();
     let mut texts = git::blobs(repo, &wanted)?;
-    let mut blob = |side: Option<(git::Side, &'static Lang, bool)>| -> Result<Option<Blob>> {
-        let Some((side, lang, test)) = side else {
+    let mut blob = |side: Option<(git::Side, Kind, bool)>| -> Result<Option<Blob>> {
+        let Some((side, kind, test)) = side else {
             return Ok(None);
         };
         let missing = || format!("no blob {} for {}", side.blob, side.path.display());
@@ -145,7 +160,7 @@ pub fn from_commit(repo: &Path, range: &Range, files: &Files, tests: bool) -> Re
         .with_context(missing)?;
         Ok(Some(Blob {
             path: side.path,
-            lang,
+            kind,
             test,
             text: lossy(bytes),
         }))
@@ -166,9 +181,9 @@ pub fn glob(glob: &str) -> Result<Glob> {
 }
 
 /// The files at `paths`: a file as given, a folder walked (its `.gitignore`s honoured, hidden files and the
-/// excluded ones left out, in the order of the names), the test files among them. A path given twice, or found
-/// under two given folders, is one item. A path under a folder given that can't be read is left out and listed as
-/// unreadable; a folder given that can't be read is an error.
+/// excluded ones left out, in the order of the names), the test files and the docs among them. A path given twice,
+/// or found under two given folders, is one item. A path under a folder given that can't be read is left out and
+/// listed as unreadable; a folder given that can't be read is an error.
 pub fn from_paths(paths: &[PathBuf], files: &Files) -> Result<Input> {
     let matchers = Matchers::new(files)?;
     let mut input = Input {
@@ -222,11 +237,11 @@ pub fn from_paths(paths: &[PathBuf], files: &Files) -> Result<Input> {
 }
 
 impl Input {
-    /// Only the items a scan of the code weighs (those the test globs don't match), or a scan of the tests (those
-    /// they match, and those of a language with tests in its source files, Rust's).
-    pub fn keep(&mut self, tests: bool) {
+    /// Only the items a scan of `mode` weighs: of the code, those the test globs don't match; of the tests, those
+    /// they match and those of a language with tests in its source files (Rust's); of the docs, the Markdown files.
+    pub fn keep(&mut self, mode: Mode) {
         self.items
-            .retain(|item| weighed_for(item.test, item.lang, tests));
+            .retain(|item| weighed_for(item.test, item.kind, mode));
     }
 
     fn add(&mut self, path: &Path, key: &Path, matchers: &Matchers, seen: &mut HashSet<PathBuf>) {
@@ -234,20 +249,22 @@ impl Input {
         if !seen.insert(path.clone()) {
             return;
         }
-        let Some(lang) = lang::for_path(&path) else {
+        let Some((kind, test)) = matchers.kind(&path, key) else {
             return;
         };
-        let test = matchers.tests.is_match(key);
-        self.items.push(Item { path, lang, test });
+        self.items.push(Item { path, kind, test });
     }
 }
 
-/// Whether a file (`test`: the test globs match it) is weighed for the code, or for the tests (`tests`): a test
-/// file is the tests' alone, a file of a language with tests in its source files (Rust's) both's, each its part.
-fn weighed_for(test: bool, lang: &Lang, tests: bool) -> bool {
-    match tests {
-        true => test || lang.tests.is_some(),
-        false => !test,
+/// Whether a file (`test`: the test globs match it) is weighed for `mode`: a Markdown file is the docs' alone; of
+/// the code, a test file is the tests' alone, a file of a language with tests in its source files (Rust's) both's,
+/// each its part.
+fn weighed_for(test: bool, kind: Kind, mode: Mode) -> bool {
+    match (kind, mode) {
+        (Kind::Markdown, mode) => mode == Mode::Docs,
+        (Kind::Code(_), Mode::Docs) => false,
+        (Kind::Code(lang), Mode::Tests) => test || lang.tests.is_some(),
+        (Kind::Code(_), Mode::Code) => !test,
     }
 }
 
@@ -257,6 +274,7 @@ struct Matchers {
     /// The excludes that end in `/**` without it: a folder they match has every path under it excluded.
     folders: GlobSet,
     tests: GlobSet,
+    docs: GlobSet,
 }
 
 impl Matchers {
@@ -272,7 +290,19 @@ impl Matchers {
             exclude: set(&mut files.exclude.iter().map(String::as_str))?,
             folders: set(&mut files.exclude.iter().filter_map(|g| g.strip_suffix("/**")))?,
             tests: set(&mut files.test_globs.iter().map(String::as_str))?,
+            docs: set(&mut files.docs_globs.iter().map(String::as_str))?,
         })
+    }
+
+    /// The kind of the file at `path` (its globs' path `key`), and whether it is a test file: a file the docs globs
+    /// match is Markdown and no test, though the test globs match it too; else its language's, by `path`; `None`
+    /// for a file of no kind codeweight reads.
+    fn kind(&self, path: &Path, key: &Path) -> Option<(Kind, bool)> {
+        if self.docs.is_match(key) {
+            return Some((Kind::Markdown, false));
+        }
+        let lang = lang::for_path(path)?;
+        Some((Kind::Code(lang), self.tests.is_match(key)))
     }
 }
 
@@ -344,10 +374,15 @@ fn shown(path: &Path) -> PathBuf {
 mod tests {
     use super::*;
 
+    fn strings(globs: &[&str]) -> Vec<String> {
+        globs.iter().map(|g| g.to_string()).collect()
+    }
+
     fn files(exclude: &[&str], test_globs: &[&str]) -> Files {
         Files {
-            exclude: exclude.iter().map(|g| g.to_string()).collect(),
-            test_globs: test_globs.iter().map(|g| g.to_string()).collect(),
+            exclude: strings(exclude),
+            test_globs: strings(test_globs),
+            docs_globs: strings(&["**/*.md"]),
         }
     }
 
@@ -365,9 +400,14 @@ mod tests {
             .iter()
             .map(|i| {
                 format!(
-                    "{}{}",
+                    "{}{}{}",
                     i.path.strip_prefix(root).unwrap().display(),
-                    if i.test { " (test)" } else { "" }
+                    if i.test { " (test)" } else { "" },
+                    if matches!(i.kind, Kind::Markdown) {
+                        " (docs)"
+                    } else {
+                        ""
+                    }
                 )
             })
             .collect()
@@ -407,6 +447,7 @@ mod tests {
         assert_eq!(
             found(&input, root),
             vec![
+                "src/README.md (docs)".to_string(),
                 "src/a/Z.java".to_string(),
                 "src/b.py".to_string(),
                 "src/c.ts".to_string(),
@@ -458,17 +499,73 @@ mod tests {
     fn a_scan_keeps_the_code_or_the_tests_and_the_files_with_tests_inside() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
-        write(root, &["a.py", "b.rs", "test_a.py"]);
-        let scan = |tests| {
+        write(root, &["a.py", "b.rs", "notes.md", "test_a.py"]);
+        let scan = |mode| {
             let mut input =
                 from_paths(&[root.to_path_buf()], &files(&[], &["**/test_*.py"])).unwrap();
-            input.keep(tests);
+            input.keep(mode);
             found(&input, root)
         };
-        assert_eq!(scan(false), vec!["a.py".to_string(), "b.rs".to_string()]);
         assert_eq!(
-            scan(true),
+            scan(Mode::Code),
+            vec!["a.py".to_string(), "b.rs".to_string()]
+        );
+        assert_eq!(
+            scan(Mode::Tests),
             vec!["b.rs".to_string(), "test_a.py (test)".to_string()]
+        );
+        assert_eq!(scan(Mode::Docs), vec!["notes.md (docs)".to_string()]);
+    }
+
+    #[test]
+    fn a_file_the_docs_globs_match_is_docs_alone_though_under_tests() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        fs::create_dir(root.join(".git")).unwrap();
+        write(
+            root,
+            &[
+                "README.md",
+                "a.py",
+                "build/b.md",
+                ".hidden/h.md",
+                "docs/guide.markdown",
+                "tests/notes.md",
+                "tests/test_a.py",
+            ],
+        );
+        let mut globs = files(&["**/build/**"], &["**/tests/**"]);
+        globs.docs_globs = strings(&["**/*.md", "**/*.markdown"]);
+        let scan = |globs: &Files, mode| {
+            let mut input = from_paths(&[root.to_path_buf()], globs).unwrap();
+            input.keep(mode);
+            found(&input, root)
+        };
+        assert_eq!(scan(&globs, Mode::Code), vec!["a.py".to_string()]);
+        assert_eq!(
+            scan(&globs, Mode::Tests),
+            vec!["tests/test_a.py (test)".to_string()]
+        );
+        assert_eq!(
+            scan(&globs, Mode::Docs),
+            vec![
+                "README.md (docs)".to_string(),
+                "docs/guide.markdown (docs)".to_string(),
+                "tests/notes.md (docs)".to_string(),
+            ]
+        );
+
+        // Overridden: a Markdown file they don't match is read by no kind; one they match is docs, whatever its
+        // extension.
+        globs.docs_globs = strings(&["tests/**"]);
+        assert_eq!(scan(&globs, Mode::Code), vec!["a.py".to_string()]);
+        assert!(scan(&globs, Mode::Tests).is_empty());
+        assert_eq!(
+            scan(&globs, Mode::Docs),
+            vec![
+                "tests/notes.md (docs)".to_string(),
+                "tests/test_a.py (docs)".to_string(),
+            ]
         );
     }
 

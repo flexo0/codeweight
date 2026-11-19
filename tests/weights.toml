@@ -38,3 +38,4 @@ symbol = 10        # a symbol run apart from a word, so a hand-worked sum reads 
 [files]
 exclude = []
 test_globs = []
+docs_globs = ["**/*.md"]

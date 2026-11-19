@@ -6,7 +6,8 @@ weighs more. A file's weight is the sum of its elements' weights, and so is a fu
 tree-sitter.
 
 It reads Java (`.java`), TypeScript (`.ts`, `.mts`, `.cts`), TSX (`.tsx`), JavaScript (`.js`, `.jsx`, `.mjs`, `.cjs`),
-Python (`.py`, `.pyi`), Rust (`.rs`) and Go (`.go`). The design is
+Python (`.py`, `.pyi`), Rust (`.rs`) and Go (`.go`). It weighs docs too, a number of their own: a Markdown file's
+(`.md`, `.markdown`) docs weight is its words and symbol runs. The design is
 in `docs/`, a file per subject (see `docs/README.md`).
 
 ## Example
@@ -43,13 +44,17 @@ codeweight: link or copy the folder into the agent's skills, e.g. from a clone
 ```
 codeweight scan <path>... [-v]            the weight of files and folders, their tests left out; several allowed
 codeweight scan-tests <path>... [-v]      the weight of their tests alone
+codeweight scan-docs <path>... [-v]       the docs weight of their Markdown files alone
 codeweight commit <rev>|<A>..<B> [-C <repo>] [-v]        the net weight delta of a commit or between two
                                                          revisions, its tests left out
 codeweight commit-tests <rev>|<A>..<B> [-C <repo>] [-v]  the same, of the tests alone
+codeweight commit-docs <rev>|<A>..<B> [-C <repo>] [-v]   the same, the docs weight of the Markdown files alone
 codeweight pre-commit [-C <repo>] [--only-staged] [-v]   the net weight delta of the uncommitted changes (or
                                                          the staged ones alone), their tests left out
 codeweight pre-commit-tests [-C <repo>] [--only-staged] [-v]
                                                          the same, of the tests alone
+codeweight pre-commit-docs [-C <repo>] [--only-staged] [-v]
+                                                         the same, the docs weight of the Markdown files alone
 codeweight init [<file>]                  writes the default weights file (default ./codeweight.toml), never over an existing one
 ```
 
@@ -65,8 +70,11 @@ prints the weight of the tests alone: the test files (`test_globs`), and in a Ru
 marked `#[cfg(test)]`, `#[test]` or a runner's `#[tokio::test]` (any `#[...::test]`), all in them (a `mod tests`
 and its functions), and a whole file marked `#![cfg(test)]`. `commit` and `pre-commit` print their net delta alone,
 signed (`+42.5`, `-17`, `0`), of the code, its tests left out; `commit-tests` and `pre-commit-tests` the delta of
-the tests alone. The code and the tests are always two numbers, never one sum, each at its full weight: a change to
-both has its code in one and its tests in the other. For each command, `--verbose` (`-v`) prints the whole report
+the tests alone. `scan-docs`, `commit-docs` and `pre-commit-docs` weigh the docs alone: the Markdown files
+(`docs_globs`), each by its words and symbol runs (`[docs]`, below; a word 1 and a symbol run 1 by default, so
+`## Setup` is 2 and `foo(a, b);` 6). The code, the tests and the docs are always three numbers, never one sum, each
+at its full weight: a change to all three has its code in one, its tests in another and its docs in the third. For
+each command, `--verbose` (`-v`) prints the whole report
 instead, as `--top` and `--by` do; with the total alone, a file's syntax errors and a folder that can't be read are a
 warning on stderr.
 
@@ -85,7 +93,9 @@ A folder is walked for the files in it: its `.gitignore` is honoured, hidden fil
 left out (a file named on the command line is weighed even if excluded). The globs are matched against a file's path
 from the root of its git repo (outside a repo, from the current folder, or from the folder given when the path is
 outside the current one). `scan` leaves the test files (`test_globs`) and a Rust file's tests out, `scan-tests`
-weighs only them. Files are weighed in parallel; the output is the same on every run.
+weighs only them. A file the docs globs match (`docs_globs`) is docs alone, though it is under `tests/`: `scan` and
+`scan-tests` never weigh it, `scan-docs` weighs only such files, each one line of the report (its `(file)`, as it
+has no functions). Files are weighed in parallel; the output is the same on every run.
 
 A file that doesn't parse cleanly is still weighed, as tree-sitter recovered it, with a warning. A file in a language
 codeweight doesn't read is left out, never an error. A folder under the one scanned that can't be read (a
@@ -115,7 +125,7 @@ functions and classes are matched by their qualified name within the file (a ren
 `added`, `removed`, `heavier` or `lighter`. The changed files are weighed as a walk of the repo's root weighs them:
 the `[files]` excludes and hidden paths are left out, and so is a file codeweight doesn't read. `commit` and
 `pre-commit` leave the test files and a Rust file's tests out; `commit-tests` and `pre-commit-tests` weigh only them,
-each as `scan-tests` does.
+each as `scan-tests` does; `commit-docs` and `pre-commit-docs` weigh only the docs, as `scan-docs` does.
 
 With `-v`, the text report starts with the total delta (`total +42.5`, `total -17`). After it comes one line per function and
 class (or per file with `--by file`), `<delta>  <status>  <path>  <name>`, a renamed file's path as `old -> new`; the
@@ -134,8 +144,8 @@ rounded to two decimals, as the text shows it.
   one of `"function"`, `"class"` (its code outside its functions) and `"file"` (a file's code outside any class, its
   `name` and `line` `null`), `name` qualified (`Outer.Inner.method`), `line` the first line, from 1 (for `commit`, the after
 side's, a removed one's the before side's).
-- `warnings`: the files with syntax errors, `{path, kind: "syntax_errors", side}`, `side` `null` for `scan` and `scan-tests`;
-  then, for `scan` and `scan-tests`, the paths under a folder given that couldn't be read and were left out,
+- `warnings`: the files with syntax errors, `{path, kind: "syntax_errors", side}`, `side` `null` for a scan (a
+  Markdown file never has one); then, for a scan, the paths under a folder given that couldn't be read and were left out,
   `{path, kind: "unreadable", side: null}`.
 
 For `commit`, also `from` (the full hash compared from, `null` for the root commit's empty tree) and `to` (the full
@@ -217,6 +227,10 @@ lambda = 3
 [languages.java.node_kinds]         # yours only: a tree-sitter node kind mapped to a category, or to "none"
 synchronized_statement = "try"
 
+[docs]                  # a Markdown file's docs weight: words * word + symbol runs * symbol
+word = 1                # a run of letters and digits; a URL is one word
+symbol = 1              # a run of anything else that isn't a space, once however long: `**`, `);`, `##` are one each
+
 [files]                 # what a folder walk weighs (globs: * and ? within a path's part, ** across parts)
 exclude = [
     "**/node_modules/**", "**/build/**", "**/target/**", "**/generated/**", "**/vendor/**", "**/*.d.ts",
@@ -227,6 +241,7 @@ test_globs = [
     "**/*.test.ts", "**/*.spec.ts", "**/*.test.tsx", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py",
     "**/*.test.js", "**/*.spec.js", "**/*.test.jsx", "**/*.spec.jsx", "**/*_test.go",
 ]
+docs_globs = ["**/*.md", "**/*.markdown"]   # docs alone, weighed by [docs], though a test glob matches them too
 ```
 
 The defaults were first tuned on real Java, TypeScript and Python code (and re-checked on Rust) so that the heaviest

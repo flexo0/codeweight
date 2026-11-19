@@ -140,7 +140,8 @@ all but `nullish_operator`, which there only ties 11 pairs more; `nested_ternari
 ## The docs weight
 
 A Markdown file's weight is its docs weight, a number of its own, never summed with code's (`markdown`, pure as
-the engine is: text in, weight out):
+the engine is: text in, weight out); `scan-docs`, `commit-docs` and `pre-commit-docs` weigh it, a file the
+`[files] docs_globs` match ([cli.md](cli.md)):
 
 ```
 docs weight = words × word + symbol runs × symbol      ([docs], 1 and 1 by default)
