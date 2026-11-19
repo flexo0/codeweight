@@ -228,4 +228,7 @@ defaults tuned again by rule).
     1.35; the nesting stays linear, 1.5 (a pull of 0.3 would go exponential, 2.05-2.45, for one pair or two). On the
     pairs: worse 36 → 32, ties 15 → 12, Clippy's `manual_map` and `redundant_pattern_matching` now better (a
     `matches!` heavier than the `is_none() && ...` it stands for), `unnecessary_literal_unwrap`'s two `panic!` with a
-    format string now worse than `Err(1).unwrap()`. The corpora not re-checked.
+    format string now worse than `Err(1).unwrap()`. The corpora not re-checked. This repo's own `codeweight.toml`, a
+    frozen copy of the defaults before milestone 16 so that its commits weighed on one scale, is gone: the engine's
+    changes since had moved that scale anyway, and the repo now weighs itself by the defaults it ships (its commits'
+    `[+N]` up to this one are on the old scale).
