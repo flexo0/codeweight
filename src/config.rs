@@ -160,7 +160,7 @@ impl Parameters {
 
 /// The `[conditions]` table: rules that weigh what a node's kind alone doesn't tell, each weighing as an existing
 /// category. All off when a file on its own leaves the table out, so it weighs as the categories alone do; the
-/// defaults turn four on (the tuning on the example pairs).
+/// defaults turn all but `nullish_operator` on (the tuning on the example pairs).
 #[derive(Clone, Debug, Default, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Conditions {
@@ -174,6 +174,11 @@ pub struct Conditions {
     pub each_unary: bool,
     /// `??` and `??=` are an `operator`, not a `bool_op`: a default value, no branch.
     pub nullish_operator: bool,
+    /// A ternary chained in a ternary's alternative (`a ? x : b ? y : z`) nests, as one in its consequence does,
+    /// rather than being a sibling as an `else if` is.
+    pub nested_ternaries: bool,
+    /// A switch's or match's default case (`default`, a bare `_`) weighs nothing, as an `else` weighs nothing.
+    pub free_default: bool,
 }
 
 /// The `[files]` table: which files a folder walk weighs, and which are tests.
@@ -567,10 +572,10 @@ mod tests {
     }
 
     #[test]
-    fn the_defaults_hold_every_condition_four_on() {
+    fn the_defaults_hold_their_conditions() {
         let defaults = parse_toml(DEFAULTS).unwrap();
         let table = defaults["conditions"].as_table().unwrap();
-        assert_eq!(table.len(), 5);
+        assert_eq!(table.len(), 7);
         assert_eq!(
             Config::defaults().unwrap().conditions,
             Conditions {
@@ -579,6 +584,8 @@ mod tests {
                 magic_numbers: true,
                 each_unary: true,
                 nullish_operator: false,
+                nested_ternaries: true,
+                free_default: true,
             }
         );
         let mine = Config::from_str_over_defaults("[conditions]\ncasts = false\n").unwrap();

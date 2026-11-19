@@ -65,6 +65,8 @@ pub(super) const BASE: Lang = Lang {
     parameters,
     scope,
     tests: None,
+    default_case: |node, _| node.kind() == "switch_default",
+    carried_return: |_| false,
 };
 
 /// The number literal.
@@ -142,7 +144,7 @@ const NESTING: &[Nesting] = &[
     Nesting::only("if_statement", &["consequence"]),
     // `else if`: the `if` in an else stays at its depth, an else's block is deeper.
     Nesting::all_but("else_clause", &["if_statement"]),
-    Nesting::chained("ternary_expression"),
+    Nesting::ternary("ternary_expression"),
     Nesting::body("switch_case"),
     Nesting::body("switch_default"),
     Nesting::body("for_statement"),
@@ -298,6 +300,22 @@ mod tests {
 
     fn weigh(text: &str) -> Weighed {
         testing::weigh(&TYPESCRIPT, text)
+    }
+
+    #[test]
+    fn a_nested_ternary_nests_and_a_default_weighs_nothing_under_their_conditions() {
+        let (off, on) = testing::ternaries_and_defaults(
+            &TYPESCRIPT,
+            "// off: branch 10 + 10 at 0, the calls 2 × 2 × 3 at 1; on: the chained ternary 10 × 2, its calls 2 × 3 × 2
+             const r = a ? b() : c ? d() : e();
+             function f(x: number) {
+               switch (x) {
+                 case 1: g(); break;
+                 default: g();              // on: the default case 10 weighs nothing
+               }
+             }",
+        );
+        assert_eq!(on - off, (10.0 + 4.0 + 20.0 + 12.0) - (20.0 + 12.0) - 10.0);
     }
 
     #[test]

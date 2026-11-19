@@ -28,6 +28,13 @@ pub static JAVA: Lang = Lang {
     parameters,
     scope,
     tests: None,
+    default_case,
+    carried_return: |node| {
+        node.kind() == "return_statement"
+            && node
+                .named_child(0)
+                .is_some_and(|value| value.kind() == "switch_expression")
+    },
 };
 
 const KINDS: &[(&str, Category)] = &[
@@ -73,7 +80,7 @@ const KINDS: &[(&str, Category)] = &[
 
 const NESTING: &[Nesting] = &[
     Nesting::chained("if_statement"),
-    Nesting::chained("ternary_expression"),
+    Nesting::ternary("ternary_expression"),
     Nesting::all_but("switch_block_statement_group", &["switch_label"]),
     Nesting::all_but("switch_rule", &["switch_label"]),
     Nesting::body("for_statement"),
@@ -86,6 +93,19 @@ const NESTING: &[Nesting] = &[
     Nesting::only("finally_clause", &["block"]),
     Nesting::body("lambda_expression"),
 ];
+
+/// A switch's group or rule whose labels hold `default` (`default:`, `default ->`).
+fn default_case(node: Node, _: &[u8]) -> bool {
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor)
+        .filter(|child| child.kind() == "switch_label")
+        .any(|label| {
+            let mut cursor = label.walk();
+            label
+                .children(&mut cursor)
+                .any(|token| token.kind() == "default")
+        })
+}
 
 /// The number literals.
 const NUMBERS: &[&str] = &[
@@ -361,7 +381,7 @@ mod tests {
                  }
                }
                int r(int x) {
-                 return switch (x) {    // the last statement: statement 1
+                 return switch (x) {    // the last statement, its value weighing for it: none
                    case 1 -> g();       // branch 10; statement and call at 1: 6
                    default -> {         // branch 10
                      yield 2;           // statement 1 × 2 at 1
@@ -374,10 +394,7 @@ mod tests {
             function(&weighed, "A.f"),
             100.0 + 10.0 + 6.0 + 6.0 + 10.0 + 20.0 + 9.0
         );
-        assert_eq!(
-            function(&weighed, "A.r"),
-            100.0 + 1.0 + 10.0 + 6.0 + 10.0 + 2.0
-        );
+        assert_eq!(function(&weighed, "A.r"), 100.0 + 10.0 + 6.0 + 10.0 + 2.0);
     }
 
     #[test]
@@ -667,6 +684,52 @@ mod tests {
             100.0 + 3.0 + 17.0 + 11.0 + 10.0 + 14.0
         );
         assert_eq!(class(&weighed, "E"), 1001.0);
+    }
+
+    #[test]
+    fn an_early_return_of_a_switch_is_still_a_jump() {
+        let weighed = weigh(
+            "class A {
+               int r(int x) {
+                 if (x > 0) {                       // branch 10
+                   return switch (x) {              // an early return: jump 3 × 2 at 1
+                     default -> 1;                  // branch 10 × 2 at 1; its statement 1 × 3 at 2
+                   };
+                 }
+                 return 0;                          // the last statement: statement 1
+               }
+             }",
+        );
+        assert_eq!(
+            function(&weighed, "A.r"),
+            100.0 + 10.0 + 6.0 + 20.0 + 3.0 + 1.0
+        );
+    }
+
+    #[test]
+    fn a_nested_ternary_nests_and_a_default_weighs_nothing_under_their_conditions() {
+        let (off, on) = testing::ternaries_and_defaults(
+            &JAVA,
+            "class A {
+               // off: branch 10 + 10 at 0, the calls 2 × 2 × 3 at 1; on: the chained ternary at 1, 10 × 2,
+               // its calls at 2, 2 × 3 × 2
+               int r = a ? b() : c ? d() : e();
+               void f(int x) {
+                 switch (x) {
+                   case 1: g(); break;
+                   default: g();                    // on: the default case 10 weighs nothing
+                 }
+                 int y = switch (x) {
+                   case 1 -> 2;
+                   default -> 3;                    // on: nothing either
+                 };
+               }
+             }",
+        );
+        assert_eq!(
+            on - off,
+            (10.0 + 4.0 + 20.0 + 12.0) - (20.0 + 12.0) - 10.0 - 10.0
+        );
     }
 
     #[test]

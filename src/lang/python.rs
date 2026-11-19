@@ -29,10 +29,23 @@ pub static PYTHON: Lang = Lang {
     parameters,
     scope,
     tests: None,
+    default_case,
+    carried_return: |_| false,
 };
 
 /// The number literals.
 const NUMBERS: &[&str] = &["integer", "float"];
+
+/// A `case _:`, the wildcard alone and no guard.
+fn default_case(node: Node, source: &[u8]) -> bool {
+    let mut cursor = node.walk();
+    let patterns: Vec<Node> = node
+        .named_children(&mut cursor)
+        .filter(|child| child.kind() == "case_pattern")
+        .collect();
+    node.child_by_field_name("guard").is_none()
+        && matches!(patterns.as_slice(), [pattern] if text(*pattern, source) == "_")
+}
 
 const KINDS: &[(&str, Category)] = &[
     ("class_definition", Class),
@@ -81,6 +94,7 @@ const NESTING: &[Nesting] = &[
         kind: "conditional_expression",
         body: Children::Nth(&[0, 2]),
         chain: Some(Children::Nth(&[2])),
+        ternary: true,
     },
     Nesting::only("case_clause", &["consequence"]),
     Nesting::body("for_statement"),
@@ -202,6 +216,25 @@ mod tests {
 
     fn weigh(text: &str) -> Weighed {
         testing::weigh(&PYTHON, text)
+    }
+
+    #[test]
+    fn a_nested_conditional_nests_and_a_wildcard_case_weighs_nothing_under_their_conditions() {
+        let (off, on) = testing::ternaries_and_defaults(
+            &PYTHON,
+            "# off: branch 10 + 10 at 0, the calls 2 × 2 × 3 at 1; on: the chained one 10 × 2, its calls 2 × 3 × 2
+r = b() if a else d() if c else e()
+def f(x):
+    match x:
+        case 1:
+            g()
+        case _ if x:        # a guard: no default, case 10 either way
+            g()
+        case _:             # on: the default case 10 weighs nothing
+            g()
+",
+        );
+        assert_eq!(on - off, (10.0 + 4.0 + 20.0 + 12.0) - (20.0 + 12.0) - 10.0);
     }
 
     #[test]

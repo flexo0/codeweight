@@ -24,14 +24,15 @@ total        = Σ weight(node) over the nodes that have a category
 - `else if` chains and `switch` / `match` cases are siblings of one level, not deeper ones. The switch itself is not
   a nesting construct; each case is (a `case`, its statements one deeper). An `if` directly in an if's `alternative`
   stays at that if's depth; an `if` inside an `else { }` block is nested. A ternary chained in a ternary's
-  alternative (`a ? x : b ? y : z`) is a sibling the same way.
+  alternative (`a ? x : b ? y : z`) is a sibling the same way, but under `[conditions] nested_ternaries` (on by
+  default), where it nests.
 - A function or class declared inside a function (a local or anonymous class, its methods, a nested function)
   nests its body; a member class or method doesn't, whatever the depth of classes around it. Depth isn't reset at a
   function: a method of a class in an `if` in a method counts both.
-- `case`: each case of a `switch` or a `match` (`default` and `_` too), apart from `branch` (an `if`, a ternary):
-  by default a branch's weight, but a switch has one case more than the if-chain it replaces (its default, where
-  an `else` weighs nothing), so a tuning on pairs of code (a snippet and its refactoring, milestone 14) needs the
-  two weighed apart.
+- `case`: each case of a `switch` or a `match` (`default` and `_` too), apart from `branch` (an `if`, a ternary),
+  so a tuning on pairs of code (a snippet and its refactoring, milestone 14) can weigh the two apart. By default it
+  weighs less than a branch, and the default case nothing (`[conditions] free_default`), as an `else`: a switch
+  weighs less than the if-chain it replaces.
 - `bool_op`: one per run of like `&&` / `||` operators, the first run counted too, not one per operator: `a && b`
   and `a && b && c` are 1, `a && b || c` is 2, `(a && b) || (c && d)` is 3. A logical expression counts one when its
   operator differs from that of the logical expression it is an operand of, or it is no operand of one; parentheses
@@ -63,9 +64,8 @@ total        = Σ weight(node) over the nodes that have a category
 - `argument`: each argument of a node that is a `call`, at the call's depth (flat by default): the items of its
   `arguments` field's list, or one for a lone argument in its place (Python's `f(x for x in xs)`, a tagged
   template's string); none of a call without the field (a Rust macro, whose arguments are tokens; a JSX element;
-  `new A` without parentheses), nor of what is no call (Java's enum constant `X(1)`, Python's class bases). It is 0
-  by default, so a call's arguments weigh nothing of their own, what is in them weighs (milestone 13); it is a
-  category for the pairs, where a call lighter than the operators it replaces has 0 or 1 arguments (`f.is_some()`
+  `new A` without parentheses), nor of what is no call (Java's enum constant `X(1)`, Python's class bases). It is 0.05
+  by default, little of its own, what is in an argument weighs (milestone 13); it is a category for the pairs, where a call lighter than the operators it replaces has 0 or 1 arguments (`f.is_some()`
   for `f != None`) and a heavier one 2 (`Objects.equals(a, b)` for `a == b`). The engine counts them
   (`lang::arguments`), the same for every language.
 - `macro`: a macro invocation (Rust's `println!(...)`, `vec![...]`, `matches!(...)`), apart from `call`. Its
@@ -73,7 +73,9 @@ total        = Σ weight(node) over the nodes that have a category
   `argument`: the macro weighs for its content. It is flat by default, as `call`. The pairs (milestone 17) replace
   `matches!(x, P)` by a call (`x.is_ipv4()`), which with a macro weighing a call's 0.55 came out heavier.
 - `jump`: `break`, `continue`, `throw`, and an early return: a return that isn't the last statement (comments aside)
-  of its function's or lambda's body; the last one is a `statement`. So `if (x) return a; return b;` is a jump and a
+  of its function's or lambda's body; the last one is a `statement`, but Java's `return switch (x) { ... };`, whose
+  switch expression weighs for it as a switch statement in its place would (the language's `carried_return`
+  hook); an early one is still a jump. So `if (x) return a; return b;` is a jump and a
   statement, and both returns of an `if / else` at the end are jumps.
 - Each function's weight is kept apart, its nested functions' not in it; code outside any function belongs to its
   class, or else to its file. A declaration's own weight (`function`, `class`) is its own entry's; a lambda is not a
@@ -93,7 +95,8 @@ total        = Σ weight(node) over the nodes that have a category
 
 The `[conditions]` table's rules weigh what a node's kind alone doesn't tell, each as an existing category, so they
 add no weight of their own. The pairs of milestone 15 asked for them; the tuning on them (milestone 16) turned on all
-but `nullish_operator`, which there only ties 11 pairs more. A file on its own that leaves the table out has them all off.
+but `nullish_operator`, which there only ties 11 pairs more; `nested_ternaries` and `free_default` were asked for
+(milestone 18). A file on its own that leaves the table out has them all off.
 
 - `casts`: a cast or type assertion is an `operator`, one per cast (no run): Java's `(T) x`, TS's `x as T`,
   `x satisfies T`, `x!` and `<T>x` (TS only: TSX reads it as JSX), Rust's `x as T`, Go's `x.(T)`. A cast is
@@ -109,3 +112,11 @@ but `nullish_operator`, which there only ties 11 pairs more. A file on its own t
   and its argument), `-x` still 1.
 - `nullish_operator`: `??` and `??=` are an `operator` run, not a `bool_op`: a default value (as `unwrap_or` is a
   call), not a branch of control flow; `a ?? b ?? c` is still one run.
+- `nested_ternaries`: a ternary chained in a ternary's alternative (`a ? x : b ? y : z`, Python's `x if a else y if
+  b else z`) nests, as one in its consequence does, rather than being a sibling, as an `else if` is: a nested
+  ternary is one expression to unravel, where an `else if` chain is a list of statements. On by default.
+- `free_default`: a switch's or match's default case weighs nothing, as an `else` weighs nothing: Java's `default`
+  (`default:`, `default ->`), TS's and JS's `default:`, Go's `default:` (of a switch or a select), a bare `_` of
+  Rust's `match` and Python's `match` (not one with a guard, `_ if x`). So a switch weighs less than the if-chain it
+  replaces as long as a `case` weighs less than a `branch`, which the tuning keeps. Its body still nests. On by
+  default.

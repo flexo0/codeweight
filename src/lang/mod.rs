@@ -79,6 +79,12 @@ pub struct Lang {
     /// Whether a node is test code in a source file, it and all in it (Rust's `#[cfg(test)]` and `#[test]`
     /// items); `None` for a language whose tests are files of their own, which the test globs find.
     pub tests: Option<fn(Node, &[u8]) -> bool>,
+    /// Whether a case is its switch's or match's default (`default`, Rust's and Python's bare `_`), which weighs
+    /// nothing under `[conditions] free_default`, as an `else` weighs nothing.
+    pub default_case: fn(Node, &[u8]) -> bool,
+    /// Whether a return that is its body's last weighs no statement, its value weighing for it: Java's `return
+    /// switch (x) { ... };`, as a switch statement there would weigh none.
+    pub carried_return: fn(Node) -> bool,
 }
 
 /// A nesting construct: which of its children are one level deeper than it.
@@ -88,6 +94,8 @@ pub struct Nesting {
     pub body: Children,
     /// Its children that stay at its depth when they are of its own kind (`else if`, a chained ternary).
     pub chain: Option<Children>,
+    /// Whether it is a ternary, whose chain nests under `[conditions] nested_ternaries`.
+    pub ternary: bool,
 }
 
 impl Nesting {
@@ -97,6 +105,7 @@ impl Nesting {
             kind,
             body: Children::Only(body),
             chain: None,
+            ternary: false,
         }
     }
 
@@ -111,6 +120,7 @@ impl Nesting {
             kind,
             body: Children::AllBut(but),
             chain: None,
+            ternary: false,
         }
     }
 
@@ -121,6 +131,16 @@ impl Nesting {
             kind,
             body: Children::Only(&["consequence", "alternative"]),
             chain: Some(Children::Only(&["alternative"])),
+            ternary: false,
+        }
+    }
+
+    /// A ternary (`c ? x : y`), chained as an `if` (`a ? x : b ? y : z` siblings) but under
+    /// `[conditions] nested_ternaries`, where its chained alternative nests as its consequence does.
+    pub const fn ternary(kind: &'static str) -> Nesting {
+        Nesting {
+            ternary: true,
+            ..Nesting::chained(kind)
         }
     }
 }
@@ -411,6 +431,17 @@ pub mod testing {
             4.0,
             text,
         )
+    }
+
+    /// A snippet's total under the test weights, without and with `[conditions] nested_ternaries` and
+    /// `free_default` on.
+    pub fn ternaries_and_defaults(lang: &'static Lang, text: &str) -> (f64, f64) {
+        let on = format!("{WEIGHTS}\n[conditions]\nnested_ternaries = true\nfree_default = true\n");
+        let config = Config::from_str_alone(&on).unwrap();
+        assert!(config.conditions.nested_ternaries && config.conditions.free_default);
+        let on = weigh_under(lang, &on, text);
+        assert!(on.clean, "syntax errors in {text}");
+        (weigh(lang, text).total, on.total)
     }
 
     /// A snippet that parses cleanly, weighed under the test weights with `macro` 6 (a call stays 2).

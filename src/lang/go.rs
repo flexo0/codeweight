@@ -26,6 +26,8 @@ pub static GO: Lang = Lang {
     parameters,
     scope,
     tests: None,
+    default_case: |node, _| node.kind() == "default_case",
+    carried_return: |_| false,
 };
 
 const KINDS: &[(&str, Category)] = &[
@@ -248,6 +250,29 @@ mod tests {
 
     fn weigh(text: &str) -> Weighed {
         testing::weigh(&GO, text)
+    }
+
+    #[test]
+    fn a_default_case_weighs_nothing_under_free_default() {
+        let (off, on) = testing::ternaries_and_defaults(
+            &GO,
+            "package p
+
+             func f(x int, ch chan int) {
+               switch x {
+               case 1:
+                 g()
+               default:                  // on: the default case 10 weighs nothing
+                 g()
+               }
+               select {
+               case v := <-ch:
+                 g(v)
+               default:                  // on: nothing either
+               }
+             }",
+        );
+        assert_eq!(on - off, -20.0);
     }
 
     #[test]

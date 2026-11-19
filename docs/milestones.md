@@ -1,8 +1,8 @@
 # Milestones
 
-Built: milestones 0-17 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
+Built: milestones 0-18 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
 `commit`, the reports, the tuned defaults, Rust, operators and accesses, JavaScript, Go, depth on the structure
-only, parameters, cases and arguments, conditions, the defaults tuned on pairs, macros).
+only, parameters, cases and arguments, conditions, the defaults tuned on pairs, macros, nested ternaries and default cases).
 
 0. (built) The repo: `Cargo.toml`, `README.md` (usage, the weights file), the MIT license, GitHub Actions (`cargo fmt
    --check`, `clippy -D warnings`, `test`).
@@ -157,3 +157,27 @@ only, parameters, cases and arguments, conditions, the defaults tuned on pairs, 
     `codeweight.toml` sets `macro` to its `call`, 0.5, so its macros weigh as before. Not done: parsing a macro's
     arguments as expressions (`vec![f(x)]`, `assert_eq!(a.len(), 3)`), which would weigh what is in them but makes
     the `matches!` pairs ties rather than wins.
+18. (built) Nested ternaries, default cases and `return switch`, as asked after milestone 17's pairs were read: a
+    nested ternary is bad, a switch should weigh less than its if-chain, and a `return` before a switch expression
+    is no line of its own. Two conditions, on by default: `nested_ternaries`, a ternary chained in a ternary's
+    alternative nesting (a `Nesting::ternary`, Java's, TS's and JS's ternary and Python's conditional), and
+    `free_default`, a default case weighing nothing as an `else` (each language's `default_case` hook: Java's
+    `default` label, TS's and JS's `switch_default`, Go's `default_case`, a bare `_` in Rust and Python). Java's
+    last `return switch (...) { ... };` weighs no statement, the switch weighing for it (the `carried_return`
+    hook; an early one stays a jump). The pairs whose fix changes the behaviour are deleted from the pairs, and the
+    extractors skip their rules: `pairs/semantic.tsv`, 94 rules, 560 pairs (Error Prone's `error`, `likely_error`, `fragile_code` and untagged
+    groups; its rules that add a check, a locale, a charset, an annotation or immutability, or that change a type
+    or what a test checks; ESLint's `eqeqeq` and `strict`; typescript-eslint's `return-await`,
+    `promise-function-async`, `prefer-readonly`). The tuning keeps `case` below `branch`. On the 8,411 pairs
+    left the objective is 4124 (4850 with the deleted ones), and 4073 on 8,391 once the pairs the splitting cut
+    wrong are dropped too (`pairs/broken.tsv` and a check in `extract/split.py`), then 3185 on 8,095 once the 292
+    pairs whose fix rightly weighs no less are dropped (`pairs/heavier.tsv`: a style option for the longer form,
+    code or a check added, the same in another form), 110 worse left, every one a simplification, then 133 on
+    1,453 once `gen/` is thinned to one pair per rule and difference, the ties under any weights deleted
+    (`tune.py dedup`: a linter's many variants of one rewrite no longer count again); `return switch`
+    −6, `nested_ternaries` 0, `free_default` +24 (Clippy's `single_match` and `manual_map`, a `match` with an
+    empty `_` arm against an `if let`, and Error Prone's `UnnecessaryDefaultInEnumSwitch` now ties), but the
+    hand-picked `java/nested_ternary_to_switch` holds at last (23.05 against 21.84). A re-tune moved little:
+    4124 → 4105, held out 1252 → 1252, every move ±3 points (`case` 2.4, `lambda` 1.65, `jump` 1.35, `bool_op`
+    down to 0.05 on some seeds): the weights are as they were. On the corpora the totals moved less than 1.2% and
+    the function rankings held (Spearman 0.997 to 1.000, the top 20 kept).

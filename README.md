@@ -184,6 +184,8 @@ let_patterns = true     # Rust's `if let` / `while let` pattern is an operator, 
 magic_numbers = true    # a number literal but 0 and 1 is an access, as the named constant in its place would be
 each_unary = true       # each unary operator counts, no run of them: !!x is 2
 nullish_operator = false  # ?? and ??= are an operator, not a bool_op: a default value, no branch
+nested_ternaries = true   # a ternary in a ternary's alternative (a ? x : b ? y : z) nests, no else-if sibling
+free_default = true       # a switch's or match's default case (default, a bare _) weighs nothing, as an else
 
 [weights]               # the base weight of each category, for every language
 statement = 1
@@ -236,11 +238,12 @@ pairs replace an index, a slice or a field-by-field copy by a call (`s[0] === "a
 weighs more than its count. A function's own weight is 1.55, below a lambda's 2: a getter weighs 2.55, its
 signature not most of it, and a class of getters and setters stays below one of logic. A `try` weighs 0.95 (its
 body's nesting is its weight), a `catch` 2 (the other path, as a branch). A `switch` / `match` case weighs 2, below
-an `if`'s 3, as a switch has one case more than the if-chain it replaces (its default); a call's argument 0.05,
+an `if`'s 3, and its default nothing, as an `else`: a switch weighs less than the if-chain it replaces. A ternary
+chained in a ternary's alternative (`a ? x : b ? y : z`) nests, where an `else if` doesn't. A call's argument 0.05,
 what is in it weighs. A Rust macro (`println!(...)`) weighs 1.15, about two calls: what is in it isn't parsed,
 so it weighs for its content. The `[conditions]` are rules that weigh what a node's kind alone doesn't tell (a cast, Rust's
-`if let` pattern, a magic number, `!!x`, `??`), each as an existing category; the defaults turn on all but `??` as
-an operator, and a weights file on its own that leaves the table out weighs as the categories alone.
+`if let` pattern, a magic number, `!!x`, `??`, a nested ternary, a default case), each as an existing category; the
+defaults turn on all but `??` as an operator, and a weights file on its own that leaves the table out weighs as the categories alone.
 
 ### The weight
 

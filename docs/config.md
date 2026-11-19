@@ -33,8 +33,8 @@ Built (`config`, `config::find`):
   and that change would silently do nothing for that language. Tuning (milestone 7, [milestones.md](milestones.md))
   needed none; should one ever be wanted, the merge must first drop a default per-language key whose base key the
   user's file sets.
-- `[conditions]` are switches, `true` or `false`; the defaults turn four on, all but `nullish_operator` (the
-  tuning on the example pairs, milestone 16); a file on its own may leave the table out (all off), as the engine's
+- `[conditions]` are switches, `true` or `false`; the defaults turn all but `nullish_operator` on (the tuning on
+  the example pairs, milestones 16 and 18); a file on its own may leave the table out (all off), as the engine's
   tests do. Each weighs a node as an existing category, so it adds no weight of
   its own; a cast or pattern kind it makes an `operator` is the language's table's, under the user's `node_kinds`
   (a kind mapped there wins). What each one weighs is [weight.md](weight.md)'s.
@@ -58,6 +58,8 @@ let_patterns = true     # Rust's `if let` / `while let` pattern is an operator, 
 magic_numbers = true    # a number literal but 0 and 1 is an access, as the named constant in its place would be
 each_unary = true       # each unary operator counts, no run of them: !!x is 2
 nullish_operator = false  # ?? and ??= are an operator, not a bool_op: a default value, no branch
+nested_ternaries = true   # a ternary in a ternary's alternative (a ? x : b ? y : z) nests, no else-if sibling
+free_default = true       # a switch's or match's default case (default, a bare _) weighs nothing, as an else
 
 [weights]               # the base weight of each category, for every language; tuned on the example pairs
 statement = 1

@@ -29,6 +29,11 @@ pub static RUST: Lang = Lang {
     parameters,
     scope,
     tests: Some(tests),
+    default_case: |node, source| {
+        node.child_by_field_name("pattern")
+            .is_some_and(|pattern| text(pattern, source) == "_")
+    },
+    carried_return: |_| false,
 };
 
 /// The number literals.
@@ -303,6 +308,21 @@ mod tests {
 
     fn weigh(text: &str) -> Weighed {
         testing::weigh(&RUST, text)
+    }
+
+    #[test]
+    fn a_wildcard_arm_weighs_nothing_under_free_default() {
+        let (off, on) = testing::ternaries_and_defaults(
+            &RUST,
+            "fn f(x: i32) {
+                 match x {
+                     1 => g(),
+                     _ if x > 0 => g(),     // a guard: no default, case 10 either way
+                     _ => g(),              // on: the default case 10 weighs nothing
+                 }
+             }",
+        );
+        assert_eq!(on - off, -10.0);
     }
 
     #[test]

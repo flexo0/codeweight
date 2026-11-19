@@ -237,16 +237,33 @@ impl<'c> Weigher<'c> {
                     Some(Category::Access)
                 }
                 None if (self.lang.exempt)(node, source) => None,
-                None => self.categories.get(id).copied().flatten().map(|category| {
-                    if flag(&self.returns, id) && self.is_early_return(node, source) {
-                        Category::Jump
-                    } else if category == Category::Lambda && declares == Some(ScopeKind::Function)
-                    {
-                        Category::Function
-                    } else {
-                        category
-                    }
-                }),
+                None => self
+                    .categories
+                    .get(id)
+                    .copied()
+                    .flatten()
+                    .and_then(|category| {
+                        if flag(&self.returns, id) {
+                            if self.is_early_return(node, source) {
+                                Some(Category::Jump)
+                            } else if (self.lang.carried_return)(node) {
+                                None
+                            } else {
+                                Some(category)
+                            }
+                        } else if category == Category::Lambda
+                            && declares == Some(ScopeKind::Function)
+                        {
+                            Some(Category::Function)
+                        } else if category == Category::Case
+                            && self.conditions.free_default
+                            && (self.lang.default_case)(node, source)
+                        {
+                            None
+                        } else {
+                            Some(category)
+                        }
+                    }),
             };
             let weight = category
                 .into_iter()
@@ -300,6 +317,7 @@ impl<'c> Weigher<'c> {
                     Some(construct) => {
                         construct.body.hold(nth, field, child.kind())
                             && !(child.kind_id() == node.kind_id()
+                                && !(construct.ternary && self.conditions.nested_ternaries)
                                 && construct
                                     .chain
                                     .as_ref()

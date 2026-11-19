@@ -22,6 +22,8 @@ let_patterns = true     # Rust's `if let` / `while let` pattern is an operator, 
 magic_numbers = true    # a number literal but 0 and 1 is an access, as the named constant in its place would be
 each_unary = true       # each unary operator counts, no run of them: !!x is 2
 nullish_operator = false  # ?? and ??= are an operator, not a bool_op: a default value, no branch
+nested_ternaries = true   # a ternary in a ternary's alternative (a ? x : b ? y : z) nests, no else-if sibling
+free_default = true       # a switch's or match's default case (default, a bare _) weighs nothing, as an else
 
 [weights]               # the base weight of each category, for every language; tuned on the example pairs
 statement = 1
