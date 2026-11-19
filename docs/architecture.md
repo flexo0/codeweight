@@ -59,6 +59,8 @@ as a command, no `git2` / `gix`.
   node that is test code inside a source file, it and all in it: Rust's `#[cfg(test)]` items; none for a language whose tests are files of their own). A lambda `scope` names a function weighs and nests as a function (TS's named
   arrows). A test checks that
   every kind and field the tables name is in the grammar, so a typo can't silently weigh nothing.
+- A call's arguments are counted alike in every language (`lang::arguments`: its `arguments` field's list items, or
+  one lone argument), no hook.
 - `engine::Weigher` turns a language's tables and its weights into arrays by node kind id once, then walks each
   tree with an explicit stack (a long `a + b + c + ...` chain is a deep tree, too deep for recursion); a node's
   weight is added to its entry's sum, so a file's sums are in source order and deterministic.

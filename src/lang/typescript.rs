@@ -88,8 +88,8 @@ macro_rules! js_kinds {
             ("generator_function", Lambda),
             ("if_statement", Branch),
             ("ternary_expression", Branch),
-            ("switch_case", Branch),
-            ("switch_default", Branch),
+            ("switch_case", Case),
+            ("switch_default", Case),
             ("for_statement", Loop),
             ("for_in_statement", Loop),
             ("while_statement", Loop),
@@ -518,5 +518,36 @@ mod tests {
         assert_eq!(function(&weighed, "C.m"), 110.0);
         assert_eq!(function(&weighed, "g"), 111.0);
         assert_eq!(weighed.file, 1.0 + 1.0 + 65.0);
+    }
+
+    #[test]
+    fn a_call_s_arguments_weigh_each() {
+        let weighed = testing::weigh_arguments(
+            &TYPESCRIPT,
+            "f();             // statement 1, call 2, no argument
+             f(a, g(b));      // statement 1, call 2, 2 arguments 4 each; g(b) a call 2, an argument 4
+             new A(x);        // statement 1, call 2, an argument
+             new A;           // statement 1, call 2, no argument
+             tag`a${b}`;      // statement 1, call 2, the template one argument",
+        );
+        assert_eq!(weighed.file, 3.0 + 17.0 + 7.0 + 3.0 + 7.0);
+    }
+
+    #[test]
+    fn a_switch_s_cases_weigh_case_not_branch() {
+        let weighed = testing::weigh_cases(
+            &TYPESCRIPT,
+            "function f(x: number) {   // function 100
+               switch (x) {
+                 case 1:               // case 7
+                   g();                // (statement 1, call 2) × 2
+                   break;              // jump 3 × 2
+                 default:              // case 7
+                   g();                // 6
+               }
+               return x ? 1 : 2;       // statement 1, the ternary a branch 10
+             }",
+        );
+        assert_eq!(function(&weighed, "f"), 100.0 + 19.0 + 13.0 + 11.0);
     }
 }

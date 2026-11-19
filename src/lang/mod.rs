@@ -300,16 +300,30 @@ pub fn first_child(node: Node) -> Option<Node> {
     node.named_children(&mut cursor).find(|c| !c.is_extra())
 }
 
+/// The number of arguments a call passes: the items of its `arguments` field's list (comments aside), or 1 for a
+/// lone argument in their place (Python's `f(x for x in xs)`, a tagged template's string); 0 without the field (a
+/// Rust macro, whose arguments are tokens; a JSX element; `new A` without parentheses).
+pub fn arguments(call: Node) -> usize {
+    match call.child_by_field_name("arguments") {
+        Some(list) if matches!(list.kind(), "argument_list" | "arguments") => {
+            count_children(list, |_| true)
+        }
+        Some(_) => 1,
+        None => 0,
+    }
+}
+
 /// The text of a node, lossy where it isn't UTF-8.
 pub fn text(node: Node, source: &[u8]) -> String {
     String::from_utf8_lossy(&source[node.byte_range()]).into_owned()
 }
 
-/// The languages' snippet tests: weighed under `tests/weights.toml` (statement 1, call 2, branch 10, loop 20, try 30,
-/// catch 40, lambda 50, function 100, class 1000, bool_op 5, jump 3, operator 0, access 0; nest(depth) = 1 + depth,
-/// depth capped at 3), each sum worked out by hand: `weight × nest(depth)` per element. The snippets about
-/// operators and accesses are weighed with those at 7 and 9 (`weigh_expressions`), those about parameters with
-/// `parameter` 10 (`weigh_parameters`): 10, 15, 20, then 20 each, by their place.
+/// The languages' snippet tests: weighed under `tests/weights.toml` (statement 1, call 2, argument 0, branch 10, case
+/// 10, loop 20, try 30, catch 40, lambda 50, function 100, class 1000, bool_op 5, jump 3, operator 0, access 0;
+/// nest(depth) = 1 + depth, depth capped at 3), each sum worked out by hand: `weight × nest(depth)` per element. The
+/// snippets about operators and accesses are weighed with those at 7 and 9 (`weigh_expressions`), those about
+/// parameters with `parameter` 10 (`weigh_parameters`): 10, 15, 20, then 20 each, by their place; those about
+/// arguments with `argument` 4 (`weigh_arguments`), those about cases with `case` 7 (`weigh_cases`).
 #[cfg(test)]
 pub mod testing {
     use super::{Lang, ScopeKind};
@@ -357,6 +371,46 @@ pub mod testing {
         let weights = WEIGHTS.replacen("parameter = 0 ", "parameter = 10 ", 1);
         let config = Config::from_str_alone(&weights).unwrap();
         assert_eq!(config.lang(lang).weight(Category::Parameter), 10.0);
+        let weighed = weigh_under(lang, &weights, text);
+        assert!(weighed.clean, "syntax errors in {text}");
+        weighed
+    }
+
+    /// A snippet that parses cleanly, weighed under the test weights with `argument` 4.
+    pub fn weigh_arguments(lang: &'static Lang, text: &str) -> Weighed {
+        weigh_with(
+            lang,
+            "argument  = 0 ",
+            "argument  = 4 ",
+            Category::Argument,
+            4.0,
+            text,
+        )
+    }
+
+    /// A snippet that parses cleanly, weighed under the test weights with `case` 7 (a branch stays 10).
+    pub fn weigh_cases(lang: &'static Lang, text: &str) -> Weighed {
+        weigh_with(
+            lang,
+            "case      = 10 ",
+            "case      = 7 ",
+            Category::Case,
+            7.0,
+            text,
+        )
+    }
+
+    fn weigh_with(
+        lang: &'static Lang,
+        line: &str,
+        with: &str,
+        category: Category,
+        weight: f64,
+        text: &str,
+    ) -> Weighed {
+        let weights = WEIGHTS.replacen(line, with, 1);
+        let config = Config::from_str_alone(&weights).unwrap();
+        assert_eq!(config.lang(lang).weight(category), weight);
         let weighed = weigh_under(lang, &weights, text);
         assert!(weighed.clean, "syntax errors in {text}");
         weighed

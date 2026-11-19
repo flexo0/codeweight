@@ -35,10 +35,10 @@ const KINDS: &[(&str, Category)] = &[
     ("method_elem", Function),
     ("func_literal", Lambda),
     ("if_statement", Branch),
-    ("expression_case", Branch),
-    ("type_case", Branch),
-    ("communication_case", Branch),
-    ("default_case", Branch),
+    ("expression_case", Case),
+    ("type_case", Case),
+    ("communication_case", Case),
+    ("default_case", Case),
     ("for_statement", Loop),
     ("call_expression", Call),
     ("break_statement", Jump),
@@ -486,5 +486,40 @@ mod tests {
             function(&weighed, "v"),
             100.0 + 10.0 + 1.0 + 50.0 + 10.0 + 1.0
         );
+    }
+
+    #[test]
+    fn a_call_s_arguments_weigh_each() {
+        let weighed = testing::weigh_arguments(
+            &GO,
+            "package p
+
+             func f() {               // function 100
+               g()                    // statement 1, call 2, no argument
+               g(a, b...)             // statement 1, call 2, 2 arguments 4 each
+               _ = make([]int, n)     // statement 1, call 2, 2 arguments: the type is one
+             }",
+        );
+        assert_eq!(function(&weighed, "f"), 100.0 + 3.0 + 11.0 + 11.0);
+    }
+
+    #[test]
+    fn a_switch_s_and_a_select_s_cases_weigh_case_not_branch() {
+        let weighed = testing::weigh_cases(
+            &GO,
+            "package p
+
+             func f(x int) {   // function 100
+               switch x {
+               case 1:         // case 7
+                 g()           // (statement 1, call 2) × 2
+               default:        // case 7
+               }
+               select {
+               case <-c:       // case 7
+               }
+             }",
+        );
+        assert_eq!(function(&weighed, "f"), 100.0 + 13.0 + 7.0 + 7.0);
     }
 }

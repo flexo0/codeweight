@@ -10,7 +10,9 @@ flat = []          # every category nests, so a hand-worked sum is weight × nes
 [weights]
 statement = 1
 call      = 2
+argument  = 0      # 0 but in the snippets about them (`lang::testing::weigh_arguments`)
 branch    = 10
+case      = 10     # a branch's, so a snippet's switch weighs as an if; its own in `lang::testing::weigh_cases`
 loop      = 20
 try       = 30
 catch     = 40

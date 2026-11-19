@@ -227,7 +227,11 @@ impl<'c> Weigher<'c> {
                 .chain((self.lang.also_statement)(node).then_some(Category::Statement))
                 .map(|c| self.weights.weight(c) * self.nesting.factor_of(c, frame.depth))
                 .sum::<f64>()
-                + self.parameters((self.lang.parameters)(node, source), frame.depth);
+                + self.parameters((self.lang.parameters)(node, source), frame.depth)
+                + match category {
+                    Some(Category::Call) => self.arguments(lang::arguments(node), frame.depth),
+                    _ => 0.0,
+                };
             if weight > 0.0 {
                 match entry {
                     Some(at) => entries[at].weight += weight,
@@ -306,6 +310,13 @@ impl<'c> Weigher<'c> {
         (0..count)
             .map(|place| base * self.parameters.factor_at(place))
             .sum()
+    }
+
+    /// The weight of a call's `count` arguments at `depth`.
+    fn arguments(&self, count: usize, depth: u32) -> f64 {
+        self.weights.weight(Category::Argument)
+            * self.nesting.factor_of(Category::Argument, depth)
+            * count as f64
     }
 
     /// Whether a return is early: not the last statement of its function's or lambda's body (the statement it is

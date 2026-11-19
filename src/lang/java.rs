@@ -39,8 +39,8 @@ const KINDS: &[(&str, Category)] = &[
     ("lambda_expression", Lambda),
     ("if_statement", Branch),
     ("ternary_expression", Branch),
-    ("switch_block_statement_group", Branch),
-    ("switch_rule", Branch),
+    ("switch_block_statement_group", Case),
+    ("switch_rule", Case),
     ("for_statement", Loop),
     ("enhanced_for_statement", Loop),
     ("while_statement", Loop),
@@ -641,5 +641,52 @@ mod tests {
             100.0 + 55.0 * 3.0 + 25.0 + 10.0 + 10.0
         );
         assert_eq!(class(&weighed, "R"), 1025.0);
+    }
+
+    #[test]
+    fn a_call_s_arguments_weigh_each() {
+        let weighed = testing::weigh_arguments(
+            &JAVA,
+            "class A {
+               void f(boolean c) {    // function 100
+                 g();                 // statement 1, call 2, no argument
+                 g(a, b.c(), 1);      // statement 1, call 2, 3 arguments 4 each; b.c() a call 2, no argument
+                 new B(x, y);         // statement 1, call 2, 2 arguments
+                 if (c) {             // branch 10
+                   g(a);              // (statement 1, call 2, argument 4) × 2
+                 }
+               }
+             }
+             enum E { X(1, 2) }       // class 1000, X a statement 1: an enum constant's arguments are no call's",
+        );
+        assert_eq!(
+            function(&weighed, "A.f"),
+            100.0 + 3.0 + 17.0 + 11.0 + 10.0 + 14.0
+        );
+        assert_eq!(class(&weighed, "E"), 1001.0);
+    }
+
+    #[test]
+    fn a_switch_s_cases_weigh_case_not_branch() {
+        let weighed = testing::weigh_cases(
+            &JAVA,
+            "class A {
+               int f(int x) {                // function 100
+                 switch (x) {
+                   case 1: g(); break;       // case 7; (statement 1, call 2, jump 3) × 2
+                   default: g();             // case 7; (1 + 2) × 2
+                 }
+                 int y = switch (x) {        // statement 1
+                   case 1 -> 2;              // case 7; its expression statement 1 × 2
+                   default -> 3;             // case 7 + 2
+                 };
+                 return x > 0 ? y : 0;       // statement 1, the ternary a branch 10
+               }
+             }",
+        );
+        assert_eq!(
+            function(&weighed, "A.f"),
+            100.0 + 19.0 + 13.0 + 1.0 + 18.0 + 11.0
+        );
     }
 }

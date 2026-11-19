@@ -169,4 +169,23 @@ mod tests {
         assert_eq!(function(&weighed, "f"), 165.0);
         assert_eq!(weighed.file, 65.0);
     }
+
+    #[test]
+    fn a_call_s_arguments_and_a_switch_s_cases_weigh_as_typescript_s() {
+        let arguments = testing::weigh_arguments(
+            &JAVASCRIPT,
+            "f(a, b);     // statement 1, call 2, 2 arguments 4 each
+             new A(c);    // statement 1, call 2, an argument",
+        );
+        assert_eq!(arguments.file, 11.0 + 7.0);
+        let cases = testing::weigh_cases(
+            &JAVASCRIPT,
+            "switch (x) {
+               case 1:    // case 7
+                 break;   // jump 3 × 2
+               default:   // case 7
+             }",
+        );
+        assert_eq!(cases.file, 13.0 + 7.0);
+    }
 }

@@ -41,7 +41,7 @@ model = "linear"        # linear: 1 + factor * depth; exponential: factor ^ dept
 factor = 1.0
 max_depth = 10          # depth is capped here, so one deep method can't explode the total
 # weigh the same at any depth: a statement's or a declaration's parts, which it already weighs the depth of
-flat = ["call", "bool_op", "operator", "access", "parameter"]
+flat = ["call", "argument", "bool_op", "operator", "access", "parameter"]
 
 [parameters]            # the parameter at place k (from 0) weighs parameter * min(1 + step * k, max)
 step = 0.2              # 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, then 1.0 each: a long list weighs more than its count
@@ -50,7 +50,9 @@ max = 2.0
 [weights]               # the base weight of each category, for every language
 statement = 1
 call      = 0.5         # a chain of getters is long, not hard
-branch    = 2           # if, ternary, case
+argument  = 0           # each argument of a call: none of their own by default, what is in them weighs
+branch    = 2           # if, ternary
+case      = 2           # each switch / match case, `default` too: by default a branch's
 loop      = 3
 try       = 1           # the body's nesting is its weight; a catch is the other path
 catch     = 2

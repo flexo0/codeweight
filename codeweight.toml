@@ -1,6 +1,6 @@
 # This repo's own weights file, not the defaults: those are src/default.toml, which `codeweight init` writes. It holds
-# every key of them, but weighs a branch 3 and a loop 2 (the defaults: 2 and 3). A file of your own is merged over the
-# defaults, so it needs only what it changes.
+# every key of them, but weighs a branch and a case 3 and a loop 2 (the defaults: 2, 2 and 3). A file of your own is
+# merged over the defaults, so it needs only what it changes.
 #
 # weight(node) = weights[category(node)] * nest(min(depth, max_depth)), nest 1 for a category of [nesting] flat
 # depth: the number of nesting constructs around the node (a branch, a loop, a try / catch / finally, a case,
@@ -12,7 +12,7 @@ model = "linear"        # linear: 1 + factor * depth; exponential: factor ^ dept
 factor = 1.0
 max_depth = 10          # depth is capped here, so one deep method can't explode the total
 # weigh the same at any depth: a statement's or a declaration's parts, which it already weighs the depth of
-flat = ["call", "bool_op", "operator", "access", "parameter"]
+flat = ["call", "argument", "bool_op", "operator", "access", "parameter"]
 
 [parameters]            # the parameter at place k (from 0) weighs parameter * min(1 + step * k, max)
 step = 0.2              # 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, then 1.0 each: a long list weighs more than its count
@@ -21,7 +21,9 @@ max = 2.0
 [weights]               # the base weight of each category, for every language
 statement = 1
 call      = 0.5         # a call, `new`: a chain of getters is long, not hard
-branch    = 3           # if, ternary, case
+argument  = 0           # each argument of a call: none of their own by default, what is in them weighs
+branch    = 3           # if, ternary
+case      = 3           # each switch / match case, `default` too: a branch's, as here before
 loop      = 2
 try       = 1           # the body's nesting is its weight; a catch is the other path
 catch     = 2

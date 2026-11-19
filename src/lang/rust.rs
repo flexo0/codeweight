@@ -39,7 +39,7 @@ const KINDS: &[(&str, Category)] = &[
     ("function_signature_item", Function),
     ("closure_expression", Lambda),
     ("if_expression", Branch),
-    ("match_arm", Branch),
+    ("match_arm", Case),
     ("for_expression", Loop),
     ("while_expression", Loop),
     ("loop_expression", Loop),
@@ -549,5 +549,33 @@ mod tests {
             function(&weighed, "p"),
             100.0 + 10.0 + 1.0 + 50.0 + 25.0 + 2.0
         );
+    }
+
+    #[test]
+    fn a_call_s_arguments_weigh_each() {
+        let weighed = testing::weigh_arguments(
+            &RUST,
+            r#"fn f() {                  // function 100
+                 g();                    // statement 1, call 2, no argument
+                 g(a, b);                // statement 1, call 2, 2 arguments 4 each
+                 s.m(a);                 // statement 1, call 2, an argument
+                 println!("{}", a);      // statement 1, call 2: a macro's arguments are tokens, none
+               }"#,
+        );
+        assert_eq!(function(&weighed, "f"), 100.0 + 3.0 + 11.0 + 7.0 + 3.0);
+    }
+
+    #[test]
+    fn a_match_s_arms_weigh_case_not_branch() {
+        let weighed = testing::weigh_cases(
+            &RUST,
+            "fn f(x: i32) -> i32 {     // function 100
+               match x {               // a construct ending the block: no tail statement
+                 1 => 2,               // case 7, the arm's value a statement 1 × 2
+                 _ => 3,               // 7 + 2
+               }
+             }",
+        );
+        assert_eq!(function(&weighed, "f"), 100.0 + 9.0 + 9.0);
     }
 }

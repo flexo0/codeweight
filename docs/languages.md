@@ -49,7 +49,7 @@ which are Java's as they stand.
 - A comprehension (list, set, dict, generator): each `for` is a loop, each `if` a branch; its element and its `if`s
   are one deeper, its `for`s (their iterables) at its depth. Its element (a dict comprehension's pair) is a
   statement, as the loop's statement making it would be; a lambda's body is one too ([weight.md](weight.md)).
-- `match` is no nesting construct; each `case` is a branch, its body deeper, its guard (`case x if c`) no branch of
+- `match` is no nesting construct; each `case` is a `case`, its body deeper, its guard (`case x if c`) no branch of
   its own (exempt), its condition at the case's depth.
 - `and` / `or` are the logical operators (`not` starts a new run: it is a unary `operator`). `raise` is a jump.
 - `access` counts an attribute (`a.b`) and a subscript (`a[i]`), not one in an annotation (`x: os.PathLike`,
@@ -70,7 +70,7 @@ which are Java's as they stand.
 - A closure is a lambda, even bound to a name (`let f = |x| ...`), its body deeper; an expression body (`|x| x + 1`)
   is a statement, as a Java lambda's ([weight.md](weight.md)).
 - `if` (`if let` too) nests its consequence; its `else` is a clause beside it, as TS's: its block deeper, its `if`
-  (`else if`) at the depth. `match` is no nesting construct; each arm is a branch, its pattern and guard at the arm's
+  (`else if`) at the depth. `match` is no nesting construct; each arm is a `case`, its pattern and guard at the arm's
   depth, its value deeper and a statement when it is no block (`=> f(x)` weighs as `=> { f(x) }`), nor an
   expression ending in one (`if`, `match`, a loop) or a jump. `for`, `while` (`while let`), `loop` are loops; a label (`'outer:`) weighs nothing.
 - `&&` / `||` are the logical operators; a let chain (`if let Some(x) = a && x > 0`) is a run of `&&`. `-x` and
@@ -124,7 +124,7 @@ which are Java's as they stand.
 - `if` nests its consequence and its alternative; an `if` in the alternative (`else if`) stays at its depth, as
   Java's; its initializer (`if err := f(); err != nil`) is at the `if`'s depth, a statement. `for` is the only loop
   (a three-clause, a `range`, a bare `for {}`). A `switch`, a type switch and a `select` are no nesting constructs;
-  each case (`default` too) is a branch, its values (a select case's send or receive, which weigh nothing, as a
+  each case (`default` too) is a `case`, its values (a select case's send or receive, which weigh nothing, as a
   label) at its depth, its statements deeper. No `try`: `defer` and `go` are statements, their call a call.
 - `break`, `continue`, `goto`, `fallthrough` and an early `return` are jumps; a label (`L:`) weighs nothing, and a
   labeled `return` at a body's end is its last statement. The grammar puts a list of statements between a block and

@@ -22,12 +22,16 @@ total        = Σ weight(node) over the nodes that have a category
   deeper body, so without one its depth would weigh nothing once its parts are flat. A ternary's values are no
   statements: a ternary is an expression in a statement, which weighs it. The language's `also_statement` hook.
 - `else if` chains and `switch` / `match` cases are siblings of one level, not deeper ones. The switch itself is not
-  a nesting construct; each case is (a branch, its statements one deeper). An `if` directly in an if's `alternative`
+  a nesting construct; each case is (a `case`, its statements one deeper). An `if` directly in an if's `alternative`
   stays at that if's depth; an `if` inside an `else { }` block is nested. A ternary chained in a ternary's
   alternative (`a ? x : b ? y : z`) is a sibling the same way.
 - A function or class declared inside a function (a local or anonymous class, its methods, a nested function)
   nests its body; a member class or method doesn't, whatever the depth of classes around it. Depth isn't reset at a
   function: a method of a class in an `if` in a method counts both.
+- `case`: each case of a `switch` or a `match` (`default` and `_` too), apart from `branch` (an `if`, a ternary):
+  by default a branch's weight, but a switch has one case more than the if-chain it replaces (its default, where
+  an `else` weighs nothing), so a tuning on pairs of code (a snippet and its refactoring, milestone 14) needs the
+  two weighed apart.
 - `bool_op`: one per run of like `&&` / `||` operators, the first run counted too, not one per operator: `a && b`
   and `a && b && c` are 1, `a && b || c` is 2, `(a && b) || (c && d)` is 3. A logical expression counts one when its
   operator differs from that of the logical expression it is an operand of, or it is no operand of one; parentheses
@@ -55,8 +59,15 @@ total        = Σ weight(node) over the nodes that have a category
   its count, as each next parameter is one more to keep in mind and to pass in order. A receiver is none (Java's
   `A this`, TS's `this: T`, Python's first `self` / `cls`, Rust's `self`, Go's receiver), as an access to it is none,
   and neither is a function type's (`(a: A) => B`, `fn(i32)`, Go's `func(int)`), which declares no function. Each
-  language's `parameters` hook counts them; the weight is the declaration's, at its depth (flat by default). A call's
-  arguments weigh nothing of their own: what is in them weighs.
+  language's `parameters` hook counts them; the weight is the declaration's, at its depth (flat by default).
+- `argument`: each argument of a node that is a `call`, at the call's depth (flat by default): the items of its
+  `arguments` field's list, or one for a lone argument in its place (Python's `f(x for x in xs)`, a tagged
+  template's string); none of a call without the field (a Rust macro, whose arguments are tokens; a JSX element;
+  `new A` without parentheses), nor of what is no call (Java's enum constant `X(1)`, Python's class bases). It is 0
+  by default, so a call's arguments weigh nothing of their own, what is in them weighs (milestone 13); it is a
+  category for the pairs, where a call lighter than the operators it replaces has 0 or 1 arguments (`f.is_some()`
+  for `f != None`) and a heavier one 2 (`Objects.equals(a, b)` for `a == b`). The engine counts them
+  (`lang::arguments`), the same for every language.
 - `jump`: `break`, `continue`, `throw`, and an early return: a return that isn't the last statement (comments aside)
   of its function's or lambda's body; the last one is a `statement`. So `if (x) return a; return b;` is a jump and a
   statement, and both returns of an `if / else` at the end are jumps.

@@ -1,7 +1,8 @@
 # Milestones
 
-Built: milestones 0-11 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
-`commit`, the reports, the tuned defaults, Rust, operators and accesses, JavaScript, Go).
+Built: milestones 0-14 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
+`commit`, the reports, the tuned defaults, Rust, operators and accesses, JavaScript, Go, depth on the structure
+only, parameters, cases and arguments).
 
 0. (built) The repo: `Cargo.toml`, `README.md` (usage, the weights file), the MIT license, GitHub Actions (`cargo fmt
    --check`, `clippy -D warnings`, `test`).
@@ -83,3 +84,18 @@ Built: milestones 0-11 (the repo, the CLI and the config, the engine and Java, T
     are 2 to 5% of a total (the Java ones most, as a class's own weight is 4 to 6%), the top 10 held in every one
     (Spearman 0.966 to 0.999, the small functions reordering most), those rising most are constructors and helpers
     of long lists (`IntEncodedValueImpl`'s, `DroolsVariableFactory.createVariable`).
+14. (built) Cases and arguments, two categories for the tuning on example pairs (a bad snippet and its fix, the
+    same behaviour, from the linters' tests: 8,940 of them, outside the repo): `case`, a `switch` / `match` case
+    apart from `branch`, and `argument`, each argument of a call ([weight.md](weight.md)). Both are neutral by
+    default, `case` a branch's 2 and `argument` 0, so every weight is as before until a tuning moves them. The
+    pairs a weight broke trade two categories both ways: a switch weighs more than the if-chain or ternary it
+    replaces (its default is a case, an `else` nothing), while Clippy's `match` pairs want a heavy arm, so lowering
+    `branch` breaks as many as it fixes; a call is lighter than the operators it replaces with 0 or 1 arguments
+    (`(x + 7) / 8` → `x.div_ceil(8)`, `f != None` → `f.is_some()`) and heavier with 2 (`Objects.equals(a, b)` →
+    `a == b`, `math.Pow(a, 2)` → `a * a`), so call and operator alone are best tied. On part 3's objective (3 per
+    pair whose good side weighs more, 1 per tie) a coarse grid gave 2499 with call and operator, 2349 with
+    `argument`, 2297 with `case` too; each source left out of a fit got better with `argument`. Not added: a
+    `comparison` apart from `operator` (a smaller gain, worse on Ruff's and ESLint's pairs held out), and nothing
+    for a `function` against a `lambda`, already two weights (function 1.5 alone fixes ESLint's
+    `object-shorthand`). Seen and left: Rust's `if let Ok(_) = x` → `x.is_ok()` (the pattern weighs nothing), a
+    slice weighing one access, `??` a `bool_op`, Rust's `as` casts weighing nothing, `!!x` one run of operators.

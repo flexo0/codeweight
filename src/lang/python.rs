@@ -35,7 +35,7 @@ const KINDS: &[(&str, Category)] = &[
     ("if_statement", Branch),
     ("elif_clause", Branch),
     ("conditional_expression", Branch),
-    ("case_clause", Branch),
+    ("case_clause", Case),
     // A comprehension's `if`; a case's guard is exempt.
     ("if_clause", Branch),
     ("for_statement", Loop),
@@ -386,5 +386,39 @@ h = lambda x, y: x                      # file: statement 1, lambda 50, 10 + 15,
         assert_eq!(function(&weighed, "A.k"), 100.0);
         assert_eq!(function(&weighed, "A.s"), 100.0);
         assert_eq!(weighed.file, 78.0);
+    }
+
+    #[test]
+    fn a_call_s_arguments_weigh_each() {
+        let weighed = testing::weigh_arguments(
+            &PYTHON,
+            "
+f()                    # statement 1, call 2, no argument
+f(a, b=1, *c, **d)     # statement 1, call 2, 4 arguments 4 each
+sum(x for x in xs)     # statement 1, call 2, the generator one argument 4; its for a loop 20, its element a
+                       # statement 1 × 2
+class A(B, C):         # A: class 1000, its bases no call's arguments
+    x = 1              # statement 1
+",
+        );
+        assert_eq!(weighed.file, 3.0 + 19.0 + 29.0);
+        assert_eq!(class(&weighed, "A"), 1001.0);
+    }
+
+    #[test]
+    fn a_match_s_cases_weigh_case_not_branch() {
+        let weighed = testing::weigh_cases(
+            &PYTHON,
+            "
+match x:
+    case 1:            # case 7
+        f()            # (statement 1, call 2) × 2
+    case _:            # case 7
+        y = 1          # statement 1 × 2
+if x:                  # branch 10
+    y = 2              # statement 1 × 2
+",
+        );
+        assert_eq!(weighed.file, 13.0 + 9.0 + 12.0);
     }
 }

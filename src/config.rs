@@ -22,7 +22,11 @@ pub const FILE_NAME: &str = "codeweight.toml";
 pub enum Category {
     Statement,
     Call,
+    /// A call's argument, each one (a call's arguments field: a list's items, or a lone one).
+    Argument,
     Branch,
+    /// A `switch` / `match` case, as `branch` is an `if`.
+    Case,
     Loop,
     Try,
     Catch,
@@ -38,10 +42,12 @@ pub enum Category {
 }
 
 impl Category {
-    pub const ALL: [Category; 14] = [
+    pub const ALL: [Category; 16] = [
         Category::Statement,
         Category::Call,
+        Category::Argument,
         Category::Branch,
+        Category::Case,
         Category::Loop,
         Category::Try,
         Category::Catch,
@@ -60,7 +66,9 @@ impl Category {
         match self {
             Category::Statement => "statement",
             Category::Call => "call",
+            Category::Argument => "argument",
             Category::Branch => "branch",
+            Category::Case => "case",
             Category::Loop => "loop",
             Category::Try => "try",
             Category::Catch => "catch",
