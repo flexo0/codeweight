@@ -1,8 +1,8 @@
 # Milestones
 
-Built: milestones 0-16 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
+Built: milestones 0-17 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
 `commit`, the reports, the tuned defaults, Rust, operators and accesses, JavaScript, Go, depth on the structure
-only, parameters, cases and arguments, conditions, the defaults tuned on pairs).
+only, parameters, cases and arguments, conditions, the defaults tuned on pairs, macros).
 
 0. (built) The repo: `Cargo.toml`, `README.md` (usage, the weights file), the MIT license, GitHub Actions (`cargo fmt
    --check`, `clippy -D warnings`, `test`).
@@ -144,3 +144,16 @@ only, parameters, cases and arguments, conditions, the defaults tuned on pairs).
     first. The totals rise by ×1.3 (codeweight) to ×1.7, ×1.4 to ×1.5 on the Java corpora. The hand-picked
     pairs are as before: 30 hold, `java/nested_ternary_to_switch` still doesn't. This repo's own `codeweight.toml`
     keeps its weights, as its commits' weights were measured by them.
+17. (built) Macros: `macro`, a Rust macro invocation apart from `call` ([weight.md](weight.md)), flat as a call.
+    Its arguments are a token tree tree-sitter doesn't parse, so what is in it weighs nothing and the macro weighs
+    for it: as a call's 0.55, Clippy's `redundant_pattern_matching` (`matches!(x, V4(_))` → `x.is_ipv4()`) and
+    `useless_format` (`format!("hello")` → `"hello".to_string()`, a macro for a call: a tie) came out
+    with the fix heavier or no lighter. Tuned as milestone 16
+    (`pairs/tune.py`, the nesting kept): 1.15 on every seed, 4890 → 4837 (549 pairs whose fix weighs more, 561
+    before; `redundant_pattern_matching` −46, `useless_format` −20, `unnecessary_literal_unwrap` +14, whose fix
+    is `panic!()` for `None.unwrap()`); held out, 30% of the pairs fit on the rest, 1458 → 1443. Three of four
+    seeds also lowered `bool_op` to 0.25, 3 points more: left at 0.55, as noise. On Rust code the totals rose 0.7 to 1.2%, the
+    function rankings unchanged (codeweight's own and two apps: Spearman 1.000, the top 20 kept). This repo's own
+    `codeweight.toml` sets `macro` to its `call`, 0.5, so its macros weigh as before. Not done: parsing a macro's
+    arguments as expressions (`vec![f(x)]`, `assert_eq!(a.len(), 3)`), which would weigh what is in them but makes
+    the `matches!` pairs ties rather than wins.

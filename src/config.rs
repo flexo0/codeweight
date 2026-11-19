@@ -22,6 +22,9 @@ pub const FILE_NAME: &str = "codeweight.toml";
 pub enum Category {
     Statement,
     Call,
+    /// A macro invocation (Rust's `println!(...)`), apart from `call`: its arguments are tokens, not parsed, so
+    /// what is in it weighs nothing and the macro weighs for it.
+    Macro,
     /// A call's argument, each one (a call's arguments field: a list's items, or a lone one).
     Argument,
     Branch,
@@ -42,9 +45,10 @@ pub enum Category {
 }
 
 impl Category {
-    pub const ALL: [Category; 16] = [
+    pub const ALL: [Category; 17] = [
         Category::Statement,
         Category::Call,
+        Category::Macro,
         Category::Argument,
         Category::Branch,
         Category::Case,
@@ -66,6 +70,7 @@ impl Category {
         match self {
             Category::Statement => "statement",
             Category::Call => "call",
+            Category::Macro => "macro",
             Category::Argument => "argument",
             Category::Branch => "branch",
             Category::Case => "case",

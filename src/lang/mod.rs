@@ -413,6 +413,18 @@ pub mod testing {
         )
     }
 
+    /// A snippet that parses cleanly, weighed under the test weights with `macro` 6 (a call stays 2).
+    pub fn weigh_macros(lang: &'static Lang, text: &str) -> Weighed {
+        weigh_with(
+            lang,
+            "macro     = 2 ",
+            "macro     = 6 ",
+            Category::Macro,
+            6.0,
+            text,
+        )
+    }
+
     /// A snippet that parses cleanly, weighed under the test weights with `case` 7 (a branch stays 10).
     pub fn weigh_cases(lang: &'static Lang, text: &str) -> Weighed {
         weigh_with(

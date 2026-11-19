@@ -172,7 +172,7 @@ model = "linear"        # linear: 1 + factor * depth; exponential: factor ^ dept
 factor = 1.5            # each level of nesting adds one and a half base weights
 max_depth = 10          # depth is capped here, so one deep method can't explode the total
 # weigh the same at any depth: a statement's or a declaration's parts, which it already weighs the depth of
-flat = ["call", "argument", "bool_op", "operator", "access", "parameter"]
+flat = ["call", "macro", "argument", "bool_op", "operator", "access", "parameter"]
 
 [parameters]            # the parameter at place k (from 0) weighs parameter * min(1 + step * k, max)
 step = 0.3              # 1.65, 2.15, 2.64, 3.14, then 3.3 each: a long list weighs more than its count
@@ -188,6 +188,7 @@ nullish_operator = false  # ?? and ??= are an operator, not a bool_op: a default
 [weights]               # the base weight of each category, for every language
 statement = 1
 call      = 0.55
+macro     = 1.15
 argument  = 0.05
 branch    = 3
 case      = 2
@@ -236,7 +237,8 @@ weighs more than its count. A function's own weight is 1.55, below a lambda's 2:
 signature not most of it, and a class of getters and setters stays below one of logic. A `try` weighs 0.95 (its
 body's nesting is its weight), a `catch` 2 (the other path, as a branch). A `switch` / `match` case weighs 2, below
 an `if`'s 3, as a switch has one case more than the if-chain it replaces (its default); a call's argument 0.05,
-what is in it weighs. The `[conditions]` are rules that weigh what a node's kind alone doesn't tell (a cast, Rust's
+what is in it weighs. A Rust macro (`println!(...)`) weighs 1.15, about two calls: what is in it isn't parsed,
+so it weighs for its content. The `[conditions]` are rules that weigh what a node's kind alone doesn't tell (a cast, Rust's
 `if let` pattern, a magic number, `!!x`, `??`), each as an existing category; the defaults turn on all but `??` as
 an operator, and a weights file on its own that leaves the table out weighs as the categories alone.
 
@@ -261,7 +263,8 @@ node kind is a tree-sitter one, as the language's grammar names it.
 | Category | Java | TypeScript, TSX, JavaScript | Python | Rust | Go |
 |---|---|---|---|---|---|
 | `statement` | an expression statement, a local variable, a field, a `return` that ends its function or lambda, a lambda's expression body (`x -> f(x)`, as `{ return f(x); }`), `yield`, `assert`, `synchronized`, an enum constant | an expression statement, `const` / `let` / `var`, a class field, an interface's property, a `type` alias, a `return` that ends its function, an arrow's expression body (`x => f(x)`) | an expression statement (an assignment too; not a docstring or a bare `...`), `assert`, `del`, a `type` alias, a `return` that ends its function, a lambda's body, a comprehension's element | an expression statement, `let`, `const`, `static`, a `type` alias, a field, an enum variant, a block's tail expression (its value, no `;`), a closure's expression body, a `match` arm's value that is no block, a `return` that ends its function or closure | an expression statement, an assignment, `:=`, each `var` / `const` spec, a send, `defer`, `go`, a type alias, a field, `i++` / `x += 1` (an `operator` too; not as a `for` clause's update), a `return` that ends its function or literal |
-| `call` | a method call, `new`, `this(...)` / `super(...)` | a call, `new`; in TSX and JavaScript each JSX element | a call | a call, a macro invocation (its arguments aren't parsed) | a call |
+| `call` | a method call, `new`, `this(...)` / `super(...)` | a call, `new`; in TSX and JavaScript each JSX element | a call | a call | a call |
+| `macro` | — | — | — | a macro invocation (`println!(...)`, `vec![...]`: its arguments aren't parsed) | — |
 | `argument` | each argument of a call (not an enum constant's) | each argument of a call or `new`, a tagged template's string one; none of a JSX element | each argument of a call (`*a`, `k=v`, `**kw` too), a lone generator (`f(x for x in xs)`) one; not a class's bases | each argument of a call; none of a macro | each argument of a call (a type, as `make`'s, too) |
 | `branch` | `if`, a ternary `?:` | `if`, a ternary `?:` | `if`, `elif`, `x if c else y`, a comprehension's `if` | `if` (`if let` too) | `if` |
 | `case` | each `switch` case (`default` too), of a statement or an expression | each `switch` case (`default` too) | each `match` case | each `match` arm | each `switch`, type switch or `select` case (`default` too) |

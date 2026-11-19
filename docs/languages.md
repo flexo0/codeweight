@@ -77,7 +77,7 @@ which are Java's as they stand.
 - `&&` / `||` are the logical operators; a let chain (`if let Some(x) = a && x > 0`) is a run of `&&`. `-x` and
   `!x` are unary operators; `*x` and `&x` are none. `access` counts a field (`a.b`, `a.0`) and an index (`a[i]`); a
   method call's callee (`a.f()`) is the call's, a path (`a::b`) no access.
-- A call and a macro invocation (`println!(...)`, `vec![...]`) are calls. `break`, `continue`, `?` (an early return
+- A call is a `call`; a macro invocation (`println!(...)`, `vec![...]`) is a `macro`, a category of its own. `break`, `continue`, `?` (an early return
   of the error) and an early `return` are jumps.
 - Statements: an expression statement, `let`, `const`, `static`, a `type` alias, a trait's associated type, a
   struct's field and an enum's variant (as Java's fields and enum constants). `use` and `extern crate` weigh nothing,
@@ -91,7 +91,7 @@ which are Java's as they stand.
   weighs the block a statement beside its own category, at the block's depth, the tail's too), so `fn f() -> i32 { a + b }`
   weighs as Java's `return a + b;`, `{ g() }` as `g();`. A tail jump (`return x`, `break`) weighs as itself, not
   twice. The same holds in any block: an `if`'s, an arm's, a closure's, `unsafe { }`'s.
-- Known gaps: a macro's arguments are a token tree, not parsed, so only the macro call weighs (what is inside
+- Known gaps: a macro's arguments are a token tree, not parsed, so only the macro weighs (what is inside
   `vec![f(x), g(y)]` or `assert_eq!(...)` weighs nothing), and a `macro_rules!` definition weighs nothing.
   `let ... else { }` is no branch, its block not deeper; an `async`
   block is no lambda.

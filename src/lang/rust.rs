@@ -50,8 +50,8 @@ const KINDS: &[(&str, Category)] = &[
     ("while_expression", Loop),
     ("loop_expression", Loop),
     ("call_expression", Call),
-    // Its arguments are a token tree, not parsed: only the call weighs.
-    ("macro_invocation", Call),
+    // Its arguments are a token tree, not parsed: only the macro weighs, its own category.
+    ("macro_invocation", Macro),
     ("break_expression", Jump),
     ("continue_expression", Jump),
     // `?`: an early return of the error.
@@ -563,10 +563,23 @@ mod tests {
                  g();                    // statement 1, call 2, no argument
                  g(a, b);                // statement 1, call 2, 2 arguments 4 each
                  s.m(a);                 // statement 1, call 2, an argument
-                 println!("{}", a);      // statement 1, call 2: a macro's arguments are tokens, none
+                 println!("{}", a);      // statement 1, macro 2 (a call's): its arguments are tokens, none
                }"#,
         );
         assert_eq!(function(&weighed, "f"), 100.0 + 3.0 + 11.0 + 7.0 + 3.0);
+    }
+
+    #[test]
+    fn a_macro_weighs_macro_not_call() {
+        let weighed = testing::weigh_macros(
+            &RUST,
+            r#"fn f() {                  // function 100
+                 g();                    // statement 1, call 2
+                 println!("{}", h());    // statement 1, macro 6; h() in its tokens unparsed
+                 let v = vec![1, 2];     // statement 1, macro 6
+               }"#,
+        );
+        assert_eq!(function(&weighed, "f"), 100.0 + 3.0 + 7.0 + 7.0);
     }
 
     #[test]

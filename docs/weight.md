@@ -68,6 +68,10 @@ total        = Σ weight(node) over the nodes that have a category
   category for the pairs, where a call lighter than the operators it replaces has 0 or 1 arguments (`f.is_some()`
   for `f != None`) and a heavier one 2 (`Objects.equals(a, b)` for `a == b`). The engine counts them
   (`lang::arguments`), the same for every language.
+- `macro`: a macro invocation (Rust's `println!(...)`, `vec![...]`, `matches!(...)`), apart from `call`. Its
+  arguments are a token tree tree-sitter doesn't parse, so what is in it weighs nothing, nor does it count any
+  `argument`: the macro weighs for its content. It is flat by default, as `call`. The pairs (milestone 17) replace
+  `matches!(x, P)` by a call (`x.is_ipv4()`), which with a macro weighing a call's 0.55 came out heavier.
 - `jump`: `break`, `continue`, `throw`, and an early return: a return that isn't the last statement (comments aside)
   of its function's or lambda's body; the last one is a `statement`. So `if (x) return a; return b;` is a jump and a
   statement, and both returns of an `if / else` at the end are jumps.

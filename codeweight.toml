@@ -13,7 +13,7 @@ model = "linear"        # linear: 1 + factor * depth; exponential: factor ^ dept
 factor = 1.0
 max_depth = 10          # depth is capped here, so one deep method can't explode the total
 # weigh the same at any depth: a statement's or a declaration's parts, which it already weighs the depth of
-flat = ["call", "argument", "bool_op", "operator", "access", "parameter"]
+flat = ["call", "macro", "argument", "bool_op", "operator", "access", "parameter"]
 
 [parameters]            # the parameter at place k (from 0) weighs parameter * min(1 + step * k, max)
 step = 0.2              # 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, then 1.0 each: a long list weighs more than its count
@@ -29,6 +29,7 @@ nullish_operator = false  # ?? and ??= are an operator, not a bool_op: a default
 [weights]               # the base weight of each category, for every language
 statement = 1
 call      = 0.5         # a call, `new`: a chain of getters is long, not hard
+macro     = 0.5         # a macro (Rust's `println!(...)`): a call's, so this repo's macros weigh as before
 argument  = 0           # each argument of a call: none of their own by default, what is in them weighs
 branch    = 3           # if, ternary
 case      = 3           # each switch / match case, `default` too: a branch's, as here before
