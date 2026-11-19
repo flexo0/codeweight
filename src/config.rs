@@ -25,6 +25,9 @@ pub enum Category {
     /// A macro invocation (Rust's `println!(...)`), apart from `call`: its arguments are tokens, not parsed, so
     /// what is in it weighs nothing and the macro weighs for it.
     Macro,
+    /// A constructor (`new Foo()`, `new int[3]`, `this(...)`, a struct or composite literal), apart from `call`: it
+    /// makes a new object, where a method call asks one.
+    Constructor,
     /// A call's argument, each one (a call's arguments field: a list's items, or a lone one).
     Argument,
     Branch,
@@ -45,10 +48,11 @@ pub enum Category {
 }
 
 impl Category {
-    pub const ALL: [Category; 17] = [
+    pub const ALL: [Category; 18] = [
         Category::Statement,
         Category::Call,
         Category::Macro,
+        Category::Constructor,
         Category::Argument,
         Category::Branch,
         Category::Case,
@@ -71,6 +75,7 @@ impl Category {
             Category::Statement => "statement",
             Category::Call => "call",
             Category::Macro => "macro",
+            Category::Constructor => "constructor",
             Category::Argument => "argument",
             Category::Branch => "branch",
             Category::Case => "case",

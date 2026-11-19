@@ -118,7 +118,7 @@ macro_rules! js_kinds {
             ("try_statement", Try),
             ("catch_clause", Catch),
             ("call_expression", Call),
-            ("new_expression", Call),
+            ("new_expression", Constructor),
             ("break_statement", Jump),
             ("continue_statement", Jump),
             ("throw_statement", Jump),
@@ -317,6 +317,18 @@ mod tests {
              }",
         );
         assert_eq!(on - off, (10.0 + 4.0 + 20.0 + 12.0) - (20.0 + 12.0) - 10.0);
+    }
+
+    #[test]
+    fn new_weighs_constructor_not_call() {
+        let weighed = testing::weigh_constructors(
+            &TYPESCRIPT,
+            "function f() {             // function 100
+               const a = new Foo(1);    // statement 1, constructor 8
+               g();                     // statement 1, call 2
+             }",
+        );
+        assert_eq!(function(&weighed, "f"), 100.0 + 9.0 + 3.0);
     }
 
     #[test]

@@ -46,6 +46,8 @@ const KINDS: &[(&str, Category)] = &[
     ("default_case", Case),
     ("for_statement", Loop),
     ("call_expression", Call),
+    // `T{...}`, `[]int{1, 2}`, `map[K]V{}`: a constructor, as Java's `new` is (an element's own `{...}` is none).
+    ("composite_literal", Constructor),
     ("break_statement", Jump),
     ("continue_statement", Jump),
     ("goto_statement", Jump),
@@ -304,6 +306,23 @@ mod tests {
              }",
         );
         assert_eq!(off.total, 100.0 + 5.0 + 7.0);
+    }
+
+    #[test]
+    fn every_composite_literal_weighs_constructor() {
+        let weighed = testing::weigh_constructors(
+            &GO,
+            "package p
+
+             func f() {                  // function 100
+               a := P{X: 1}              // statement 1, constructor 8
+               b := []int{1, 2}          // 1 + 8
+               c := map[string]int{}     // 1 + 8
+               d := [][]int{{1}, {2}}    // 1 + 8: an element's own {...} is none
+               g()                       // statement 1, call 2
+             }",
+        );
+        assert_eq!(function(&weighed, "f"), 100.0 + 4.0 * 9.0 + 3.0);
     }
 
     #[test]

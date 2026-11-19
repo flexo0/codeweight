@@ -11,6 +11,7 @@ flat = []          # every category nests, so a hand-worked sum is weight × nes
 statement = 1
 call      = 2
 macro     = 2      # a call's, so a snippet's macro weighs as a call; its own in `lang::testing::weigh_macros`
+constructor = 2    # a call's, so a snippet's `new` weighs as a call; its own in `lang::testing::weigh_constructors`
 argument  = 0      # 0 but in the snippets about them (`lang::testing::weigh_arguments`)
 branch    = 10
 case      = 10     # a branch's, so a snippet's switch weighs as an if; its own in `lang::testing::weigh_cases`

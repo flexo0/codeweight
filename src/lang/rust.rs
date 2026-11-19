@@ -55,6 +55,8 @@ const KINDS: &[(&str, Category)] = &[
     ("while_expression", Loop),
     ("loop_expression", Loop),
     ("call_expression", Call),
+    // `Foo { x: 1 }`: a constructor (the tuple struct's `Foo(1)` parses as a call, which it stays).
+    ("struct_expression", Constructor),
     // Its arguments are a token tree, not parsed: only the macro weighs, its own category.
     ("macro_invocation", Macro),
     ("break_expression", Jump),
@@ -343,6 +345,19 @@ mod tests {
     }
 
     #[test]
+    fn a_struct_expression_weighs_constructor() {
+        let weighed = testing::weigh_constructors(
+            &RUST,
+            "fn f() {                                         // function 100
+                 let a = P { x: 1 };                          // statement 1, constructor 8
+                 let b = P { x: 1, ..Default::default() };    // 1 + 8, and the call 2
+                 let c = Q(1);                                // 1 + 2: a tuple struct's parses as a call
+             }",
+        );
+        assert_eq!(function(&weighed, "f"), 100.0 + 9.0 + 11.0 + 3.0);
+    }
+
+    #[test]
     fn branches_an_else_if_chain_a_let_chain_and_the_tail() {
         let weighed = weigh(
             "fn f(x: i32) -> i32 {
@@ -421,7 +436,7 @@ mod tests {
             "mod shapes {                                       // shapes: class 1000
                pub struct Circle { r: f64 }                    // shapes.Circle: class 1000, a field 1
                impl Circle {                                   // nothing of its own; shapes.Circle's
-                 pub fn new(r: f64) -> Self { Circle { r } }   // shapes.Circle.new: 100, the tail 1
+                 pub fn new(r: f64) -> Self { Circle { r } }   // shapes.Circle.new: 100, the tail 1, call 2
                }
                impl Area for Circle {
                  fn area(&self) -> f64 { self.r * self.r }     // shapes.Circle.area: 100 + 1
@@ -446,7 +461,7 @@ mod tests {
         );
         assert_eq!(class(&weighed, "shapes"), 1000.0);
         assert_eq!(class(&weighed, "shapes.Circle"), 1001.0);
-        assert_eq!(function(&weighed, "shapes.Circle.new"), 101.0);
+        assert_eq!(function(&weighed, "shapes.Circle.new"), 103.0);
         assert_eq!(function(&weighed, "shapes.Circle.area"), 101.0);
         assert_eq!(class(&weighed, "shapes.Vec"), 0.0);
         assert_eq!(function(&weighed, "shapes.Vec.area"), 101.0);

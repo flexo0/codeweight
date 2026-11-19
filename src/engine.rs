@@ -279,7 +279,9 @@ impl<'c> Weigher<'c> {
                 .sum::<f64>()
                 + self.parameters((self.lang.parameters)(node, source), frame.depth)
                 + match category {
-                    Some(Category::Call) => self.arguments(lang::arguments(node), frame.depth),
+                    Some(Category::Call | Category::Constructor) => {
+                        self.arguments(lang::arguments(node), frame.depth)
+                    }
                     _ => 0.0,
                 };
             if weight > 0.0 {

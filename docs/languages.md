@@ -1,7 +1,10 @@
 # The languages
 
 What each language's elements are, where it adds to or differs from the general rules ([weight.md](weight.md)),
-which are Java's as they stand.
+which are Java's as they stand. Every constructor is a `constructor` (milestone 21): Java's `new Foo()`, an array's `new int[3]` /
+`new Integer[] {1, 2}` (a bare `{1, 2}` initializer is none) and `this(...)` / `super(...)`, TS's and JS's `new`,
+Rust's struct literal, Go's composite literal; Python's `Foo()` stays a `call`, no syntax telling it from a
+function's.
 
 ## TypeScript, TSX and JavaScript
 
@@ -77,7 +80,8 @@ which are Java's as they stand.
 - `&&` / `||` are the logical operators; a let chain (`if let Some(x) = a && x > 0`) is a run of `&&`. `-x` and
   `!x` are unary operators; `*x` and `&x` are none. `access` counts a field (`a.b`, `a.0`) and an index (`a[i]`); a
   method call's callee (`a.f()`) is the call's, a path (`a::b`) no access.
-- A call is a `call`; a macro invocation (`println!(...)`, `vec![...]`) is a `macro`, a category of its own. `break`, `continue`, `?` (an early return
+- A call is a `call` (a tuple struct's `P(1)` too, which parses as one); a struct literal (`P { x: 1 }`) is a
+  `constructor`; a macro invocation (`println!(...)`, `vec![...]`) is a `macro`, a category of its own. `break`, `continue`, `?` (an early return
   of the error) and an early `return` are jumps.
 - Statements: an expression statement, `let`, `const`, `static`, a `type` alias, a trait's associated type, a
   struct's field and an enum's variant (as Java's fields and enum constants). `use` and `extern crate` weigh nothing,
@@ -126,7 +130,9 @@ which are Java's as they stand.
   Java's; its initializer (`if err := f(); err != nil`) is at the `if`'s depth, a statement. `for` is the only loop
   (a three-clause, a `range`, a bare `for {}`). A `switch`, a type switch and a `select` are no nesting constructs;
   each case (`default` too) is a `case`, its values (a select case's send or receive, which weigh nothing, as a
-  label) at its depth, its statements deeper. No `try`: `defer` and `go` are statements, their call a call.
+  label) at its depth, its statements deeper. No `try`: `defer` and `go` are statements, their call a call. A
+  composite literal (`P{X: 1}`, `[]int{1, 2}`, `map[K]V{}`) is a `constructor`, as Java's `new` is; an element's
+  own `{...}` inside one is none.
 - `break`, `continue`, `goto`, `fallthrough` and an early `return` are jumps; a label (`L:`) weighs nothing, and a
   labeled `return` at a body's end is its last statement. The grammar puts a list of statements between a block and
   its statements (`statement_list`), which the early return looks through (the language's `lists`).

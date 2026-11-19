@@ -10,8 +10,8 @@ functions weighs more. The weight of a file, a folder or a function is the sum o
 a git commit (or a range, or the uncommitted changes) is its net delta, after minus before, positive or negative. It
 reads Java, TypeScript (TS, TSX), JavaScript, Python, Rust and Go, parsed by tree-sitter.
 
-Milestones 0-19 are built (the CLI, the config, the engine, Java, TypeScript, TSX, Python, folders, `commit`, the
-text and JSON reports, the tuned defaults, Rust, operators and accesses, JavaScript, Go, depth on the structure only, parameters, cases and arguments, conditions, the defaults tuned on pairs, macros, nested ternaries and default cases, assignments); the design is `docs/`, a file per subject
+Milestones 0-21 are built (the CLI, the config, the engine, Java, TypeScript, TSX, Python, folders, `commit`, the
+text and JSON reports, the tuned defaults, Rust, operators and accesses, JavaScript, Go, depth on the structure only, parameters, cases and arguments, conditions, the defaults tuned on pairs, macros, nested ternaries and default cases, assignments, constructors, a constructor category); the design is `docs/`, a file per subject
 (its index `docs/README.md`), the milestones `docs/milestones.md`. Keep those docs in step with what is built (a
 decision made while building goes into its subject's file, in the same commit).
 

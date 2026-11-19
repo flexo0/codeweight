@@ -59,8 +59,11 @@ const KINDS: &[(&str, Category)] = &[
     ("try_with_resources_statement", Try),
     ("catch_clause", Catch),
     ("method_invocation", Call),
-    ("object_creation_expression", Call),
-    ("explicit_constructor_invocation", Call),
+    ("object_creation_expression", Constructor),
+    // `new int[3]`, `new Integer[] {1, 2}`: a constructor, as `new Foo()` is (a bare `{1, 2}` initializer is none).
+    ("array_creation_expression", Constructor),
+    // `this(...)`, `super(...)`.
+    ("explicit_constructor_invocation", Constructor),
     ("break_statement", Jump),
     ("continue_statement", Jump),
     ("throw_statement", Jump),
@@ -750,6 +753,26 @@ mod tests {
              }",
         );
         assert_eq!(added, 7.0 + 7.0 + 14.0);
+    }
+
+    #[test]
+    fn every_constructor_weighs_constructor_not_call() {
+        let weighed = testing::weigh_constructors(
+            &JAVA,
+            "class A {
+               A(int x) { this(); }                     // A.A: function 100 × 2, constructor 8 (no statement around it)
+               A() { super(); }                         // 8
+               void f() {                               // function 100
+                 Object a = new Foo();                  // statement 1, constructor 8
+                 int[] b = new int[3];                  // an array's: 1 + 8
+                 Integer[] c = new Integer[] {1, 2};    // 1 + 8
+                 int[] d = {1, 2};                      // a bare initializer: statement 1 only
+                 g();                                   // statement 1, call 2
+               }
+             }",
+        );
+        assert_eq!(function(&weighed, "A.A"), 200.0 + 8.0 + 8.0);
+        assert_eq!(function(&weighed, "A.f"), 100.0 + 9.0 * 3.0 + 1.0 + 3.0);
     }
 
     #[test]

@@ -1,8 +1,8 @@
 # Milestones
 
-Built: milestones 0-19 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
+Built: milestones 0-21 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
 `commit`, the reports, the tuned defaults, Rust, operators and accesses, JavaScript, Go, depth on the structure
-only, parameters, cases and arguments, conditions, the defaults tuned on pairs, macros, nested ternaries and default cases, assignments).
+only, parameters, cases and arguments, conditions, the defaults tuned on pairs, macros, nested ternaries and default cases, assignments, constructors, a constructor category).
 
 0. (built) The repo: `Cargo.toml`, `README.md` (usage, the weights file), the MIT license, GitHub Actions (`cargo fmt
    --check`, `clippy -D warnings`, `test`).
@@ -190,3 +190,19 @@ only, parameters, cases and arguments, conditions, the defaults tuned on pairs, 
     now better; Error Prone's `RefactorSwitch` still worse, its `x = switch (...)` a statement more against an
     `=` less per case (statement 1, operator 0.6). On the corpora the totals rose 1-2% and the function rankings
     held (Spearman 0.996 to 0.999, the top 20 kept but one at jsprit).
+20. (built) Every constructor weighs, as asked after an array's `new Integer[] {...}` was seen to weigh nothing: a
+    `call`, as `new Foo()` is. Java's `array_creation_expression` (`new int[3]`, `new Integer[] {1, 2}`; a bare
+    `{1, 2}` initializer stays none), Rust's `struct_expression` (`P { x: 1 }`, as the tuple struct's `P(1)` is a
+    call), Go's `composite_literal` (`P{X: 1}`, `[]int{1}`, `map[K]V{}`; an element's own `{...}` none). TS's, JS's
+    and Python's were calls already. On the pairs: 130 → 127, Error Prone's `TruthContainsExactlyElementsInUsage`
+    (`containsExactlyElementsIn(new Integer[] {1, 2, 3})` against `containsExactly(1, 2, 3)`) now better. On the
+    corpora the totals and the function rankings held (×1.00, Spearman 1.000).
+21. (built) `constructor`, a category apart from `call`, as asked after milestone 20: a constructor makes a new
+    object where a method call asks one, so it may weigh otherwise. Java's `new Foo()`, array creation and
+    `this(...)` / `super(...)`, TS's and JS's `new`, Rust's struct literal, Go's composite literal; Python's `Foo()`
+    and Rust's tuple struct `P(1)` stay calls, no syntax telling them from a function's. 0.9 by default, a bit
+    above a call's 0.55, by judgment: for Java's, TS's and Go's constructors any weight from 0.25 to 5 scores the
+    same on the pairs (134 at 0); with Rust's struct literal 127 → 124, Clippy's `init_numbered_fields`
+    (`T { 0: v }` against `T(v)`, a constructor against a call) now better. Its arguments count as a call's, it is flat as `call`;
+    `tests/weights.toml` sets it to a call's 2, with a snippet test per language at its own value; this repo's own
+    `codeweight.toml` to its call's 0.5.

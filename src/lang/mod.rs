@@ -476,6 +476,18 @@ pub mod testing {
         )
     }
 
+    /// A snippet that parses cleanly, weighed under the test weights with `constructor` 8 (a call stays 2).
+    pub fn weigh_constructors(lang: &'static Lang, text: &str) -> Weighed {
+        weigh_with(
+            lang,
+            "constructor = 2 ",
+            "constructor = 8 ",
+            Category::Constructor,
+            8.0,
+            text,
+        )
+    }
+
     /// A snippet that parses cleanly, weighed under the test weights with `case` 7 (a branch stays 10).
     pub fn weigh_cases(lang: &'static Lang, text: &str) -> Weighed {
         weigh_with(

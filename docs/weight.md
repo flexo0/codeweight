@@ -61,7 +61,7 @@ total        = Σ weight(node) over the nodes that have a category
   `A this`, TS's `this: T`, Python's first `self` / `cls`, Rust's `self`, Go's receiver), as an access to it is none,
   and neither is a function type's (`(a: A) => B`, `fn(i32)`, Go's `func(int)`), which declares no function. Each
   language's `parameters` hook counts them; the weight is the declaration's, at its depth (flat by default).
-- `argument`: each argument of a node that is a `call`, at the call's depth (flat by default): the items of its
+- `argument`: each argument of a node that is a `call` or a `constructor`, at its depth (flat by default): the items of its
   `arguments` field's list, or one for a lone argument in its place (Python's `f(x for x in xs)`, a tagged
   template's string); none of a call without the field (a Rust macro, whose arguments are tokens; a JSX element;
   `new A` without parentheses), nor of what is no call (Java's enum constant `X(1)`, Python's class bases). It is 0.05
@@ -72,6 +72,14 @@ total        = Σ weight(node) over the nodes that have a category
   arguments are a token tree tree-sitter doesn't parse, so what is in it weighs nothing, nor does it count any
   `argument`: the macro weighs for its content. It is flat by default, as `call`. The pairs (milestone 17) replace
   `matches!(x, P)` by a call (`x.is_ipv4()`), which with a macro weighing a call's 0.55 came out heavier.
+- `constructor`: a constructor, apart from `call`: Java's `new Foo()`, an array's `new int[3]` / `new T[] {...}`
+  and `this(...)` / `super(...)`, TS's and JS's `new`, Rust's struct literal (`P { x: 1 }`), Go's composite
+  literal (`P{X: 1}`, `[]int{1}`). It makes a new object where a method call asks one, so it weighs a bit more,
+  0.9 against 0.55 (milestone 21, by judgment: for Java's, TS's and Go's the pairs score the same for any weight
+  from 0.25 to 5). Its
+  arguments count as a call's; it is flat by default, as `call`. A bare initializer (`int[] a = {1, 2}`, a Go
+  element's own `{...}`) is none, and Python's `Foo()` and Rust's tuple struct `P(1)` stay calls: no syntax tells
+  them from a function's call.
 - `jump`: `break`, `continue`, `throw`, and an early return: a return that isn't the last statement (comments aside)
   of its function's or lambda's body; the last one is a `statement`, but Java's `return switch (x) { ... };`, whose
   switch expression weighs for it as a switch statement in its place would (the language's `carried_return`

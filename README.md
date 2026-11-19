@@ -172,7 +172,7 @@ model = "linear"        # linear: 1 + factor * depth; exponential: factor ^ dept
 factor = 1.5            # each level of nesting adds one and a half base weights
 max_depth = 10          # depth is capped here, so one deep method can't explode the total
 # weigh the same at any depth: a statement's or a declaration's parts, which it already weighs the depth of
-flat = ["call", "macro", "argument", "bool_op", "operator", "access", "parameter"]
+flat = ["call", "macro", "constructor", "argument", "bool_op", "operator", "access", "parameter"]
 
 [parameters]            # the parameter at place k (from 0) weighs parameter * min(1 + step * k, max)
 step = 0.3              # 1.65, 2.15, 2.64, 3.14, then 3.3 each: a long list weighs more than its count
@@ -192,6 +192,7 @@ assignments = true        # a plain = is an operator, as += is; a declaration's 
 statement = 1
 call      = 0.55
 macro     = 1.15
+constructor = 0.9
 argument  = 0.05
 branch    = 3
 case      = 2
@@ -242,7 +243,8 @@ body's nesting is its weight), a `catch` 2 (the other path, as a branch). A `swi
 an `if`'s 3, and its default nothing, as an `else`: a switch weighs less than the if-chain it replaces. A ternary
 chained in a ternary's alternative (`a ? x : b ? y : z`) nests, where an `else if` doesn't. A call's argument 0.05,
 what is in it weighs. A Rust macro (`println!(...)`) weighs 1.15, about two calls: what is in it isn't parsed,
-so it weighs for its content. The `[conditions]` are rules that weigh what a node's kind alone doesn't tell (a cast, Rust's
+so it weighs for its content. A constructor (`new Foo()`, `new int[3]`, a struct literal) weighs 0.9, a bit above
+a call: it makes a new object, where a call asks one. The `[conditions]` are rules that weigh what a node's kind alone doesn't tell (a cast, Rust's
 `if let` pattern, a magic number, `!!x`, `??`, a nested ternary, a default case), each as an existing category; the
 defaults turn on all but `??` as an operator, and a weights file on its own that leaves the table out weighs as the categories alone.
 
@@ -267,9 +269,10 @@ node kind is a tree-sitter one, as the language's grammar names it.
 | Category | Java | TypeScript, TSX, JavaScript | Python | Rust | Go |
 |---|---|---|---|---|---|
 | `statement` | an expression statement, a local variable, a field, a `return` that ends its function or lambda, a lambda's expression body (`x -> f(x)`, as `{ return f(x); }`), `yield`, `assert`, `synchronized`, an enum constant | an expression statement, `const` / `let` / `var`, a class field, an interface's property, a `type` alias, a `return` that ends its function, an arrow's expression body (`x => f(x)`) | an expression statement (an assignment too; not a docstring or a bare `...`), `assert`, `del`, a `type` alias, a `return` that ends its function, a lambda's body, a comprehension's element | an expression statement, `let`, `const`, `static`, a `type` alias, a field, an enum variant, a block's tail expression (its value, no `;`), a closure's expression body, a `match` arm's value that is no block, a `return` that ends its function or closure | an expression statement, an assignment, `:=`, each `var` / `const` spec, a send, `defer`, `go`, a type alias, a field, `i++` / `x += 1` (an `operator` too; not as a `for` clause's update), a `return` that ends its function or literal |
-| `call` | a method call, `new`, `this(...)` / `super(...)` | a call, `new`; in TSX and JavaScript each JSX element | a call | a call | a call |
+| `call` | a method call | a call; in TSX and JavaScript each JSX element | a call (a class's `Foo()` too: no syntax tells it from a function's) | a call (a tuple struct's `P(1)` too) | a call (`new(T)`, `make(...)` too) |
+| `constructor` | `new Foo()`, an array's `new int[3]` / `new T[] {...}` (not a bare `{...}` initializer), `this(...)` / `super(...)` | `new Foo()` | — | a struct literal (`P { x: 1 }`) | a composite literal (`P{X: 1}`, `[]int{1}`, `map[K]V{}`; not an element's own `{...}`) |
 | `macro` | — | — | — | a macro invocation (`println!(...)`, `vec![...]`: its arguments aren't parsed) | — |
-| `argument` | each argument of a call (not an enum constant's) | each argument of a call or `new`, a tagged template's string one; none of a JSX element | each argument of a call (`*a`, `k=v`, `**kw` too), a lone generator (`f(x for x in xs)`) one; not a class's bases | each argument of a call; none of a macro | each argument of a call (a type, as `make`'s, too) |
+| `argument` | each argument of a call or constructor (not an enum constant's) | each argument of a call or `new`, a tagged template's string one; none of a JSX element | each argument of a call (`*a`, `k=v`, `**kw` too), a lone generator (`f(x for x in xs)`) one; not a class's bases | each argument of a call; none of a macro | each argument of a call (a type, as `make`'s, too) |
 | `branch` | `if`, a ternary `?:` | `if`, a ternary `?:` | `if`, `elif`, `x if c else y`, a comprehension's `if` | `if` (`if let` too) | `if` |
 | `case` | each `switch` case (`default` too), of a statement or an expression | each `switch` case (`default` too) | each `match` case | each `match` arm | each `switch`, type switch or `select` case (`default` too) |
 | `loop` | `for`, for-each, `while`, `do` | `for`, `for ... in` / `of`, `while`, `do` | `for`, `while`, a comprehension's `for` | `for`, `while`, `loop` | `for` |
