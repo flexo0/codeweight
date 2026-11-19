@@ -1,8 +1,9 @@
 # Milestones
 
-Built: milestones 0-22 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
+Built: milestones 0-23 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
 `commit`, the reports, the tuned defaults, Rust, operators and accesses, JavaScript, Go, depth on the structure
-only, parameters, cases and arguments, conditions, the defaults tuned on pairs, macros, nested ternaries and default cases, assignments, constructors, a constructor category, every operator counted).
+only, parameters, cases and arguments, conditions, the defaults tuned on pairs, macros, nested ternaries and default cases, assignments, constructors, a constructor category, every operator counted, the
+defaults tuned again by rule).
 
 0. (built) The repo: `Cargo.toml`, `README.md` (usage, the weights file), the MIT license, GitHub Actions (`cargo fmt
    --check`, `clippy -D warnings`, `test`).
@@ -216,3 +217,15 @@ only, parameters, cases and arguments, conditions, the defaults tuned on pairs, 
     124 → 123 (worse 37 → 36, ties 13 → 15), Error Prone's `RefactorSwitch` `L209-8` now better (4 `=` against 2),
     Staticcheck's `QF1005` (`math.Pow(x*2, 2)` against `x * 2 * x * 2`) now worse; the weights stay (`operator`
     0.6 is still the best, `bool_op` 0.2 would score 120). The corpora not re-checked.
+23. (built) The defaults tuned again on the 1,453 pairs, by a new score (`pairs/tune.py`): still 3 per pair whose good
+    side weighs more and 1 per tie, but each pair weighed 1 / sqrt(its rule's pairs), a hand-picked one three times
+    that, so a rule with fifty tests doesn't count fifty times one with a single test, plus the distance from the
+    defaults (`lam = 1`) in place of the tie-break, so a weight moves only as far as the pairs ask. A soft margin on
+    ln(bad / good) was tried as a term too, so that an order held by a hair counts: on five folds of the rules,
+    each fitted on four and scored on the fifth, it cut the pairs within 5% of a tie (82 → 22-31) but put more in
+    the wrong order on the rules held out (44 → 48-56), and is off; the pull of 1 held out better than 0.3 (39
+    against 44 worse). Three seeds agree: `macro` 1.15 → 1.75, `case` 2 → 2.4, `lambda` 2 → 1.65, `jump` 1.55 →
+    1.35; the nesting stays linear, 1.5 (a pull of 0.3 would go exponential, 2.05-2.45, for one pair or two). On the
+    pairs: worse 36 → 32, ties 15 → 12, Clippy's `manual_map` and `redundant_pattern_matching` now better (a
+    `matches!` heavier than the `is_none() && ...` it stands for), `unnecessary_literal_unwrap`'s two `panic!` with a
+    format string now worse than `Err(1).unwrap()`. The corpora not re-checked.

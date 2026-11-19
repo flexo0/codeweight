@@ -28,19 +28,19 @@ assignments = true        # a plain = is an operator, as += is; a declaration's 
 [weights]               # the base weight of each category, for every language; tuned on the example pairs
 statement = 1
 call      = 0.55        # a call: a chain of getters is long, not hard
-macro     = 1.15        # a macro (Rust's `println!(...)`): what is in it is tokens, unparsed
+macro     = 1.75        # a macro (Rust's `println!(...)`): what is in it is tokens, unparsed
 constructor = 0.9       # new Foo(), new int[3], this(...), a struct literal: a new object, a bit above a call
 argument  = 0.05        # each argument of a call: little of its own, what is in it weighs
 branch    = 3           # if, ternary
-case      = 2           # each switch / match case, `default` too: below a branch, as a switch has one more
+case      = 2.4         # each switch / match case, `default` too: below a branch, as a switch has one more
 loop      = 3
 try       = 0.95        # the body's nesting is its weight; a catch is the other path
 catch     = 2
-lambda    = 2
+lambda    = 1.65
 function  = 1.55        # a declaration, below a lambda: a getter is 2.55, not mostly its signature
 class     = 5
 bool_op   = 0.55        # each && / || operator: a && b is 1, a && b && c and a && b || c are 2
-jump      = 1.55        # break, continue, an early return, throw
+jump      = 1.35        # break, continue, an early return, throw
 operator  = 0.6         # each operator: a + b is 1, a + b - c and (a + b) * c are 2; x += 1, i++, -x, !x; !!x is 2
 access    = 1.85        # each field access or index: a.b.c is 2, a[i] is 1; not a call's callee, nor this.x
 parameter = 1.65        # a function's or lambda's parameter, the first; not self / this / a receiver
