@@ -61,6 +61,19 @@ impl Weighed {
         weighed
     }
 
+    /// The weight of its code without its tests, and of its tests alone: `only(false)`'s and `only(true)`'s
+    /// totals, with no copy of it.
+    pub fn split(&self) -> (f64, f64) {
+        let entries = |tests: bool| {
+            self.entries
+                .iter()
+                .filter(|e| e.test == tests)
+                .map(|e| e.weight)
+                .sum::<f64>()
+        };
+        (self.file + entries(false), self.file_tests + entries(true))
+    }
+
     fn times(mut self, code: f64, tests: f64) -> Weighed {
         self.file *= code;
         self.file_tests *= tests;

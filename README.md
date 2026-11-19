@@ -12,18 +12,24 @@ in `docs/`, a file per subject (see `docs/README.md`).
 
 ## Example
 
-codeweight run on its own sources, and on what a commit added or took away, its code and its tests apart:
+codeweight run on its own sources, and on what a commit added or took away: its code, its docs and its tests,
+three numbers, never one sum:
 
 ```
 $ codeweight scan src
-4600.25
+code +9519.02
+docs 0
+tests +3036.49
 $ codeweight commit b88842c
-+797.75
-$ codeweight commit-tests b88842c
-+352.75
+code +1095.35
+docs +2240
+tests +534.04
+$ codeweight commit b88842c --short
+c+1095;d+2240;t+534
 ```
 
-`-v` lists the functions behind the number, heaviest first (see "Usage").
+`--code` (or `--tests`, `--docs`) prints that number alone, and with `-v` the functions behind it, heaviest first
+(see "Usage").
 
 ## Install
 
@@ -42,43 +48,49 @@ codeweight: link or copy the folder into the agent's skills, e.g. from a clone
 ## Usage
 
 ```
-codeweight scan <path>... [-v]            the weight of files and folders, their tests left out; several allowed
-codeweight scan-tests <path>... [-v]      the weight of their tests alone
-codeweight scan-docs <path>... [-v]       the docs weight of their Markdown files alone
-codeweight commit <rev>|<A>..<B> [-C <repo>] [-v]        the net weight delta of a commit or between two
-                                                         revisions, its tests left out
-codeweight commit-tests <rev>|<A>..<B> [-C <repo>] [-v]  the same, of the tests alone
-codeweight commit-docs <rev>|<A>..<B> [-C <repo>] [-v]   the same, the docs weight of the Markdown files alone
-codeweight pre-commit [-C <repo>] [--only-staged] [-v]   the net weight delta of the uncommitted changes (or
-                                                         the staged ones alone), their tests left out
-codeweight pre-commit-tests [-C <repo>] [--only-staged] [-v]
-                                                         the same, of the tests alone
-codeweight pre-commit-docs [-C <repo>] [--only-staged] [-v]
-                                                         the same, the docs weight of the Markdown files alone
-codeweight init [<file>]                  writes the default weights file (default ./codeweight.toml), never over an existing one
+codeweight scan <path>... [<one>|--short] [--json]           the weight of files and folders; several allowed
+codeweight commit <rev>|<A>..<B> [-C <repo>] [<one>|--short] [--json]
+                                                             the net weight delta of a commit or between two
+                                                             revisions
+codeweight pre-commit [-C <repo>] [--only-staged] [<one>|--short] [--json]
+                                                             the net weight delta of the uncommitted changes (or
+                                                             the staged ones alone)
+codeweight init [<file>]       writes the default weights file (default ./codeweight.toml), never over an existing one
+
+<one>: --code|--tests|--docs [-v] [--top <N>] [--by file|function]
 ```
 
-Every command takes:
+Every command takes `--config <file>`: the weights file (see below for where it is looked up without one).
+`scan`, `commit` and `pre-commit` take:
 
-- `--config <file>`: the weights file (see below for where it is looked up without one);
-- `--format text|json`: the report's format, text by default (the JSON is described below);
+- `--code`, `--tests` or `--docs` (at most one): that number alone, and its report;
+- `--verbose` (`-v`): the whole report instead of the total alone;
 - `--top <N>`: only the report's first N lines (the heaviest; for a delta, the largest changes);
-- `--by file|function`: what the report lists, the functions by default.
+- `--by file|function`: what the report lists, the functions by default;
+- `--short`: the three numbers on one line;
+- `--json`: JSON instead of text (described below).
 
-`scan` prints its total alone, a number (`4698.25`): the weight of the code, its tests left out. `scan-tests`
-prints the weight of the tests alone: the test files (`test_globs`), and in a Rust file the items
-marked `#[cfg(test)]`, `#[test]` or a runner's `#[tokio::test]` (any `#[...::test]`), all in them (a `mod tests`
-and its functions), and a whole file marked `#![cfg(test)]`. `commit` and `pre-commit` print their net delta alone,
-signed (`+42.5`, `-17`, `0`), of the code, its tests left out; `commit-tests` and `pre-commit-tests` the delta of
-the tests alone. `scan-docs`, `commit-docs` and `pre-commit-docs` weigh the docs alone: the Markdown files
-(`docs_globs`), each by its words and symbol runs (`[docs]`, below; a word 1 and a symbol run 1 by default, so
-`## Setup` is 2 and `foo(a, b);` 6). The code, the tests and the docs are always three numbers, never one sum, each
-at its full weight: a change to all three has its code in one, its tests in another and its docs in the third. For
-each command, `--verbose` (`-v`) prints the whole report
-instead, as `--top` and `--by` do; with the total alone, a file's syntax errors and a folder that can't be read are a
-warning on stderr.
+`-v`, `--top` and `--by` need one of `--code`, `--tests` and `--docs`, `--short` none of them, and `--short` and
+`--json` don't go together: each is a usage error (exit 2) otherwise.
 
-The text report (`-v`) starts with the total. After it come the functions and classes, heaviest first, then by path and
+Without `--code`, `--tests` or `--docs`, a command prints three numbers, each on its line, in the order code, docs,
+tests: `code +15.5`, `docs +17`, `tests -5`. Each is signed (`scan`'s too), with at most two decimals, a zero
+without a sign (`docs 0`). `--short` prints them on one line, each rounded to a whole number, all three always
+there: `c+15;d+17;t-5`, a zero part `d0`. The code's is the weight of the code, its tests left out. The tests' is
+the weight of the tests alone: the test files (`test_globs`), and in a Rust file the items marked `#[cfg(test)]`,
+`#[test]` or a runner's `#[tokio::test]` (any `#[...::test]`), all in them (a `mod tests` and its functions), and a
+whole file marked `#![cfg(test)]`. The docs' is the weight of the Markdown files (`docs_globs`), each by its words
+and symbol runs (`[docs]`, below; a word 1 and a symbol run 1 by default, so `## Setup` is 2 and `foo(a, b);` 6).
+The code, the tests and the docs are always three numbers, never one sum, each at its full weight: a change to all
+three has its code in one, its tests in another and its docs in the third. The input is read once and each file
+weighed once, a Rust file with tests counting toward the code and the tests both.
+
+With `--code`, `--tests` or `--docs`, a command prints that number alone: `scan` its total (`4698.25`), `commit` and
+`pre-commit` their net delta, signed (`+42.5`, `-17`, `0`). `--verbose` (`-v`) prints its whole report instead, as
+`--top` and `--by` do. With the numbers alone (the three, `--short`, or one total), a file's syntax errors and a
+folder that can't be read are a warning on stderr.
+
+The text report (`--code -v`, or `--tests`, `--docs`) starts with the total. After it come the functions and classes, heaviest first, then by path and
 name, each as `<weight>  <path>  <name>`; with `--by file`, the files. A class's line (`Name (class)`) has its code
 outside its functions; `(file)` is a file's code outside any class. A function is named by its enclosing classes and
 functions, `Outer.Inner.method`. Same-named functions of one class are one line, their weights summed: overloads, or
@@ -92,10 +104,10 @@ type (`T.M` for `func (r *T) M()`). A weight has at most two decimals.
 A folder is walked for the files in it: its `.gitignore` is honoured, hidden files and the `[files]` excludes are
 left out (a file named on the command line is weighed even if excluded). The globs are matched against a file's path
 from the root of its git repo (outside a repo, from the current folder, or from the folder given when the path is
-outside the current one). `scan` leaves the test files (`test_globs`) and a Rust file's tests out, `scan-tests`
-weighs only them. A file the docs globs match (`docs_globs`) is docs alone, though it is under `tests/`: `scan` and
-`scan-tests` never weigh it, `scan-docs` weighs only such files, each one line of the report (its `(file)`, as it
-has no functions). Files are weighed in parallel; the output is the same on every run.
+outside the current one). The code leaves the test files (`test_globs`) and a Rust file's tests out, the tests
+are only them. A file the docs globs match (`docs_globs`) is docs alone, though it is under `tests/`: neither the
+code nor the tests weigh it, the docs only such files, each one line of `--docs`' report (its `(file)`, as it has no
+functions). Files are weighed in parallel; the output is the same on every run.
 
 A file that doesn't parse cleanly is still weighed, as tree-sitter recovered it, with a warning. A file in a language
 codeweight doesn't read is left out, never an error. A folder under the one scanned that can't be read (a
@@ -123,20 +135,38 @@ and `git gc` drops them later.
 A file's delta is its weight after minus before: an added file's is all positive, a deleted one's all negative. Its
 functions and classes are matched by their qualified name within the file (a renamed file's old and new), each one
 `added`, `removed`, `heavier` or `lighter`. The changed files are weighed as a walk of the repo's root weighs them:
-the `[files]` excludes and hidden paths are left out, and so is a file codeweight doesn't read. `commit` and
-`pre-commit` leave the test files and a Rust file's tests out; `commit-tests` and `pre-commit-tests` weigh only them,
-each as `scan-tests` does; `commit-docs` and `pre-commit-docs` weigh only the docs, as `scan-docs` does.
+the `[files]` excludes and hidden paths are left out, and so is a file codeweight doesn't read. Their code, docs
+and tests are weighed as `scan` weighs them, with `--code`, `--tests` or `--docs` as `scan` does with it.
 
-With `-v`, the text report starts with the total delta (`total +42.5`, `total -17`). After it comes one line per function and
+With `--code -v` (or `--tests`, `--docs`), the text report starts with the total delta (`total +42.5`, `total -17`). After it comes one line per function and
 class (or per file with `--by file`), `<delta>  <status>  <path>  <name>`, a renamed file's path as `old -> new`; the
 largest changes first, either way (a gain before a loss of the same size), then by path and name. A line whose delta
 is 0 (an untouched function, a pure rename) is left out; `--top` keeps the first N lines.
 
 ### The JSON
 
-`--format json` prints one JSON object with the same lines as the text, in the same order, `--top` and `--by`
-acting alike; the whole report, `--verbose` or not. Every field below is always there, `null` where it has no value. A weight or a delta is a number
-rounded to two decimals, as the text shows it.
+Without `--code`, `--tests` or `--docs`, `--json` prints one object, the three numbers and the warnings:
+
+- `code`, `docs`, `tests`: the three numbers (for `commit` and `pre-commit`, the deltas), each rounded to two
+  decimals;
+- `warnings`: as a report's, below;
+- for `commit` and `pre-commit`, also `from` and `to`, as a report's, below.
+
+```json
+{
+  "from": "60baba96b16d35eb98e1c87993574780995f624c",
+  "to": "b48be68e77d42c8c9a8a28f2060d0bbe261779d4",
+  "code": 6.0,
+  "docs": 17.0,
+  "tests": -5.0,
+  "warnings": []
+}
+```
+
+With `--code`, `--tests` or `--docs`, `--json` prints that number's report, one JSON object with the same lines as
+the text, in the same order, `--top` and `--by` acting alike; the whole report, `--verbose` or not. Every field
+below is always there, `null` where it has no value. A weight or a delta is a number rounded to two decimals, as the
+text shows it.
 
 - `total`: the whole weight (or delta), not only the rows shown.
 - `by`: `"function"` or `"file"`.

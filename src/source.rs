@@ -108,10 +108,15 @@ pub struct Changed {
 }
 
 /// The files `range` changed in the repo at `repo`, as a walk of the repo's root would weigh them on each side, for
-/// the code, the tests or the docs (`mode`), as a scan keeps them: a side that is hidden (a part of its path starts
-/// with `.`), excluded, of no kind codeweight reads, or not kept is left out, and a change with neither side left;
-/// the rest (at least one side each) in git's order.
-pub fn from_commit(repo: &Path, range: &Range, files: &Files, mode: Mode) -> Result<Vec<Changed>> {
+/// the code, the tests or the docs (`mode`, as a scan keeps them; `None`: all three): a side that is hidden (a part
+/// of its path starts with `.`), excluded, of no kind codeweight reads, or not kept is left out, and a change with
+/// neither side left; the rest (at least one side each) in git's order.
+pub fn from_commit(
+    repo: &Path,
+    range: &Range,
+    files: &Files,
+    mode: Option<Mode>,
+) -> Result<Vec<Changed>> {
     let matchers = Matchers::new(files)?;
     let mut kept = Vec::new();
     for change in git::changes(repo, range)? {
@@ -125,7 +130,8 @@ pub fn from_commit(repo: &Path, range: &Range, files: &Files, mode: Mode) -> Res
                 return None;
             }
             let (kind, test) = matchers.kind(&side.path, &side.path)?;
-            weighed_for(test, kind, mode).then_some((side, kind, test))
+            mode.is_none_or(|mode| weighed_for(test, kind, mode))
+                .then_some((side, kind, test))
         };
         let before = keep(change.before);
         let after = keep(change.after);

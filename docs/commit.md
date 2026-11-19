@@ -9,7 +9,7 @@ Built (`git`, `source::from_commit`, `report`):
    to fetch more history. `A..B` is the two revisions, an empty side `HEAD` as in git;
    `A...B` (against the merge base) is an error, not silently read as `A..B`. A revision starting with `-` is an
    error, so it can't pass for an option.
-   `pre-commit` / `pre-commit-tests` (`git::uncommitted`): `HEAD` (the empty tree in a repo with no commit) against a tree of the working
+   `pre-commit` (`git::uncommitted`): `HEAD` (the empty tree in a repo with no commit) against a tree of the working
    tree, made by `git add -A` into a copy of the index (`GIT_INDEX_FILE`, in a temp folder of its own) and
    `git write-tree`. So the untracked files are in it and the ignored ones aren't, renames are found between a
    tracked file and an untracked one, the index's stat cache spares hashing the unchanged files, and the rest of
@@ -30,11 +30,13 @@ Built (`git`, `source::from_commit`, `report`):
 5. Per function and class, and the file's code outside them, matched by kind and qualified name (`Class.method`,
    `module.func`) within the file, a renamed file's old and new: added, removed, heavier, lighter. A function moved
    to another file is removed from one and added to the other.
-6. The report: the total delta first (`+42.5`, `-17`), then the files' or the functions' deltas ([cli.md](cli.md)).
+6. The report: the three deltas, the code's, the docs' and the tests'; or one of them (`--code`, `--tests`,
+   `--docs`), its total delta (`+42.5`, `-17`), then its files' or functions' deltas ([cli.md](cli.md)).
 
-The code and the tests are two deltas, never one: `commit` / `pre-commit` weigh a change's code, its test files and
-a Rust file's tests left out, `commit-tests` / `pre-commit-tests` its tests alone, each side kept and weighed as `scan`
-/ `scan-tests` would (`source::from_commit`'s `tests`, `Weighed::only`). A sum of the two, or a factor that weighs
+The code, the docs and the tests are three deltas, never one: a change's code, its test files and a Rust file's
+tests left out; its docs; its tests alone; each side kept and weighed once as `scan` would, its parts split
+(`Weighed::split`), or with `--code`, `--tests` or `--docs` kept and weighed for that one alone
+(`source::from_commit`'s `mode`, `Weighed::only`). A sum of the two, or a factor that weighs
 the tests less in it, would let a change to one hide in the other's number.
 
 The `commit` tests make throwaway repos (`tempfile`, git's global and system config off): an add, a delete, a

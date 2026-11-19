@@ -1,9 +1,12 @@
-//! The reports of a scan (the weights) and of a commit (the deltas), as text or JSON: the total, then the files or
-//! the functions and classes, then the warnings; or the total alone.
+//! The reports of a scan (the weights) and of a commit (the deltas), as text or JSON: the code's, the docs' and the
+//! tests' numbers; or one of them, its total, then the files or the functions and classes, then the warnings, or
+//! the total alone.
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::Write;
+use std::iter::Sum;
+use std::ops::{Add, Sub};
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
@@ -41,6 +44,94 @@ pub struct Changed {
 pub struct Revisions<'a> {
     pub from: Option<&'a str>,
     pub to: Option<&'a str>,
+}
+
+/// The three numbers of a file, a scan or a delta: the code's (its tests aside), the docs' and the tests'.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Parts {
+    pub code: f64,
+    pub docs: f64,
+    pub tests: f64,
+}
+
+impl Add for Parts {
+    type Output = Parts;
+
+    fn add(self, other: Parts) -> Parts {
+        Parts {
+            code: self.code + other.code,
+            docs: self.docs + other.docs,
+            tests: self.tests + other.tests,
+        }
+    }
+}
+
+impl Sub for Parts {
+    type Output = Parts;
+
+    fn sub(self, other: Parts) -> Parts {
+        Parts {
+            code: self.code - other.code,
+            docs: self.docs - other.docs,
+            tests: self.tests - other.tests,
+        }
+    }
+}
+
+impl Sum for Parts {
+    fn sum<I: Iterator<Item = Parts>>(parts: I) -> Parts {
+        parts.fold(Parts::default(), Add::add)
+    }
+}
+
+/// The three numbers as text, a line each in the order code, docs, tests, each signed (`code +15.5`, `docs 0`).
+pub fn parts_text(parts: Parts) -> String {
+    format!(
+        "code {}\ndocs {}\ntests {}\n",
+        signed(parts.code),
+        signed(parts.docs),
+        signed(parts.tests)
+    )
+}
+
+/// The three numbers on one line, each rounded to a whole number and signed: `c+15;d0;t-5`.
+pub fn parts_short(parts: Parts) -> String {
+    // Rounded from the two decimals the text shows, so the two agree (`0.5` is `+1`).
+    let whole = |part: f64| match rounded(part).round() {
+        0.0 => "0".to_string(),
+        n if n > 0.0 => format!("+{n}"),
+        n => format!("{n}"),
+    };
+    format!(
+        "c{};d{};t{}\n",
+        whole(parts.code),
+        whole(parts.docs),
+        whole(parts.tests)
+    )
+}
+
+/// A scan's three numbers as JSON, with its warnings (the fields are described in the README).
+pub fn scan_parts_json(parts: Parts, files: &[Weighted], unreadable: &[Unreadable]) -> String {
+    json(&PartsReport {
+        from: None,
+        to: None,
+        code: rounded(parts.code),
+        docs: rounded(parts.docs),
+        tests: rounded(parts.tests),
+        warnings: scan_json_warnings(files, unreadable),
+    })
+}
+
+/// A commit's three deltas as JSON, with its revisions and warnings (the fields are described in the README).
+pub fn commit_parts_json(parts: Parts, changes: &[Changed], revisions: &Revisions) -> String {
+    json(&PartsReport {
+        from: Some(revisions.from),
+        to: Some(revisions.to),
+        code: rounded(parts.code),
+        docs: rounded(parts.docs),
+        tests: rounded(parts.tests),
+        warnings: commit_json_warnings(changes),
+    })
 }
 
 /// What a row is: a function, a class (its code outside its functions), or a file's code outside any class.
@@ -279,20 +370,24 @@ pub fn scan_json(
             },
         })
         .collect();
-    let warnings = files
-        .iter()
-        .filter(|f| !f.weighed.clean)
-        .map(|f| Warning::syntax(&f.path, None))
-        .chain(unreadable.iter().map(|u| Warning::unreadable(&u.path)))
-        .collect();
     json(&Report {
         from: None,
         to: None,
         total: rounded(scan_total(files)),
         by,
         rows,
-        warnings,
+        warnings: scan_json_warnings(files, unreadable),
     })
+}
+
+/// A scan's warnings as JSON: syntax errors, then the paths that couldn't be read.
+fn scan_json_warnings(files: &[Weighted], unreadable: &[Unreadable]) -> Vec<Warning> {
+    files
+        .iter()
+        .filter(|f| !f.weighed.clean)
+        .map(|f| Warning::syntax(&f.path, None))
+        .chain(unreadable.iter().map(|u| Warning::unreadable(&u.path)))
+        .collect()
 }
 
 fn scan_total(files: &[Weighted]) -> f64 {
@@ -388,17 +483,21 @@ pub fn commit_json(
             }
         })
         .collect();
-    let warnings = commit_warnings(changes)
-        .map(|(change, _, side)| Warning::syntax(&change.path, Some(side)))
-        .collect();
     json(&Report {
         from: Some(revisions.from),
         to: Some(revisions.to),
         total: rounded(commit_total(changes)),
         by,
         rows,
-        warnings,
+        warnings: commit_json_warnings(changes),
     })
+}
+
+/// A commit's warnings as JSON: the sides with syntax errors.
+fn commit_json_warnings(changes: &[Changed]) -> Vec<Warning> {
+    commit_warnings(changes)
+        .map(|(change, _, side)| Warning::syntax(&change.path, Some(side)))
+        .collect()
 }
 
 fn commit_total(changes: &[Changed]) -> f64 {
@@ -451,6 +550,19 @@ struct Report<'a> {
     total: f64,
     by: By,
     rows: Vec<JsonRow>,
+    warnings: Vec<Warning>,
+}
+
+/// The JSON of the three numbers: a scan's has no `from` and `to`.
+#[derive(Serialize)]
+struct PartsReport<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    from: Option<Option<&'a str>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    to: Option<Option<&'a str>>,
+    code: f64,
+    docs: f64,
+    tests: f64,
     warnings: Vec<Warning>,
 }
 
@@ -515,7 +627,7 @@ impl Warning {
     }
 }
 
-fn json(report: &Report) -> String {
+fn json(report: &impl Serialize) -> String {
     // A report of plain strings and numbers always serializes.
     let mut text = serde_json::to_string_pretty(report).unwrap_or_default();
     text.push('\n');
@@ -567,6 +679,24 @@ mod tests {
         assert_eq!(signed(0.001), "0");
         assert_eq!(rounded(-0.001), 0.0);
         assert!(rounded(-0.001).is_sign_positive());
+    }
+
+    #[test]
+    fn the_three_numbers_are_signed_the_short_ones_whole() {
+        let parts = Parts {
+            code: 15.5,
+            docs: 0.001,
+            tests: -5.0,
+        };
+        assert_eq!(parts_text(parts), "code +15.5\ndocs 0\ntests -5\n");
+        assert_eq!(parts_short(parts), "c+16;d0;t-5\n");
+        // Whole from the two decimals the text shows: 0.499 shows as 0.5, so +1; -0.4 is 0, no sign.
+        let small = Parts {
+            code: 0.499,
+            docs: -0.4,
+            tests: -2.5,
+        };
+        assert_eq!(parts_short(small), "c+1;d0;t-3\n");
     }
 
     #[test]

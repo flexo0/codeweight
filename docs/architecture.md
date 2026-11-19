@@ -9,7 +9,7 @@
 | `engine` | one tree walked: each node's weight, summed by function, class and file |
 | `markdown` | a Markdown text's docs weight: its words and symbol runs, line by line, no tree-sitter |
 | `git` | the files a commit, a range or the uncommitted changes changed (`git diff-tree -r -M`; the uncommitted ones as a tree, `git add -A` into a copy of the index, `git write-tree`), their text before and after (`git cat-file --batch`) |
-| `report` | the text table and the JSON; for `commit`, the deltas |
+| `report` | the three numbers (a line each, `--short`'s one line, their JSON), and one number's report, the text table and the JSON; for `commit`, the deltas |
 
 Files are weighed in parallel (`rayon`).
 
@@ -29,17 +29,18 @@ as a command, no `git2` / `gix`.
   glob means the same from any folder scanned, and later for `commit`; outside a repo, from the current folder when
   the path is in it, else from the folder given (a file given: its name), never with the folders above, so a project
   under a `build` or `tests` folder is neither excluded nor taken for tests whatever the path's spelling. A
-  file the test globs match is a test file: `scan` leaves it out, `scan-tests` keeps it and the files of a language
-  with tests inside its source files (Rust's), each weighed for its tests alone. A file the docs globs match is
-  Markdown (`source::Kind`), docs alone and never a test file, though a test glob matches it too: `scan-docs` keeps
-  only such files, `scan` and `scan-tests` none (`source::Mode`: the code, the tests or the docs). A path is shown as given,
+  file the test globs match is a test file: the code's number leaves it out, the tests' keeps it and the files of a
+  language with tests inside its source files (Rust's), each weighed for its tests alone. A file the docs globs match is
+  Markdown (`source::Kind`), docs alone and never a test file, though a test glob matches it too: the docs' number has
+  only such files, the code's and the tests' none (`source::Mode`: the code, the tests or the docs). The general
+  command weighs every file once and splits it into the three (`Weighed::split`); `--code`, `--tests` or `--docs`
+  keeps only that one's files (`Input::keep`). A path is shown as given,
   or the folder given joined with the path in it, without a leading `./`; a path given twice, or under two folders
   given, is weighed once.
 - `source` for `commit` (`from_commit`): a changed file's each side is kept as a walk of the repo's root would keep
   it: its path (from the root, as `git diff-tree` gives it) not hidden (no part starting with `.`), not excluded, in
-  a language codeweight reads or Markdown, and kept for what is weighed as a scan keeps a file (`commit` /
-  `pre-commit` the code, `commit-tests` / `pre-commit-tests` the tests, `commit-docs` / `pre-commit-docs` the docs,
-  never two in one number); a side that isn't a regular file (a symlink, a
+  a language codeweight reads or Markdown, and, with `--code`, `--tests` or `--docs`, kept for that one as a scan keeps a file (never two in
+  one number; without them every side is kept, its parts split as a scan's); a side that isn't a regular file (a symlink, a
   submodule) is none. A side's language is its own path's, so a rename `a.js -> a.ts` is an added file. A change with
   no side kept is left out, unlisted. Then
   the kept sides' blobs, each once, all through one `git cat-file --batch`; all of a commit's texts are in memory

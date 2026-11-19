@@ -9,8 +9,9 @@ function, a class, ...) has a weight, set in a weights file; an element nested i
 functions weighs more. The weight of a file, a folder or a function is the sum of its elements' weights; the weight of
 a git commit (or a range, or the uncommitted changes) is its net delta, after minus before, positive or negative. It
 reads Java, TypeScript (TS, TSX), JavaScript, Python, Rust and Go, parsed by tree-sitter. It weighs docs too: a
-Markdown file's docs weight is its words and symbol runs, a number of its own (`scan-docs`, `commit-docs`,
-`pre-commit-docs`), never summed with the code's or the tests'.
+Markdown file's docs weight is its words and symbol runs, a number of its own, never summed with the code's or the
+tests': `scan`, `commit` and `pre-commit` print the three (`--code`, `--tests` or `--docs` one alone, with its
+report).
 
 The design is `docs/`, a file per subject (its index `docs/README.md`); `docs/milestones.md` is how it was built,
 milestone by milestone, and how the defaults were tuned. Keep those docs in step with what is built (a decision made

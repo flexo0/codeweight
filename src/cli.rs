@@ -5,7 +5,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand};
 use rayon::prelude::*;
 
 use crate::config::{self, Config, Docs};
@@ -13,7 +13,7 @@ use crate::engine::{Weighed, Weigher};
 use crate::git;
 use crate::lang;
 use crate::markdown;
-use crate::report::{self, By, Changed, Revisions, Weighted};
+use crate::report::{self, By, Changed, Parts, Revisions, Weighted};
 use crate::source::{self, Kind, Mode};
 
 /// Weighs code: every element by its weight, heavier when nested.
@@ -25,51 +25,17 @@ struct Cli {
     /// The weights file (else ./codeweight.toml, else codeweight.toml at the repo's root, else the defaults)
     #[arg(long, global = true, value_name = "FILE")]
     config: Option<PathBuf>,
-    /// The report's format
-    #[arg(long, global = true, value_enum, default_value_t = Format::Text)]
-    format: Format,
-    /// Only the N heaviest lines of the report (the report, not the total alone)
-    #[arg(long, global = true, value_name = "N")]
-    top: Option<usize>,
-    /// What the report lists [default: function] (the report, not the total alone)
-    #[arg(long, global = true, value_enum)]
-    by: Option<By>,
-}
-
-impl Cli {
-    fn by(&self) -> By {
-        self.by.unwrap_or(By::Function)
-    }
-
-    /// Whether the text is the whole report, not the total alone: `--verbose`, or a list asked for.
-    fn report(&self, verbose: bool) -> bool {
-        verbose || self.top.is_some() || self.by.is_some()
-    }
 }
 
 #[derive(Subcommand)]
 enum Command {
-    /// The weight of files and folders, their tests left out: the total alone
+    /// The weight of files and folders: the code's, the docs' and the tests', or one of them
     Scan(ScanArgs),
-    /// The weight of the tests in files and folders (the test files, a Rust file's tests): the total alone
-    ScanTests(ScanArgs),
-    /// The docs weight of the Markdown files in files and folders (those the docs globs match): the total alone
-    ScanDocs(ScanArgs),
-    /// The net weight delta of a commit or between two revisions, its tests left out: the total alone
+    /// The net weight delta of a commit or between two revisions: the code's, the docs' and the tests', or one
     Commit(CommitArgs),
-    /// The net weight delta of a commit's tests or of the tests between two revisions: the total alone
-    CommitTests(CommitArgs),
-    /// The net docs weight delta of a commit's Markdown files or of those between two revisions: the total alone
-    CommitDocs(CommitArgs),
-    /// The net weight delta of the uncommitted changes (the untracked files too) against HEAD, their tests left
-    /// out: the total alone
+    /// The net weight delta of the uncommitted changes (the untracked files too) against HEAD: the code's, the
+    /// docs' and the tests', or one
     PreCommit(PreCommitArgs),
-    /// The net weight delta of the uncommitted changes' tests (the untracked files too) against HEAD: the total
-    /// alone
-    PreCommitTests(PreCommitArgs),
-    /// The net docs weight delta of the uncommitted changes' Markdown files (the untracked files too) against
-    /// HEAD: the total alone
-    PreCommitDocs(PreCommitArgs),
     /// Writes the default weights file
     Init {
         /// Where to write it
@@ -78,18 +44,17 @@ enum Command {
     },
 }
 
-/// The arguments of `scan`, `scan-tests` and `scan-docs`.
+/// The arguments of `scan`.
 #[derive(Args)]
 struct ScanArgs {
     /// A file or a folder, absolute or relative
     #[arg(required = true)]
     paths: Vec<PathBuf>,
-    /// The whole report: the total, the functions (or files), and the warnings
-    #[arg(short, long)]
-    verbose: bool,
+    #[command(flatten)]
+    output: Output,
 }
 
-/// The arguments of `commit`, `commit-tests` and `commit-docs`.
+/// The arguments of `commit`.
 #[derive(Args)]
 struct CommitArgs {
     /// A revision (against its first parent) or a range A..B
@@ -97,12 +62,11 @@ struct CommitArgs {
     /// Any path inside the repo
     #[arg(short = 'C', default_value = ".")]
     repo: PathBuf,
-    /// The whole report: the total, the functions (or files), and the warnings
-    #[arg(short, long)]
-    verbose: bool,
+    #[command(flatten)]
+    output: Output,
 }
 
-/// The arguments of `pre-commit`, `pre-commit-tests` and `pre-commit-docs`.
+/// The arguments of `pre-commit`.
 #[derive(Args)]
 struct PreCommitArgs {
     /// Any path inside the repo
@@ -111,82 +75,159 @@ struct PreCommitArgs {
     /// Only the staged changes (the index against HEAD, as `git commit` would commit them)
     #[arg(long)]
     only_staged: bool,
-    /// The whole report: the total, the functions (or files), and the warnings
-    #[arg(short, long)]
+    #[command(flatten)]
+    output: Output,
+}
+
+/// The one number a specific command prints; none for the three of the general one.
+#[derive(Args)]
+#[group(id = "only", multiple = false)]
+struct Only {
+    /// Only the code's weight, its tests left out: the total, or with `-v` the whole report
+    #[arg(long)]
+    code: bool,
+    /// Only the tests' weight (the test files, a Rust file's tests): the total, or with `-v` the whole report
+    #[arg(long)]
+    tests: bool,
+    /// Only the docs weight of the Markdown files (those the docs globs match): the total, or with `-v` the whole
+    /// report
+    #[arg(long)]
+    docs: bool,
+}
+
+/// What a command prints, the same for the three.
+#[derive(Args)]
+struct Output {
+    #[command(flatten)]
+    only: Only,
+    /// As JSON: the three numbers and the warnings; with `--code`, `--tests` or `--docs`, the whole report
+    #[arg(long)]
+    json: bool,
+    /// The three numbers on one line, each rounded to a whole number (`c+15;d+17;t-5`)
+    #[arg(long, conflicts_with_all = ["json", "only"])]
+    short: bool,
+    /// The whole report: the total, the functions (or files), and the warnings (with `--code`, `--tests` or
+    /// `--docs`)
+    #[arg(short, long, requires = "only")]
     verbose: bool,
+    /// Only the N heaviest lines of the report (with `--code`, `--tests` or `--docs`)
+    #[arg(long, value_name = "N", requires = "only")]
+    top: Option<usize>,
+    /// What the report lists [default: function] (with `--code`, `--tests` or `--docs`)
+    #[arg(long, value_enum, requires = "only")]
+    by: Option<By>,
 }
 
-impl CommitArgs {
-    /// The commit or range these arguments ask for.
-    fn changes(&self) -> Changes<'_> {
-        Changes::Rev(&self.rev)
+impl Output {
+    /// The one number asked for, `None` for all three.
+    fn mode(&self) -> Option<Mode> {
+        let only = &self.only;
+        [
+            (only.code, Mode::Code),
+            (only.tests, Mode::Tests),
+            (only.docs, Mode::Docs),
+        ]
+        .into_iter()
+        .find_map(|(asked, mode)| asked.then_some(mode))
     }
-}
 
-impl PreCommitArgs {
-    /// The uncommitted changes these arguments ask for.
-    fn changes(&self) -> Changes<'static> {
-        Changes::Uncommitted {
-            staged: self.only_staged,
+    fn by(&self) -> By {
+        self.by.unwrap_or(By::Function)
+    }
+
+    /// Whether a specific command's text is the whole report, not the total alone: `--verbose`, or a list asked
+    /// for.
+    fn report(&self) -> bool {
+        self.verbose || self.top.is_some() || self.by.is_some()
+    }
+
+    /// The general command's three numbers as asked: `--json` (`json`, with the warnings), `--short` or three
+    /// lines, those two with the warnings (`warnings`) to stderr.
+    fn parts(
+        &self,
+        parts: Parts,
+        json: impl FnOnce() -> String,
+        warnings: impl FnOnce() -> String,
+    ) {
+        if self.json {
+            print!("{}", json());
+            return;
         }
+        eprint!("{}", warnings());
+        print!(
+            "{}",
+            if self.short {
+                report::parts_short(parts)
+            } else {
+                report::parts_text(parts)
+            }
+        );
     }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
-enum Format {
-    Text,
-    Json,
 }
 
 /// Runs the command line's command, its output to stdout.
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
     match &cli.command {
-        Command::Scan(a) => scan(&cli, a, Mode::Code),
-        Command::ScanTests(a) => scan(&cli, a, Mode::Tests),
-        Command::ScanDocs(a) => scan(&cli, a, Mode::Docs),
-        Command::Commit(a) => commit(&cli, a.changes(), &a.repo, a.verbose, Mode::Code),
-        Command::CommitTests(a) => commit(&cli, a.changes(), &a.repo, a.verbose, Mode::Tests),
-        Command::CommitDocs(a) => commit(&cli, a.changes(), &a.repo, a.verbose, Mode::Docs),
-        Command::PreCommit(a) => commit(&cli, a.changes(), &a.repo, a.verbose, Mode::Code),
-        Command::PreCommitTests(a) => commit(&cli, a.changes(), &a.repo, a.verbose, Mode::Tests),
-        Command::PreCommitDocs(a) => commit(&cli, a.changes(), &a.repo, a.verbose, Mode::Docs),
+        Command::Scan(a) => scan(&cli, a),
+        Command::Commit(a) => commit(&cli, Changes::Rev(&a.rev), &a.repo, &a.output),
+        Command::PreCommit(a) => {
+            let changes = Changes::Uncommitted {
+                staged: a.only_staged,
+            };
+            commit(&cli, changes, &a.repo, &a.output)
+        }
         Command::Init { file } => init(file),
     }
 }
 
-/// Weighs the code at the paths, its tests or its docs (`mode`), each at its full weight.
-fn scan(cli: &Cli, args: &ScanArgs, mode: Mode) -> Result<()> {
+/// Weighs the code at the paths, its docs and its tests, each at its full weight: the three numbers, or the one
+/// asked for (`--code`, `--docs`, `--tests`) with its report.
+fn scan(cli: &Cli, args: &ScanArgs) -> Result<()> {
+    let output = &args.output;
+    let mode = output.mode();
     let config = load_config(cli, args.paths.first().map(PathBuf::as_path))?;
     let mut input = source::from_paths(&args.paths, &config.files)?;
-    input.keep(mode);
+    if let Some(mode) = mode {
+        input.keep(mode);
+    }
     let weighers = Weighers::new(&config);
     // In parallel, each file read when weighed; `collect` keeps the input's order.
-    let files = input
+    let (files, parts): (Vec<Weighted>, Vec<Parts>) = input
         .items
         .into_par_iter()
         .map(|item| {
-            let weighed = weighers.weigh(item.kind, &item.text()?, item.test, &item.path, mode)?;
-            Ok(Weighted {
-                path: item.path,
-                weighed,
-            })
+            let (weighed, parts) =
+                weighers.weigh(item.kind, &item.text()?, item.test, &item.path, mode)?;
+            Ok((
+                Weighted {
+                    path: item.path,
+                    weighed,
+                },
+                parts,
+            ))
         })
-        .collect::<Result<Vec<_>>>()?;
-    let report = cli.report(args.verbose);
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .unzip();
+    if mode.is_none() {
+        let parts = parts.into_iter().sum();
+        output.parts(
+            parts,
+            || report::scan_parts_json(parts, &files, &input.unreadable),
+            || report::scan_warnings(&files, &input.unreadable),
+        );
+        return Ok(());
+    };
     print!(
         "{}",
-        match cli.format {
-            Format::Text if report => {
-                report::scan_text(&files, &input.unreadable, cli.by(), cli.top)
-            }
-            Format::Text => {
-                eprint!("{}", report::scan_warnings(&files, &input.unreadable));
-                report::scan_number(&files)
-            }
-            Format::Json => {
-                report::scan_json(&files, &input.unreadable, cli.by(), cli.top)
-            }
+        if output.json {
+            report::scan_json(&files, &input.unreadable, output.by(), output.top)
+        } else if output.report() {
+            report::scan_text(&files, &input.unreadable, output.by(), output.top)
+        } else {
+            eprint!("{}", report::scan_warnings(&files, &input.unreadable));
+            report::scan_number(&files)
         }
     );
     Ok(())
@@ -201,9 +242,11 @@ enum Changes<'a> {
     Uncommitted { staged: bool },
 }
 
-/// Weighs the net delta of a commit, a range or the uncommitted changes: of the code, its tests or its docs
-/// (`mode`), each at its full weight.
-fn commit(cli: &Cli, changes: Changes, repo: &Path, verbose: bool, mode: Mode) -> Result<()> {
+/// Weighs the net delta of a commit, a range or the uncommitted changes: of the code, its docs and its tests,
+/// each at its full weight: the three numbers, or the one asked for (`--code`, `--docs`, `--tests`) with its
+/// report.
+fn commit(cli: &Cli, changes: Changes, repo: &Path, output: &Output) -> Result<()> {
+    let mode = output.mode();
     let config = load_config(cli, Some(repo))?;
     let range = match changes {
         Changes::Rev(rev) => git::resolve(repo, rev)?,
@@ -211,50 +254,66 @@ fn commit(cli: &Cli, changes: Changes, repo: &Path, verbose: bool, mode: Mode) -
     };
     // The uncommitted changes' tree is no commit of the repo's.
     let to = matches!(changes, Changes::Rev(_)).then_some(range.to.as_str());
+    let revisions = Revisions {
+        from: range.from.as_deref(),
+        to,
+    };
     let changes = source::from_commit(repo, &range, &config.files, mode)?;
     let weighers = Weighers::new(&config);
-    let side = |blob: Option<source::Blob>| -> Result<Option<(PathBuf, Weighed)>> {
+    let side = |blob: Option<source::Blob>| -> Result<Option<(PathBuf, Weighed, Parts)>> {
         blob.map(|b| {
-            let weighed = weighers.weigh(b.kind, &b.text, b.test, &b.path, mode)?;
-            Ok((b.path, weighed))
+            let (weighed, parts) = weighers.weigh(b.kind, &b.text, b.test, &b.path, mode)?;
+            Ok((b.path, weighed, parts))
         })
         .transpose()
     };
-    let changes = changes
+    let (changes, parts): (Vec<Changed>, Vec<Parts>) = changes
         .into_par_iter()
         .map(|change| {
             let before = side(change.before)?;
             let after = side(change.after)?;
             let (path, old_path) = match (&before, &after) {
-                (Some((old, _)), Some((new, _))) if old != new => (new.clone(), Some(old.clone())),
-                (_, Some((path, _))) | (Some((path, _)), None) => (path.clone(), None),
+                (Some((old, _, _)), Some((new, _, _))) if old != new => {
+                    (new.clone(), Some(old.clone()))
+                }
+                (_, Some((path, _, _))) | (Some((path, _, _)), None) => (path.clone(), None),
                 (None, None) => bail!("a change with neither side"),
             };
-            Ok(Changed {
-                path,
-                old_path,
-                before: before.map(|(_, w)| w),
-                after: after.map(|(_, w)| w),
-            })
+            let parts = |side: &Option<(PathBuf, Weighed, Parts)>| {
+                side.as_ref().map_or_else(Parts::default, |(_, _, p)| *p)
+            };
+            let delta = parts(&after) - parts(&before);
+            Ok((
+                Changed {
+                    path,
+                    old_path,
+                    before: before.map(|(_, w, _)| w),
+                    after: after.map(|(_, w, _)| w),
+                },
+                delta,
+            ))
         })
-        .collect::<Result<Vec<_>>>()?;
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .unzip();
+    if mode.is_none() {
+        let parts = parts.into_iter().sum();
+        output.parts(
+            parts,
+            || report::commit_parts_json(parts, &changes, &revisions),
+            || report::commit_warnings_text(&changes),
+        );
+        return Ok(());
+    };
     print!(
         "{}",
-        match cli.format {
-            Format::Text if cli.report(verbose) => {
-                report::commit_text(&changes, cli.by(), cli.top)
-            }
-            Format::Text => {
-                eprint!("{}", report::commit_warnings_text(&changes));
-                report::commit_number(&changes)
-            }
-            Format::Json => {
-                let revisions = Revisions {
-                    from: range.from.as_deref(),
-                    to,
-                };
-                report::commit_json(&changes, &revisions, cli.by(), cli.top)
-            }
+        if output.json {
+            report::commit_json(&changes, &revisions, output.by(), output.top)
+        } else if output.report() {
+            report::commit_text(&changes, output.by(), output.top)
+        } else {
+            eprint!("{}", report::commit_warnings_text(&changes));
+            report::commit_number(&changes)
         }
     );
     Ok(())
@@ -281,18 +340,26 @@ impl<'c> Weighers<'c> {
         }
     }
 
-    /// A text of `kind` weighed for `mode`: Markdown its docs weight; code its tests alone or its code without
-    /// them, a test file's (`test`) all test code.
+    /// A text of `kind` weighed, and its three parts: Markdown its docs weight; code its tests and its code
+    /// without them, a test file's (`test`) all test code. For one number (`mode`) the weight is of that part
+    /// alone, else of the whole text.
     fn weigh(
         &self,
         kind: Kind,
         text: &str,
         test: bool,
         path: &Path,
-        mode: Mode,
-    ) -> Result<Weighed> {
+        mode: Option<Mode>,
+    ) -> Result<(Weighed, Parts)> {
         let lang = match kind {
-            Kind::Markdown => return Ok(markdown::weigh(text, self.docs)),
+            Kind::Markdown => {
+                let weighed = markdown::weigh(text, self.docs);
+                let parts = Parts {
+                    docs: weighed.total,
+                    ..Parts::default()
+                };
+                return Ok((weighed, parts));
+            }
             Kind::Code(lang) => lang,
         };
         let weigher = self
@@ -304,7 +371,17 @@ impl<'c> Weighers<'c> {
             .weigh(text)
             .with_context(|| format!("weighing {}", path.display()))?;
         let weighed = if test { weighed.all_tests() } else { weighed };
-        Ok(weighed.only(mode == Mode::Tests))
+        let (code, tests) = weighed.split();
+        let parts = Parts {
+            code,
+            docs: 0.0,
+            tests,
+        };
+        let weighed = match mode {
+            Some(mode) => weighed.only(mode == Mode::Tests),
+            None => weighed,
+        };
+        Ok((weighed, parts))
     }
 }
 

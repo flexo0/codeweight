@@ -47,21 +47,21 @@ fn scan_reports_a_java_file_s_functions_and_classes() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("A.java"), JAVA).unwrap();
     // Under the defaults: A.f is function 1.55, statement 1 and call 0.49; A is class 5.
-    let output = codeweight(dir.path(), &["scan", "A.java"]);
+    let output = codeweight(dir.path(), &["scan", "--code", "A.java"]);
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(stdout(&output), "8.04\n");
 
-    let verbose = codeweight(dir.path(), &["scan", "A.java", "--verbose"]);
+    let verbose = codeweight(dir.path(), &["scan", "--code", "A.java", "--verbose"]);
     assert_eq!(
         stdout(&verbose),
         "total 8.04\n   5  A.java  A (class)\n3.04  A.java  A.f\n"
     );
-    let short = codeweight(dir.path(), &["scan", "-v", "A.java"]);
+    let short = codeweight(dir.path(), &["scan", "--code", "-v", "A.java"]);
     assert_eq!(stdout(&short), stdout(&verbose));
 
-    let by_file = codeweight(dir.path(), &["scan", "A.java", "--by", "file"]);
+    let by_file = codeweight(dir.path(), &["scan", "--code", "A.java", "--by", "file"]);
     assert_eq!(stdout(&by_file), "total 8.04\n8.04  A.java\n");
-    let top = codeweight(dir.path(), &["scan", "A.java", "--top", "1"]);
+    let top = codeweight(dir.path(), &["scan", "--code", "A.java", "--top", "1"]);
     assert_eq!(stdout(&top), "total 8.04\n5  A.java  A (class)\n");
 }
 
@@ -70,14 +70,14 @@ fn scan_leaves_out_an_unsupported_file_and_warns_of_syntax_errors() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("notes.txt"), "hello").unwrap();
     fs::write(dir.path().join("B.java"), "class B { void f( }").unwrap();
-    let output = codeweight(dir.path(), &["scan", "notes.txt", "B.java", "-v"]);
+    let output = codeweight(dir.path(), &["scan", "--code", "notes.txt", "B.java", "-v"]);
     assert!(output.status.success(), "{}", stderr(&output));
     let out = stdout(&output);
     assert!(!out.contains("notes.txt"), "{out}");
     assert!(out.contains("warning: B.java has syntax errors"), "{out}");
 
     // The total alone: the warning to stderr.
-    let quiet = codeweight(dir.path(), &["scan", "notes.txt", "B.java"]);
+    let quiet = codeweight(dir.path(), &["scan", "--code", "notes.txt", "B.java"]);
     assert!(quiet.status.success(), "{}", stderr(&quiet));
     assert_eq!(stdout(&quiet).lines().count(), 1, "{}", stdout(&quiet));
     assert!(stdout(&quiet).trim().parse::<f64>().is_ok());
@@ -117,7 +117,7 @@ fn the_weights_file_is_looked_up_in_order() {
     let file = repo.join("src/A.java");
     let file = file.to_str().unwrap();
     let total = |cwd: &Path, extra: &[&str]| {
-        let mut args = vec!["scan", file, "--by", "file"];
+        let mut args = vec!["scan", "--code", file, "--by", "file"];
         args.extend_from_slice(extra);
         let output = codeweight(cwd, &args);
         assert!(output.status.success(), "{}", stderr(&output));
@@ -161,11 +161,11 @@ fn scan_walks_a_folder_its_excludes_and_tests_left_out_and_scan_tests_weighs_the
         fs::write(path, text).unwrap();
     }
 
-    let output = codeweight(root, &["scan", "."]);
+    let output = codeweight(root, &["scan", "--code", "."]);
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(stdout(&output), "10.12\n");
 
-    let verbose = codeweight(root, &["scan", ".", "--verbose"]);
+    let verbose = codeweight(root, &["scan", "--code", ".", "--verbose"]);
     assert_eq!(
         stdout(&verbose),
         "total 10.12\n\
@@ -175,16 +175,16 @@ fn scan_walks_a_folder_its_excludes_and_tests_left_out_and_scan_tests_weighs_the
          \x20  1  src/b.ts  (file)\n"
     );
 
-    let by_file = codeweight(root, &["scan", "src", "tests", "--by", "file"]);
+    let by_file = codeweight(root, &["scan", "--code", "src", "tests", "--by", "file"]);
     assert_eq!(
         stdout(&by_file),
         "total 10.12\n4.04  src/b.ts\n3.04  src/a.py\n3.04  src/c.rs\n"
     );
 
-    let tests = codeweight(root, &["scan-tests", "."]);
+    let tests = codeweight(root, &["scan", "--tests", "."]);
     assert!(tests.status.success(), "{}", stderr(&tests));
     assert_eq!(stdout(&tests), "11.08\n");
-    let tests = codeweight(root, &["scan-tests", ".", "-v"]);
+    let tests = codeweight(root, &["scan", "--tests", ".", "-v"]);
     assert_eq!(
         stdout(&tests),
         "total 11.08\n\
@@ -215,10 +215,10 @@ fn scan_weighs_go_its_test_files_and_vendor_and_generated_files_left_out() {
         fs::write(path, text).unwrap();
     }
 
-    let output = codeweight(root, &["scan", ".", "-v"]);
+    let output = codeweight(root, &["scan", "--code", ".", "-v"]);
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(stdout(&output), "total 3.04\n3.04  pkg/a.go  S.m\n");
-    let tests = codeweight(root, &["scan-tests", ".", "-v"]);
+    let tests = codeweight(root, &["scan", "--tests", ".", "-v"]);
     assert_eq!(stdout(&tests), "total 4.69\n4.69  pkg/a_test.go  TestM\n");
 }
 
@@ -244,10 +244,10 @@ fn scan_docs_weighs_the_markdown_files_alone_and_scan_and_scan_tests_never_see_t
         fs::write(path, text).unwrap();
     }
 
-    let docs = codeweight(root, &["scan-docs", "."]);
+    let docs = codeweight(root, &["scan", "--docs", "."]);
     assert!(docs.status.success(), "{}", stderr(&docs));
     assert_eq!(stdout(&docs), "13\n");
-    let verbose = codeweight(root, &["scan-docs", ".", "-v"]);
+    let verbose = codeweight(root, &["scan", "--docs", ".", "-v"]);
     assert_eq!(
         stdout(&verbose),
         "total 13\n\
@@ -256,16 +256,22 @@ fn scan_docs_weighs_the_markdown_files_alone_and_scan_and_scan_tests_never_see_t
          3  tests/notes.md  (file)\n"
     );
     assert_eq!(
-        stdout(&codeweight(root, &["scan", ".", "-v"])),
+        stdout(&codeweight(root, &["scan", "--code", ".", "-v"])),
         "total 3.04\n3.04  src/a.py  f\n"
     );
     assert_eq!(
-        stdout(&codeweight(root, &["scan-tests", ".", "-v"])),
+        stdout(&codeweight(root, &["scan", "--tests", ".", "-v"])),
         "total 3.04\n3.04  tests/test_a.py  t\n"
     );
     // A file given is weighed by its kind too: the code's scan of a Markdown file weighs nothing.
-    assert_eq!(stdout(&codeweight(root, &["scan", "README.md"])), "0\n");
-    assert_eq!(stdout(&codeweight(root, &["scan-docs", "src/a.py"])), "0\n");
+    assert_eq!(
+        stdout(&codeweight(root, &["scan", "--code", "README.md"])),
+        "0\n"
+    );
+    assert_eq!(
+        stdout(&codeweight(root, &["scan", "--docs", "src/a.py"])),
+        "0\n"
+    );
 
     // Docs globs of one's own: only the docs folder's.
     fs::write(
@@ -273,11 +279,11 @@ fn scan_docs_weighs_the_markdown_files_alone_and_scan_and_scan_tests_never_see_t
         "[files]\ndocs_globs = [\"docs/**\"]\n",
     )
     .unwrap();
-    let own = codeweight(root, &["scan-docs", ".", "--config", "own.toml"]);
+    let own = codeweight(root, &["scan", "--docs", ".", "--config", "own.toml"]);
     assert!(own.status.success(), "{}", stderr(&own));
     assert_eq!(stdout(&own), "4\n");
     fs::write(root.join("bad.toml"), "[files]\ndocs_globs = [\"a/[b\"]\n").unwrap();
-    let bad = codeweight(root, &["scan-docs", ".", "--config", "bad.toml"]);
+    let bad = codeweight(root, &["scan", "--docs", ".", "--config", "bad.toml"]);
     assert_eq!(bad.status.code(), Some(2));
     assert!(stderr(&bad).contains("docs_globs"), "{}", stderr(&bad));
 }
@@ -337,20 +343,22 @@ impl Repo {
         self.git(&["rev-parse", "HEAD"])
     }
 
-    /// `codeweight commit -v` (the whole report) under the engine's test weights (statement 1, call 2, function
-    /// 100), its stdout.
+    /// `codeweight commit --code -v` (the code's whole report) under the engine's test weights (statement 1, call
+    /// 2, function 100), its stdout.
     fn weigh(&self, args: &[&str]) -> String {
-        self.run("commit", args)
+        self.run(&["commit", "--code"], args)
     }
 
-    /// `codeweight pre-commit -v`, the uncommitted changes, as `weigh`.
+    /// `codeweight pre-commit --code -v`, the uncommitted changes, as `weigh`.
     fn pre_commit(&self, args: &[&str]) -> String {
-        self.run("pre-commit", args)
+        self.run(&["pre-commit", "--code"], args)
     }
 
-    fn run(&self, command: &str, args: &[&str]) -> String {
+    /// A command (its name and its one number's flag) with `-v` and the arguments, as `weigh`.
+    fn run(&self, command: &[&str], args: &[&str]) -> String {
         let weights = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/weights.toml");
-        let mut all = vec![command, "-v"];
+        let mut all = command.to_vec();
+        all.push("-v");
         all.extend_from_slice(args);
         all.extend_from_slice(&["--config", weights]);
         let output = codeweight(self.path(), &all);
@@ -376,7 +384,7 @@ fn commit_weighs_the_root_commit_against_the_empty_tree() {
     );
 
     // The total delta alone, without `-v`.
-    let output = codeweight(repo.path(), &["commit", "HEAD"]);
+    let output = codeweight(repo.path(), &["commit", "--code", "HEAD"]);
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(stdout(&output), "+3.04\n");
 }
@@ -443,7 +451,7 @@ fn commit_weighs_a_range_tree_to_tree_so_an_undone_change_nets_zero() {
     assert_eq!(repo.weigh(&["HEAD~1..HEAD~1"]), "total 0\n");
 
     let json: serde_json::Value =
-        serde_json::from_str(&repo.weigh(&["HEAD~2..HEAD~1", "--format", "json"])).unwrap();
+        serde_json::from_str(&repo.weigh(&["HEAD~2..HEAD~1", "--json"])).unwrap();
     assert_eq!(json["from"], serde_json::json!(start));
     assert_eq!(json["total"], serde_json::json!(106.0));
     assert_eq!(json["rows"].as_array().unwrap().len(), 2);
@@ -478,13 +486,13 @@ fn commit_leaves_out_the_excludes_and_its_tests_and_commit_tests_weighs_the_test
     };
     // Under the defaults: f, c and u are 3.04 (function 1.55, statement 1, call 0.49), the class of the tests 5.
     assert_eq!(
-        run(&["commit", "HEAD"]),
+        run(&["commit", "--code", "HEAD"]),
         "total +6.08\n\
          +3.04  added    a.py  f\n\
          +3.04  added    c.rs  c\n"
     );
     assert_eq!(
-        run(&["commit-tests", "HEAD"]),
+        run(&["commit", "--tests", "HEAD"]),
         "total +11.08\n\
          \x20  +5  added    c.rs  tests (class)\n\
          +3.04  added    c.rs  tests.u\n\
@@ -493,9 +501,9 @@ fn commit_leaves_out_the_excludes_and_its_tests_and_commit_tests_weighs_the_test
 
     // The uncommitted changes: a test heavier by a statement and a call.
     fs::write(repo.path().join("tests/test_a.py"), FG).unwrap();
-    assert_eq!(run(&["pre-commit"]), "total 0\n");
+    assert_eq!(run(&["pre-commit", "--code"]), "total 0\n");
     assert_eq!(
-        run(&["pre-commit-tests"]),
+        run(&["pre-commit", "--tests"]),
         "total +1.49\n+1.49  heavier  tests/test_a.py  f\n"
     );
 }
@@ -507,7 +515,7 @@ fn commit_docs_weighs_a_doc_added_edited_renamed_and_deleted() {
     let doc = format!("# A\n{}", "word\n".repeat(20));
     repo.commit(&[("doc.md", Some(&doc)), ("a.py", Some(F))]);
     assert_eq!(
-        repo.run("commit-docs", &["HEAD"]),
+        repo.run(&["commit", "--docs"], &["HEAD"]),
         "total +31\n+31  added    doc.md  (file)\n"
     );
     // The code's delta has no docs in it.
@@ -520,7 +528,7 @@ fn commit_docs_weighs_a_doc_added_edited_renamed_and_deleted() {
     let edited = format!("{doc}more, words\n");
     repo.commit(&[("doc.md", Some(&edited))]);
     assert_eq!(
-        repo.run("commit-docs", &["HEAD"]),
+        repo.run(&["commit", "--docs"], &["HEAD"]),
         "total +12\n+12  heavier  doc.md  (file)\n"
     );
 
@@ -530,18 +538,18 @@ fn commit_docs_weighs_a_doc_added_edited_renamed_and_deleted() {
         ("guide.md", Some(&format!("{edited}word\n"))),
     ]);
     assert_eq!(
-        repo.run("commit-docs", &["HEAD"]),
+        repo.run(&["commit", "--docs"], &["HEAD"]),
         "total +1\n+1  heavier  doc.md -> guide.md  (file)\n"
     );
 
     repo.commit(&[("guide.md", None)]);
     assert_eq!(
-        repo.run("commit-docs", &["HEAD"]),
+        repo.run(&["commit", "--docs"], &["HEAD"]),
         "total -44\n-44  removed  guide.md  (file)\n"
     );
     // A range: the first commit's doc against none.
     assert_eq!(
-        repo.run("commit-docs", &["HEAD~3..HEAD"]),
+        repo.run(&["commit", "--docs"], &["HEAD~3..HEAD"]),
         "total -31\n-31  removed  doc.md  (file)\n"
     );
 
@@ -549,11 +557,14 @@ fn commit_docs_weighs_a_doc_added_edited_renamed_and_deleted() {
     fs::write(repo.path().join("new.md"), "x\n").unwrap();
     fs::write(repo.path().join("a.py"), FG).unwrap();
     assert_eq!(
-        repo.run("pre-commit-docs", &[]),
+        repo.run(&["pre-commit", "--docs"], &[]),
         "total +1\n+1  added    new.md  (file)\n"
     );
     repo.git(&["add", "a.py"]);
-    assert_eq!(repo.run("pre-commit-docs", &["--only-staged"]), "total 0\n");
+    assert_eq!(
+        repo.run(&["pre-commit", "--docs"], &["--only-staged"]),
+        "total 0\n"
+    );
 }
 
 #[test]
@@ -596,8 +607,7 @@ fn pre_commit_weighs_the_uncommitted_changes_and_leaves_the_index_alone() {
     );
     assert_eq!(state(), before);
 
-    let json: serde_json::Value =
-        serde_json::from_str(&repo.pre_commit(&["--format", "json"])).unwrap();
+    let json: serde_json::Value = serde_json::from_str(&repo.pre_commit(&["--json"])).unwrap();
     assert_eq!(
         json["from"],
         serde_json::json!(repo.git(&["rev-parse", "HEAD"]))
@@ -636,8 +646,7 @@ fn pre_commit_sees_a_rename_into_an_untracked_file_and_a_repo_with_no_commit() {
         fresh.pre_commit(&["--only-staged"]),
         "total +103\n+103  added    a.py  f\n"
     );
-    let json: serde_json::Value =
-        serde_json::from_str(&fresh.pre_commit(&["--format", "json"])).unwrap();
+    let json: serde_json::Value = serde_json::from_str(&fresh.pre_commit(&["--json"])).unwrap();
     assert_eq!(json["from"], serde_json::Value::Null);
     assert_eq!(json["to"], serde_json::Value::Null);
 }
@@ -668,7 +677,7 @@ fn commit_at_a_shallow_clone_s_boundary_is_an_error_not_a_root() {
     let url = format!("file://{}", repo.path().display());
     clone.git(&["fetch", "-q", "--depth", "1", &url, "main"]);
     clone.git(&["reset", "-q", "--hard", "FETCH_HEAD"]);
-    let output = codeweight(clone.path(), &["commit", "HEAD"]);
+    let output = codeweight(clone.path(), &["commit", "--code", "HEAD"]);
     assert_eq!(output.status.code(), Some(2), "{}", stdout(&output));
     assert!(
         stderr(&output).contains("shallow clone"),
@@ -702,10 +711,10 @@ fn scan_s_json_lists_the_rows_of_its_text() {
         dir.path(),
         &[
             "scan",
+            "--code",
             "A.java",
             "notes.txt",
-            "--format",
-            "json",
+            "--json",
             "--top",
             "1",
         ],
@@ -722,4 +731,175 @@ fn scan_s_json_lists_the_rows_of_its_text() {
             "warnings": []
         })
     );
+}
+
+/// A folder of code, tests and docs: under the defaults, the code 3.04, the docs 6 and the tests 3.04 + 5 + 3.04.
+fn three_parts(root: &Path) {
+    for (file, text) in [
+        // f is function 1.55, statement 1, call 0.49.
+        ("src/a.py", "def f():\n    g()\n"),
+        // `Title`, `Some`, `words`, `here` and `#`, `.`.
+        ("README.md", "# Title\n\nSome words here.\n"),
+        // c is 3.04 of the code, its tests' class 5 and u 3.04 of the tests.
+        (
+            "src/c.rs",
+            "fn c() { g(); }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn u() { c(); }\n}\n",
+        ),
+        ("tests/test_a.py", "def t():\n    g()\n"),
+        // Syntax errors: weighed, with a warning.
+        ("src/B.java", "class B { void f( }"),
+    ] {
+        let path = root.join(file);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    }
+}
+
+#[test]
+fn scan_prints_the_code_the_docs_and_the_tests_each_as_its_flag_does() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    three_parts(root);
+    let ok = |args: &[&str]| {
+        let output = codeweight(root, args);
+        assert!(output.status.success(), "{}", stderr(&output));
+        output
+    };
+    let only = |flag: &str| stdout(&ok(&["scan", ".", flag])).trim().to_string();
+    let (code, docs, tests) = (only("--code"), only("--docs"), only("--tests"));
+    assert_eq!((docs.as_str(), tests.as_str()), ("6", "11.08"));
+
+    let three = ok(&["scan", "."]);
+    assert_eq!(
+        stdout(&three),
+        format!("code +{code}\ndocs +{docs}\ntests +{tests}\n")
+    );
+    assert!(
+        stderr(&three).starts_with("warning: src/B.java has syntax errors"),
+        "{}",
+        stderr(&three)
+    );
+
+    let short = ok(&["scan", ".", "--short"]);
+    let code: f64 = code.parse().unwrap();
+    assert_eq!(stdout(&short), format!("c+{};d+6;t+11\n", code.round()));
+    assert!(stderr(&short).starts_with("warning: src/B.java has syntax errors"));
+
+    let json: serde_json::Value =
+        serde_json::from_str(&stdout(&ok(&["scan", ".", "--json"]))).unwrap();
+    assert_eq!(
+        json,
+        serde_json::json!({
+            "code": code,
+            "docs": 6.0,
+            "tests": 11.08,
+            "warnings": [{"path": "src/B.java", "kind": "syntax_errors", "side": null}]
+        })
+    );
+
+    // Nothing of a kind: a zero has no sign.
+    assert_eq!(
+        stdout(&ok(&["scan", "README.md"])),
+        "code 0\ndocs +6\ntests 0\n"
+    );
+    assert_eq!(
+        stdout(&ok(&["scan", "README.md", "--short"])),
+        "c0;d+6;t0\n"
+    );
+}
+
+#[test]
+fn commit_and_pre_commit_print_the_three_deltas() {
+    let repo = Repo::new();
+    // The test weights, `tests/` the test files.
+    let weights_text =
+        fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/weights.toml"))
+            .unwrap()
+            .replace("test_globs = []", "test_globs = [\"tests/**\"]");
+    let own = tempfile::tempdir().unwrap();
+    let weights = own.path().join("weights.toml");
+    fs::write(&weights, weights_text).unwrap();
+    let weights = weights.to_str().unwrap();
+    let run = |args: &[&str]| {
+        let mut all = args.to_vec();
+        all.extend_from_slice(&["--config", weights]);
+        let output = codeweight(repo.path(), &all);
+        assert!(output.status.success(), "{}", stderr(&output));
+        stdout(&output)
+    };
+    // Under tests/weights.toml: F's f is 103, the test's too, FG's 106; `# A` and a word are 10 + 2.
+    let first = repo.commit(&[
+        ("a.py", Some(F)),
+        ("tests/test_a.py", Some(FG)),
+        ("doc.md", Some("# A word\n")),
+    ]);
+    assert_eq!(
+        run(&["commit", "HEAD"]),
+        "code +103\ndocs +12\ntests +106\n"
+    );
+    // A test made lighter, a doc deleted, the code untouched.
+    let second = repo.commit(&[("tests/test_a.py", Some(F)), ("doc.md", None)]);
+    assert_eq!(run(&["commit", "HEAD"]), "code 0\ndocs -12\ntests -3\n");
+    assert_eq!(run(&["commit", "HEAD", "--short"]), "c0;d-12;t-3\n");
+    let json: serde_json::Value =
+        serde_json::from_str(&run(&["commit", "HEAD~1..HEAD", "--json"])).unwrap();
+    assert_eq!(
+        json,
+        serde_json::json!({
+            "from": first, "to": second, "code": 0.0, "docs": -12.0, "tests": -3.0, "warnings": []
+        })
+    );
+
+    // The uncommitted changes: the code heavier, a doc untracked, the staged one alone.
+    fs::write(repo.path().join("a.py"), FG).unwrap();
+    fs::write(repo.path().join("new.md"), "x\n").unwrap();
+    assert_eq!(run(&["pre-commit", "--short"]), "c+3;d+1;t0\n");
+    repo.git(&["add", "a.py"]);
+    assert_eq!(
+        run(&["pre-commit", "--only-staged"]),
+        "code +3\ndocs 0\ntests 0\n"
+    );
+    let json: serde_json::Value = serde_json::from_str(&run(&["pre-commit", "--json"])).unwrap();
+    assert_eq!(json["from"], serde_json::json!(second));
+    assert_eq!(json["to"], serde_json::Value::Null);
+    assert_eq!(json["code"], serde_json::json!(3.0));
+}
+
+#[test]
+fn the_report_s_options_need_one_number_and_short_none() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("A.java"), JAVA).unwrap();
+    for args in [
+        &["scan", "A.java", "-v"][..],
+        &["scan", "A.java", "--top", "1"],
+        &["scan", "A.java", "--by", "file"],
+        &["scan", "A.java", "--code", "--tests"],
+        &["scan", "A.java", "--docs", "--short"],
+        &["scan", "A.java", "--short", "--json"],
+        &["commit", "HEAD", "-v"],
+        &["pre-commit", "--by", "function"],
+        &["pre-commit", "--tests", "--short"],
+        &["scan", "A.java", "--format", "json"],
+        &["init", "--code"],
+    ] {
+        let output = codeweight(dir.path(), args);
+        assert_eq!(
+            output.status.code(),
+            Some(2),
+            "{args:?}: {}",
+            stdout(&output)
+        );
+        assert!(
+            stderr(&output).starts_with("error: "),
+            "{args:?}: {}",
+            stderr(&output)
+        );
+    }
+    // `--config` stays every command's, before the command too.
+    fs::write(dir.path().join("w.toml"), "[weights]\nclass = 100\n").unwrap();
+    let output = codeweight(
+        dir.path(),
+        &["--config", "w.toml", "scan", "--code", "A.java"],
+    );
+    assert_eq!(stdout(&output), "103.04\n");
 }
