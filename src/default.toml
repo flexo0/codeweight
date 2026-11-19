@@ -58,6 +58,10 @@ parameter = 1.65        # a function's or lambda's parameter, the first; not sel
 # [languages.java.node_kinds]       # a tree-sitter node kind mapped to a category (or to "none")
 # synchronized_statement = "try"
 
+[docs]                  # a Markdown file's docs weight: words * word + symbol runs * symbol
+word = 1                # a run of letters and digits; a URL is one word
+symbol = 1              # a run of anything else that isn't a space, once however long: `**`, `);`, `##` are one each
+
 [files]
 exclude = [
     "**/node_modules/**", "**/build/**", "**/target/**", "**/generated/**", "**/vendor/**", "**/*.d.ts",

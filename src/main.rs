@@ -5,6 +5,11 @@ mod config;
 mod engine;
 mod git;
 mod lang;
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "the docs commands to come weigh Markdown with it")
+)]
+mod markdown;
 mod report;
 mod source;
 

@@ -222,6 +222,16 @@ pub struct Conditions {
     pub assignments: bool,
 }
 
+/// The `[docs]` table: the weights of a Markdown file's docs weight, `words × word + symbol runs × symbol`.
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Docs {
+    /// Each word: a run of letters and digits (a URL is one too).
+    pub word: f64,
+    /// Each run of other characters that aren't spaces, however long.
+    pub symbol: f64,
+}
+
 /// The `[files]` table: which files a folder walk weighs, and which are tests.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -251,6 +261,7 @@ pub struct Config {
     pub parameters: Parameters,
     pub accesses: Accesses,
     pub conditions: Conditions,
+    pub docs: Docs,
     pub files: Files,
     languages: BTreeMap<&'static str, LangConfig>,
 }
@@ -299,6 +310,8 @@ impl Config {
         check_non_negative("[parameters] max", raw.parameters.max)?;
         check_non_negative("[accesses] step", raw.accesses.step)?;
         check_non_negative("[accesses] max", raw.accesses.max)?;
+        check_non_negative("[docs] word", raw.docs.word)?;
+        check_non_negative("[docs] symbol", raw.docs.symbol)?;
         for glob in &raw.files.exclude {
             source::glob(glob).with_context(|| format!("[files] exclude `{glob}`"))?;
         }
@@ -366,6 +379,7 @@ impl Config {
             parameters: raw.parameters,
             accesses: raw.accesses,
             conditions: raw.conditions,
+            docs: raw.docs,
             files: raw.files,
             languages,
         })
@@ -414,6 +428,7 @@ struct RawConfig {
     weights: BTreeMap<String, f64>,
     #[serde(default)]
     languages: BTreeMap<String, RawLang>,
+    docs: Docs,
     files: Files,
 }
 
@@ -641,10 +656,34 @@ mod tests {
     }
 
     #[test]
+    fn docs_weights_merge_over_the_defaults() {
+        let defaults = Config::defaults().unwrap();
+        assert_eq!(
+            defaults.docs,
+            Docs {
+                word: 1.0,
+                symbol: 1.0
+            }
+        );
+        let mine = Config::from_str_over_defaults("[docs]\nsymbol = 0.5\n").unwrap();
+        assert_eq!(
+            mine.docs,
+            Docs {
+                word: 1.0,
+                symbol: 0.5
+            }
+        );
+        assert_eq!(mine.nesting, defaults.nesting);
+        assert!(error_of("[docs]\nwords = 1\n").contains("words"));
+        assert!(error_of("[docs]\nword = -1\n").contains("[docs] word is -1"));
+        assert!(error_of("[docs]\nsymbol = -0.5\n").contains("[docs] symbol is -0.5"));
+    }
+
+    #[test]
     fn a_file_on_its_own_must_set_every_category() {
         let error = Config::from_str_alone(
             "[nesting]\nmodel = \"linear\"\nfactor = 1\nmax_depth = 3\nflat = []\n[parameters]\nstep = 0\nmax = 1\n[weights]\nstatement = 1\n\
-             [files]\nexclude = []\ntest_globs = []\n",
+             [docs]\nword = 1\nsymbol = 1\n[files]\nexclude = []\ntest_globs = []\n",
         )
         .unwrap_err();
         assert!(format!("{error:#}").contains("no weight for `call`"));

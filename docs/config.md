@@ -40,6 +40,9 @@ Built (`config`, `config::find`):
   tests do. Each weighs a node as an existing category, so it adds no weight of
   its own; a cast or pattern kind it makes an `operator` is the language's table's, under the user's `node_kinds`
   (a kind mapped there wins). What each one weighs is [weight.md](weight.md)'s.
+- `[docs]` is the weights of a Markdown file's docs weight ([weight.md](weight.md)): `word` for each word and
+  `symbol` for each symbol run, 1 and 1 by default, each 0 or above. Its two keys are all it holds (an unknown one
+  is an error); a file on its own must hold it, as the engine's tests' does (`word` 1, `symbol` 10).
 - `[files]` is for what is weighed ([architecture.md](architecture.md), `source`).
 
 ```toml
@@ -94,6 +97,10 @@ lambda = 3
 
 [languages.typescript.node_kinds]   # a tree-sitter node kind mapped to a category (or to "none")
 satisfies_expression = "statement"
+
+[docs]                  # a Markdown file's docs weight: words * word + symbol runs * symbol
+word = 1                # a run of letters and digits; a URL is one word
+symbol = 1              # a run of anything else that isn't a space, once however long: `**`, `);`, `##` are one each
 
 [files]
 exclude = [

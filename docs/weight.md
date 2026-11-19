@@ -136,3 +136,34 @@ all but `nullish_operator`, which there only ties 11 pairs more; `nested_ternari
   declaration's initializer is none: Java's `int x = 1`, TS's and JS's `let` / `const` / `var`, Rust's `let`, Go's
   `:=` and `var x = 1`; nor is Python's `=`, which is its declaration too (only `+=` and its like weigh). Go's
   assignment is a statement of its own and stays one. On by default.
+
+## The docs weight
+
+A Markdown file's weight is its docs weight, a number of its own, never summed with code's (`markdown`, pure as
+the engine is: text in, weight out):
+
+```
+docs weight = words × word + symbol runs × symbol      ([docs], 1 and 1 by default)
+```
+
+- A word is a run of Unicode letters and digits (any script: `мир` is one); a symbol run is a run of anything else
+  that isn't a space, counted once however long. One rule everywhere, prose, markup, inline code and fenced blocks
+  alike, with no nesting: `a = b + c` is 5, `Hello, world.` 4, `## Setup` 2, `**important**` 3, `a == b` 3,
+  `snake_case`, `well-known` and `don't` 3 each, `foo(a, b);` 6. Markup is what a reader of the source reads too,
+  so `**`, `##` and a fence's backticks are a symbol run each.
+- Outside fenced blocks only (fenced by three or more backticks or tildes, at any indentation, as a list's are; one
+  never closed runs to the end), which a scanner of lines tells:
+  - YAML front matter at the top (a first line `---`, up to the next `---` or `...`) weighs nothing, nor does a
+    table's separator line (`|---|:--:|`, `--- | ---`: cells of hyphens, a colon at either end, between pipes; a
+    `---` without a pipe is a rule, a symbol run), nor a `<!-- comment -->`, inline or over lines. A `<!--` with no
+    `-->` after it is text, and so is one in inline code (it is code there), though a `-->` comes after.
+  - A URL is one word: an absolute one (`scheme://...`, bare or in `<...>`), up to a space or a character no URL
+    holds unescaped (`<`, `>`, `"`, `` ` ``, `|`, `[`, `]`), less a sentence's trailing punctuation and an
+    unmatched `)`; and a link's or an image's destination whatever its form, the text after `](` up to a space or
+    its `)` (a `(` in it matched by a `)`), or in `<...>`. A relative link is one reference as an absolute one is,
+    and a doc's renaming rewrites the links to it without weighing their paths' lengths:
+    `[weight.md](weight.md)` is 3 words (`weight`, `md`, the destination) and 4 symbol runs (`[`, `.`, `](`, `)`),
+    `see https://a.org/b.` 2 words and 1 symbol run. A link's title is text; a reference definition
+    (`[id]: url`) is text but its absolute URL; inline code's `](` is code, no link.
+- A Markdown file is one row, its weight its file's (no functions nor classes), and always clean: any text is
+  Markdown.
