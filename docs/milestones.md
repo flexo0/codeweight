@@ -113,8 +113,8 @@
     comprehension's `for` weighing a loop (Ruff's `FURB122`) a weight's matter.
 16. (built) The defaults tuned on the example pairs, the 8,940 generated ones and the 31 picked by hand, by the
     objective of milestones 14 and 15 (3 per pair whose good side weighs more, 1 per tie; lower is better), with a
-    simple evolutionary algorithm: `pairs/tune.py`, outside the repo beside the pairs. A snippet's weight is linear
-    in its counts, so codeweight runs once per count, not per candidate: a run per category and depth cap, per
+    simple evolutionary algorithm: `code-snippet-pairs/tune.py`, outside the repo beside the pairs. A snippet's weight
+    is linear in its counts, so codeweight runs once per count, not per candidate: a run per category and depth cap, per
     parameter cap and per flat category under each of the 32 sets of conditions give each pair's difference, from
     which any candidate's objective is exact (checked against codeweight's own totals). The search, a (40 + 80)
     one on a grid of 0.05 from the defaults, tunes every base weight (`statement` fixed at 1), the nesting, the
@@ -145,8 +145,8 @@
     for it: as a call's 0.55, Clippy's `redundant_pattern_matching` (`matches!(x, V4(_))` → `x.is_ipv4()`) and
     `useless_format` (`format!("hello")` → `"hello".to_string()`, a macro for a call: a tie) came out
     with the fix heavier or no lighter. Tuned as milestone 16
-    (`pairs/tune.py`, the nesting kept): 1.15 on every seed, 4890 → 4837 (549 pairs whose fix weighs more, 561
-    before; `redundant_pattern_matching` −46, `useless_format` −20, `unnecessary_literal_unwrap` +14, whose fix
+    (`code-snippet-pairs/tune.py`, the nesting kept): 1.15 on every seed, 4890 → 4837 (549 pairs whose fix weighs more,
+    561 before; `redundant_pattern_matching` −46, `useless_format` −20, `unnecessary_literal_unwrap` +14, whose fix
     is `panic!()` for `None.unwrap()`); held out, 30% of the pairs fit on the rest, 1458 → 1443. Three of four
     seeds also lowered `bool_op` to 0.25, 3 points more: left at 0.55, as noise. On Rust code the totals rose 0.7 to 1.2%, the
     function rankings unchanged (codeweight's own and two apps: Spearman 1.000, the top 20 kept). This repo's own
@@ -161,16 +161,16 @@
     `default` label, TS's and JS's `switch_default`, Go's `default_case`, a bare `_` in Rust and Python). Java's
     last `return switch (...) { ... };` weighs no statement, the switch weighing for it (the `carried_return`
     hook; an early one stays a jump). The pairs whose fix changes the behaviour are deleted from the pairs, and the
-    extractors skip their rules: `pairs/semantic.tsv`, 94 rules, 560 pairs (Error Prone's `error`, `likely_error`, `fragile_code` and untagged
-    groups; its rules that add a check, a locale, a charset, an annotation or immutability, or that change a type
-    or what a test checks; ESLint's `eqeqeq` and `strict`; typescript-eslint's `return-await`,
-    `promise-function-async`, `prefer-readonly`). The tuning keeps `case` below `branch`. On the 8,411 pairs
-    left the objective is 4124 (4850 with the deleted ones), and 4073 on 8,391 once the pairs the splitting cut
-    wrong are dropped too (`pairs/broken.tsv` and a check in `extract/split.py`), then 3185 on 8,095 once the 292
-    pairs whose fix rightly weighs no less are dropped (`pairs/heavier.tsv`: a style option for the longer form,
-    code or a check added, the same in another form), 110 worse left, every one a simplification, then 133 on
-    1,453 once `gen/` is thinned to one pair per rule and difference, the ties under any weights deleted
-    (`tune.py dedup`: a linter's many variants of one rewrite no longer count again); `return switch`
+    extractors skip their rules: `code-snippet-pairs/extract/semantic.tsv`, 94 rules, 560 pairs (Error Prone's `error`,
+    `likely_error`, `fragile_code` and untagged groups; its rules that add a check, a locale, a charset, an annotation
+    or immutability, or that change a type or what a test checks; ESLint's `eqeqeq` and `strict`; typescript-eslint's
+    `return-await`, `promise-function-async`, `prefer-readonly`). The tuning keeps `case` below `branch`. On the 8,411
+    pairs left the objective is 4124 (4850 with the deleted ones), and 4073 on 8,391 once the pairs the splitting cut
+    wrong are dropped too (`code-snippet-pairs/extract/broken.tsv` and a check in `extract/split.py`), then 3185 on
+    8,095 once the 292 pairs whose fix rightly weighs no less are dropped (`code-snippet-pairs/extract/heavier.tsv`: a
+    style option for the longer form, code or a check added, the same in another form), 110 worse left, every one a
+    simplification, then 133 on 1,453 once `gen/` is thinned to one pair per rule and difference, the ties under any
+    weights deleted (`tune.py dedup`: a linter's many variants of one rewrite no longer count again); `return switch`
     −6, `nested_ternaries` 0, `free_default` +24 (Clippy's `single_match` and `manual_map`, a `match` with an
     empty `_` arm against an `if let`, and Error Prone's `UnnecessaryDefaultInEnumSwitch` now ties), but the
     hand-picked `java/nested_ternary_to_switch` holds at last (23.05 against 21.84). A re-tune moved little:
@@ -212,9 +212,9 @@
     124 → 123 (worse 37 → 36, ties 13 → 15), Error Prone's `RefactorSwitch` `L209-8` now better (4 `=` against 2),
     Staticcheck's `QF1005` (`math.Pow(x*2, 2)` against `x * 2 * x * 2`) now worse; the weights stay (`operator`
     0.6 is still the best, `bool_op` 0.2 would score 120). The corpora not re-checked.
-23. (built) The defaults tuned again on the 1,453 pairs, by a new score (`pairs/tune.py`): still 3 per pair whose good
-    side weighs more and 1 per tie, but each pair weighed 1 / sqrt(its rule's pairs), a hand-picked one three times
-    that, so a rule with fifty tests doesn't count fifty times one with a single test, plus the distance from the
+23. (built) The defaults tuned again on the 1,453 pairs, by a new score (`code-snippet-pairs/tune.py`): still 3 per pair
+    whose good side weighs more and 1 per tie, but each pair weighed 1 / sqrt(its rule's pairs), a hand-picked one three
+    times that, so a rule with fifty tests doesn't count fifty times one with a single test, plus the distance from the
     defaults (`lam = 1`) in place of the tie-break, so a weight moves only as far as the pairs ask. A soft margin on
     ln(bad / good) was tried as a term too, so that an order held by a hair counts: on five folds of the rules,
     each fitted on four and scored on the fifth, it cut the pairs within 5% of a tie (82 → 22-31) but put more in
@@ -232,22 +232,22 @@
     `step` 1, `max` 3; an access's place is how many accesses its object is in a row of (`a.b.c.d`: `.b` 0, `.c` 1,
     `.d` 2), a call, `this` or any other node ending the row ([weight.md](weight.md)). A file on its own that leaves
     the table out weighs every access alike (`step` 0, `max` 1), so the engine's tests stand; a snippet per
-    language (`lang::testing::weigh_accesses`) has `access` 9 grow 9, 18, 27. `pairs/tune.py` counts the accesses
-    by place and tunes `step` and `max` too. On the pairs: worse 32 → 39, ties 12 → 13, all of it the first
+    language (`lang::testing::weigh_accesses`) has `access` 9 grow 9, 18, 27. `code-snippet-pairs/tune.py` counts the
+    accesses by place and tunes `step` and `max` too. On the pairs: worse 32 → 39, ties 12 → 13, all of it the first
     access's 1.85 → 0.5 (a lone index or slice replaced by a call, Ruff's `FURB131`, `FURB145`, `FURB187`,
     `PERF403`, typescript-eslint's `prefer-string-starts-ends-with`, Clippy's `unnecessary_operation`: `l[:]` at
     0.5 now below `l.copy()`); `step` and `max` move no pair (with `access` at 1: 33). Clippy's `unnecessary_fold`
     `L224` now better. The corpora not re-checked.
-25. (built) The defaults tuned by a search without a grid. `pairs/tune.py` had kept every weight on a grid of 0.05
-    and mutated one or two genes at a time; it now shakes every real value at once, x to x × U(0.9, 1.1) +
+25. (built) The defaults tuned by a search without a grid. `code-snippet-pairs/tune.py` had kept every weight on a grid
+    of 0.05 and mutated one or two genes at a time; it now shakes every real value at once, x to x × U(0.9, 1.1) +
     U(-0.1, 0.1), the shake falling to a hundredth by the last of 3000 generations, to 0.001 (a generation on
     every core, about 30 s a search). A difference up to 0.01, a report's last digit, is now a tie (it was 1e-6:
     the search had split ties by 0.001, `bool_op` 0.548 against `operator` 0.549, which the reports show the
     same). With `access` kept at 0.5 (as asked in milestone 24; free, it goes to 1.1): `call` 0.55 → 0.49, `macro`
     1.75 → 1.6, `constructor` 0.9 → 0.949, `argument` 0.05 → 0.316, `bool_op` 0.55 → 0.544, `operator` 0.6 →
     0.556. On the pairs: worse 39 → 35, ties 13 → 5. On five folds of the rules it holds out as the old search
-    does (42 worse; ties 10 → 6): the better fit is mostly the pairs' own (`pairs/README.md`). The corpora not
-    re-checked.
+    does (42 worse; ties 10 → 6): the better fit is mostly the pairs' own (`code-snippet-pairs/README.md`). The corpora
+    not re-checked.
 26. (built) The docs weight, as asked: how much a change adds to or takes from the docs, a Markdown file's words and
     symbol runs ([weight.md](weight.md), `markdown`, pure as the engine is, no tree-sitter), `[docs] word` 1 and
     `symbol` 1: a word a run of letters and digits, a symbol run (`**`, `);`) one however long. Then its commands, `scan-docs`, `commit-docs` and `pre-commit-docs`, the `-tests` twins' arguments:
