@@ -117,7 +117,7 @@ const NUMBERS: &[&str] = &[
     "hex_floating_point_literal",
 ];
 
-/// A binary or unary operator, a compound assignment, `++` / `--`, `instanceof`. `&` / `|` are bitwise: they can't
+/// A binary or unary operator, an assignment, `++` / `--`, `instanceof`. `&` / `|` are bitwise: they can't
 /// be told from logical ones without types.
 fn operator(node: Node) -> Option<Operator> {
     let token = || node.child_by_field_name("operator").map(|op| op.kind());
@@ -730,6 +730,26 @@ mod tests {
             on - off,
             (10.0 + 4.0 + 20.0 + 12.0) - (20.0 + 12.0) - 10.0 - 10.0
         );
+    }
+
+    #[test]
+    fn a_plain_assignment_is_an_operator_under_assignments() {
+        let added = testing::assignments_add(
+            &JAVA,
+            "class A {
+               void f(int x) {
+                 int y = 1;               // a declaration's initializer: none
+                 y = 2;                   // operator 7 at 0
+                 y += 3;                  // a compound one is an operator either way
+                 a = b = 4;               // one run: 7
+                 switch (x) {
+                   case 1 -> y = 5;       // at 1: 14
+                   default -> g();
+                 }
+               }
+             }",
+        );
+        assert_eq!(added, 7.0 + 7.0 + 14.0);
     }
 
     #[test]

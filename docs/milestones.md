@@ -1,8 +1,8 @@
 # Milestones
 
-Built: milestones 0-18 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
+Built: milestones 0-19 (the repo, the CLI and the config, the engine and Java, TypeScript, TSX and Python, folders,
 `commit`, the reports, the tuned defaults, Rust, operators and accesses, JavaScript, Go, depth on the structure
-only, parameters, cases and arguments, conditions, the defaults tuned on pairs, macros, nested ternaries and default cases).
+only, parameters, cases and arguments, conditions, the defaults tuned on pairs, macros, nested ternaries and default cases, assignments).
 
 0. (built) The repo: `Cargo.toml`, `README.md` (usage, the weights file), the MIT license, GitHub Actions (`cargo fmt
    --check`, `clippy -D warnings`, `test`).
@@ -181,3 +181,12 @@ only, parameters, cases and arguments, conditions, the defaults tuned on pairs, 
     4124 → 4105, held out 1252 → 1252, every move ±3 points (`case` 2.4, `lambda` 1.65, `jump` 1.35, `bool_op`
     down to 0.05 on some seeds): the weights are as they were. On the corpora the totals moved less than 1.2% and
     the function rankings held (Spearman 0.997 to 1.000, the top 20 kept).
+19. (built) Assignments, as asked after milestone 18's Java pairs were read: `case 1 -> x = f();` should weigh more
+    than the switch expression's `case 1 -> f();`, by its `=`. A condition, on by default: `assignments`, a plain
+    `=` an `operator` beside its statement, as a compound one is (an `Operator::Assign` the engine adds, never in
+    the node's place, so Go's assignment stays a statement); a declaration's initializer is none (`int x = 1`,
+    `let`, `const`, `:=`, `var x = 1`), nor is Python's `=`, its declaration too. On the pairs: 133 → 130,
+    Clippy's `needless_late_init` (`match n { 1 => a = "one", ... }` against `let a = match n { 1 => "one", ... }`)
+    now better; Error Prone's `RefactorSwitch` still worse, its `x = switch (...)` a statement more against an
+    `=` less per case (statement 1, operator 0.6). On the corpora the totals rose 1-2% and the function rankings
+    held (Spearman 0.996 to 0.999, the top 20 kept but one at jsprit).

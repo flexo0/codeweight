@@ -133,7 +133,8 @@ which are Java's as they stand.
 - Statements: an expression statement, an assignment, `:=`, each `var` / `const` spec (a `const (...)` block of
   five is five, as Java's enum constants), a send (`ch <- v`), `defer`, `go`, an alias, a field. `i++`, `i--` and a
   compound assignment (`x += 1`) are statements of their own in the grammar, no expression in one: they weigh a
-  statement and an `operator` (the `also_statement` hook), as Java's `x++;`; in a `for` clause's update
+  statement and an `operator` (the `also_statement` hook), as Java's `x++;` (a plain `x = 1` its statement, and an
+  `operator` beside it under `[conditions] assignments`); in a `for` clause's update
   (`for i := 0; i < n; i++`) only the operator, as Java's update is no statement. The update is the loop's head:
   any statement there weighs none (`for ...; i, j = i+1, j-1`). The initializer (`i := 0`) is a statement, as
   Java's `int i = 0`.

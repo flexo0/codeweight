@@ -132,7 +132,7 @@ const BARE: &[&str] = &[
     "continue_expression",
 ];
 
-/// A binary operator, a let chain (`if let Some(x) = a && x > 0`, a run of `&&`), a compound assignment, `-x` /
+/// A binary operator, a let chain (`if let Some(x) = a && x > 0`, a run of `&&`), an assignment, `-x` /
 /// `!x`. A dereference (`*x`) and a borrow (`&x`) are none: plumbing, not arithmetic.
 fn operator(node: Node) -> Option<Operator> {
     let token = || node.child_by_field_name("operator").map(|op| op.kind());
@@ -140,6 +140,7 @@ fn operator(node: Node) -> Option<Operator> {
         "binary_expression" => Operator::of(token()?),
         "let_chain" => Some(Operator::And),
         "compound_assignment_expr" => Operator::of_assignment(token()?),
+        "assignment_expression" => Some(Operator::Assign),
         "unary_expression" => match node.child(0)?.kind() {
             "-" | "!" => Operator::unary(node.named_child(0)?, NUMBERS),
             _ => None,
@@ -323,6 +324,22 @@ mod tests {
              }",
         );
         assert_eq!(on - off, -10.0);
+    }
+
+    #[test]
+    fn a_plain_assignment_is_an_operator_under_assignments() {
+        let added = testing::assignments_add(
+            &RUST,
+            "fn f(c: bool) {
+                 let mut y = 1;     // a declaration's initializer: none
+                 y = 2;             // operator 7 at 0
+                 y += 3;            // a compound one is an operator either way
+                 if c {
+                     y = 4;         // at 1: 14
+                 }
+             }",
+        );
+        assert_eq!(added, 7.0 + 14.0);
     }
 
     #[test]

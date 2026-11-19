@@ -159,13 +159,14 @@ const NESTING: &[Nesting] = &[
     Nesting::body("generator_function"),
 ];
 
-/// A binary or unary operator (`typeof`, `void`, `delete` too), a compound assignment (`&&=`, `||=` and `??=` are
-/// logical), `++` / `--`.
+/// A binary or unary operator (`typeof`, `void`, `delete` too), an assignment (`&&=`, `||=` and `??=` are logical),
+/// `++` / `--`.
 fn operator(node: Node) -> Option<Operator> {
     let token = || node.child_by_field_name("operator").map(|op| op.kind());
     match node.kind() {
         "binary_expression" => Operator::of(token()?),
         "augmented_assignment_expression" => Operator::of_assignment(token()?),
+        "assignment_expression" => Some(Operator::Assign),
         "unary_expression" => Operator::unary(node.child_by_field_name("argument")?, NUMBERS),
         "update_expression" => Some(Operator::Unary),
         _ => None,
@@ -316,6 +317,19 @@ mod tests {
              }",
         );
         assert_eq!(on - off, (10.0 + 4.0 + 20.0 + 12.0) - (20.0 + 12.0) - 10.0);
+    }
+
+    #[test]
+    fn a_plain_assignment_is_an_operator_under_assignments() {
+        let added = testing::assignments_add(
+            &TYPESCRIPT,
+            "let y = 1;                    // a declaration's initializer: none
+             y = 2;                        // operator 7 at 0
+             y ||= 3;                      // a logical compound one is a bool_op either way
+             a = b = 4;                    // one run: 7
+             if (c) { y = 5; }             // at 1: 14",
+        );
+        assert_eq!(added, 7.0 + 7.0 + 14.0);
     }
 
     #[test]

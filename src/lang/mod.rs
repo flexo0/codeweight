@@ -199,6 +199,9 @@ pub enum Operator {
     BitXor,
     /// `-x`, `!x`, `not x`, `~x`, `typeof x`, `++`, `--`.
     Unary,
+    /// A plain `=` assignment, a declaration's initializer aside: an `operator` beside the node's own weight under
+    /// `[conditions] assignments`, else nothing.
+    Assign,
 }
 
 impl Operator {
@@ -221,9 +224,12 @@ impl Operator {
         })
     }
 
-    /// A compound assignment's operator by its token (`+=` is `+`); a plain `=` is none.
+    /// An assignment's operator by its token: a compound one's (`+=` is `+`), a plain `=`'s `Assign`.
     pub fn of_assignment(token: &str) -> Option<Operator> {
-        Operator::of(token.strip_suffix('=')?)
+        match token {
+            "=" => Some(Operator::Assign),
+            token => Operator::of(token.strip_suffix('=')?),
+        }
     }
 
     /// A unary operator on `operand`; none on a number (`-1` is a literal).
@@ -431,6 +437,20 @@ pub mod testing {
             4.0,
             text,
         )
+    }
+
+    /// What `[conditions] assignments` on adds to a snippet's total, under the test weights with `operator` 7.
+    pub fn assignments_add(lang: &'static Lang, text: &str) -> f64 {
+        let off = weigh_expressions(lang, text);
+        let on = WEIGHTS
+            .replacen("operator  = 0", "operator  = 7", 1)
+            .replacen("access    = 0", "access    = 9", 1)
+            + "\n[conditions]\nassignments = true\n";
+        let config = Config::from_str_alone(&on).unwrap();
+        assert!(config.conditions.assignments);
+        let on = weigh_under(lang, &on, text);
+        assert!(on.clean, "syntax errors in {text}");
+        on.total - off.total
     }
 
     /// A snippet's total under the test weights, without and with `[conditions] nested_ternaries` and

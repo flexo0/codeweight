@@ -221,7 +221,13 @@ impl<'c> Weigher<'c> {
                 in_function |= scope.kind == ScopeKind::Function;
             }
 
-            let operator = (self.lang.operator)(node);
+            // A plain `=` weighs beside the node's own category (Go's assignment is a statement), never in its
+            // place; a run of them (`a = b = c`) is one.
+            let raw_operator = (self.lang.operator)(node);
+            let operator = raw_operator.filter(|op| *op != Operator::Assign);
+            let assigns = self.conditions.assignments
+                && raw_operator == Some(Operator::Assign)
+                && frame.operator != Some(Operator::Assign);
             let category = match operator {
                 Some(Operator::Unary) if self.conditions.each_unary => Some(Category::Operator),
                 Some(op) if frame.operator == Some(op) => None,
@@ -268,6 +274,7 @@ impl<'c> Weigher<'c> {
             let weight = category
                 .into_iter()
                 .chain((self.lang.also_statement)(node).then_some(Category::Statement))
+                .chain(assigns.then_some(Category::Operator))
                 .map(|c| self.weights.weight(c) * self.nesting.factor_of(c, frame.depth))
                 .sum::<f64>()
                 + self.parameters((self.lang.parameters)(node, source), frame.depth)
@@ -283,8 +290,8 @@ impl<'c> Weigher<'c> {
                 }
             }
 
-            let child_operator = match operator {
-                Some(_) => operator,
+            let child_operator = match raw_operator {
+                Some(_) => raw_operator,
                 None if flag(&self.parens, id) => frame.operator,
                 None => None,
             };

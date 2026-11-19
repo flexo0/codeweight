@@ -83,7 +83,7 @@ const NESTING: &[Nesting] = &[
 /// The number literals.
 const NUMBERS: &[&str] = &["int_literal", "float_literal", "imaginary_literal"];
 
-/// A binary operator (`&^`, and not, as a bitwise and), a compound assignment, `-x` / `+x` / `!x` / `^x`, `i++` /
+/// A binary operator (`&^`, and not, as a bitwise and), an assignment, `-x` / `+x` / `!x` / `^x`, `i++` /
 /// `i--`. A dereference (`*p`), an address (`&x`) and a receive (`<-ch`) are none: plumbing, not arithmetic.
 fn operator(node: Node) -> Option<Operator> {
     let token = || node.child_by_field_name("operator").map(|op| op.kind());
@@ -128,7 +128,7 @@ fn exempt(node: Node, source: &[u8]) -> bool {
 fn also_statement(node: Node) -> bool {
     let own_operator = match node.kind() {
         "inc_statement" | "dec_statement" => true,
-        "assignment_statement" => operator(node).is_some(),
+        "assignment_statement" => operator(node).is_some_and(|op| op != Operator::Assign),
         _ => false,
     };
     own_operator && !is_update(node)
@@ -273,6 +273,37 @@ mod tests {
              }",
         );
         assert_eq!(on - off, -20.0);
+    }
+
+    #[test]
+    fn a_plain_assignment_is_an_operator_under_assignments() {
+        let added = testing::assignments_add(
+            &GO,
+            "package p
+
+             func f() {
+               y := 1        // a declaration: none
+               var z = 2     // none either
+               y = 2         // operator 7 at 0, its statement 1 either way
+               y += 3        // a compound one is an operator either way
+               y, z = z, y   // 7
+             }",
+        );
+        assert_eq!(added, 7.0 + 7.0);
+        // Off, a plain assignment weighs its statement once: 5 statements, the compound one an operator 7 too.
+        let off = testing::weigh_expressions(
+            &GO,
+            "package p
+
+             func f() {
+               y := 1
+               var z = 2
+               y = 2
+               y += 3
+               y, z = z, y
+             }",
+        );
+        assert_eq!(off.total, 100.0 + 5.0 + 7.0);
     }
 
     #[test]

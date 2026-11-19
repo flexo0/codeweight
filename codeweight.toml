@@ -27,6 +27,7 @@ each_unary = false      # each unary operator counts, no run of them: !!x is 2
 nullish_operator = false  # ?? and ??= are an operator, not a bool_op: a default value, no branch
 nested_ternaries = false  # a ternary in a ternary's alternative nests (milestone 18), off here
 free_default = false      # a default case weighs nothing (milestone 18), off here
+assignments = false       # a plain = is an operator (milestone 19), off here
 
 [weights]               # the base weight of each category, for every language
 statement = 1

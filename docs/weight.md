@@ -44,8 +44,8 @@ total        = Σ weight(node) over the nodes that have a category
   `a * b + c` are 2, `a * b + c * d` is 3. Like operators are those of one precedence level: `+ -`, `* / %` (Python's
   `//` and `@`), `**`, the shifts, the comparisons (`==`, `<`, ..., `instanceof`, `in`, `is`; a chained Python
   comparison `a < b < c` is one), `&`, `|`, `^`, and the unary ones (`-x`, `!x`, `not x`, `~x`, TS's `typeof`, `++`
-  and `--`). A compound assignment (`x += 1`) is its operator, so `x += b + c` is one run, as `x = x + b + c`; a
-  plain `=` is none, the statement already weighs it. A negative number (`-1`) is a literal, no operator. A Rust
+  and `--`). A compound assignment (`x += 1`) is its operator, so `x += b + c` is one run; a plain `=` is none, the
+  statement already weighing it, but under `[conditions] assignments` (on by default), where it is one too. A negative number (`-1`) is a literal, no operator. A Rust
   dereference (`*x`) and a borrow (`&x`) are none, and so are Go's (`*p`, `&x`) and its receive (`<-ch`). `&&=`,
   `||=`, `??=` are logical: `bool_op`.
 - `access`: one per field access or index, so `obj.a` is 1, `obj.a.b` and `a[i][j]` are 2. A call's callee is the
@@ -96,7 +96,7 @@ total        = Σ weight(node) over the nodes that have a category
 The `[conditions]` table's rules weigh what a node's kind alone doesn't tell, each as an existing category, so they
 add no weight of their own. The pairs of milestone 15 asked for them; the tuning on them (milestone 16) turned on all
 but `nullish_operator`, which there only ties 11 pairs more; `nested_ternaries` and `free_default` were asked for
-(milestone 18). A file on its own that leaves the table out has them all off.
+(milestone 18), `assignments` too (milestone 19). A file on its own that leaves the table out has them all off.
 
 - `casts`: a cast or type assertion is an `operator`, one per cast (no run): Java's `(T) x`, TS's `x as T`,
   `x satisfies T`, `x!` and `<T>x` (TS only: TSX reads it as JSX), Rust's `x as T`, Go's `x.(T)`. A cast is
@@ -120,3 +120,9 @@ but `nullish_operator`, which there only ties 11 pairs more; `nested_ternaries` 
   Rust's `match` and Python's `match` (not one with a guard, `_ if x`). So a switch weighs less than the if-chain it
   replaces as long as a `case` weighs less than a `branch`, which the tuning keeps. Its body still nests. On by
   default.
+- `assignments`: a plain `=` assignment is an `operator` too, as a compound one (`x += 1`) is, beside its
+  statement: writing a variable is something to follow, so `case 1 -> x = f();` weighs more than the switch
+  expression's `case 1 -> f();`, and `int x; x = 1;` more than `int x = 1;`. A run of them (`a = b = c`) is one. A
+  declaration's initializer is none: Java's `int x = 1`, TS's and JS's `let` / `const` / `var`, Rust's `let`, Go's
+  `:=` and `var x = 1`; nor is Python's `=`, which is its declaration too (only `+=` and its like weigh). Go's
+  assignment is a statement of its own and stays one. On by default.

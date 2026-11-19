@@ -238,6 +238,13 @@ def f(x):
     }
 
     #[test]
+    fn a_plain_assignment_is_none_under_assignments() {
+        // Python's `=` is its declaration too.
+        let added = testing::assignments_add(&PYTHON, "y = 1\ny += 2\nif c:\n    y = 3\n");
+        assert_eq!(added, 0.0);
+    }
+
+    #[test]
     fn branches_an_elif_chain_and_a_chained_conditional() {
         let weighed = weigh(
             r#"

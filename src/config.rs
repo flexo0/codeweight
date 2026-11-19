@@ -179,6 +179,10 @@ pub struct Conditions {
     pub nested_ternaries: bool,
     /// A switch's or match's default case (`default`, a bare `_`) weighs nothing, as an `else` weighs nothing.
     pub free_default: bool,
+    /// A plain `=` assignment is an `operator` too, as a compound one (`+=`) is: `case 1 -> x = f();` weighs more
+    /// than `case 1 -> f();`. A declaration's initializer (`int x = 1`, `let`, `const`, `:=`) is none, nor is
+    /// Python's `=`, which is its declaration.
+    pub assignments: bool,
 }
 
 /// The `[files]` table: which files a folder walk weighs, and which are tests.
@@ -575,7 +579,7 @@ mod tests {
     fn the_defaults_hold_their_conditions() {
         let defaults = parse_toml(DEFAULTS).unwrap();
         let table = defaults["conditions"].as_table().unwrap();
-        assert_eq!(table.len(), 7);
+        assert_eq!(table.len(), 8);
         assert_eq!(
             Config::defaults().unwrap().conditions,
             Conditions {
@@ -586,6 +590,7 @@ mod tests {
                 nullish_operator: false,
                 nested_ternaries: true,
                 free_default: true,
+                assignments: true,
             }
         );
         let mine = Config::from_str_over_defaults("[conditions]\ncasts = false\n").unwrap();
