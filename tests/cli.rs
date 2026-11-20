@@ -94,12 +94,12 @@ fn scan_leaves_out_an_unsupported_file_and_warns_of_syntax_errors() {
     assert!(!out.contains("notes.txt"), "{out}");
     assert!(out.contains("warning: B.java has syntax errors"), "{out}");
 
-    // The total alone: the warning to stderr.
+    // The total alone: no warning.
     let quiet = codeweight(dir.path(), &["scan", "--code", "notes.txt", "B.java"]);
     assert!(quiet.status.success(), "{}", stderr(&quiet));
     assert_eq!(stdout(&quiet).lines().count(), 1, "{}", stdout(&quiet));
     assert!(stdout(&quiet).trim().parse::<f64>().is_ok());
-    assert!(stderr(&quiet).starts_with("warning: B.java has syntax errors"));
+    assert_eq!(stderr(&quiet), "");
 }
 
 #[test]
@@ -155,7 +155,7 @@ fn a_reader_that_quits_early_ends_it_quietly_with_exit_0() {
     fs::write(dir.path().join("B.java"), "class B { void f( }\n").unwrap();
     let mut child = Command::new(env!("CARGO_BIN_EXE_codeweight"))
         .current_dir(dir.path())
-        .args(["scan", "--code", "B.java"])
+        .args(["scan", "-v", "B.java"])
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()
@@ -864,15 +864,20 @@ fn scan_prints_the_code_the_docs_and_the_tests_each_as_its_flag_does() {
         stdout(&three),
         format!("code +{code}\ndocs +{docs}\ntests +{tests}\n")
     );
-    assert!(
-        stderr(&three).starts_with("warning: src/B.java has syntax errors"),
-        "{}",
-        stderr(&three)
+    assert_eq!(stderr(&three), "");
+    // `-v`: the warnings to stderr, the numbers the same.
+    let verbose = ok(&["scan", ".", "-v"]);
+    assert_eq!(stdout(&verbose), stdout(&three));
+    assert_eq!(
+        stderr(&verbose),
+        "warning: src/B.java has syntax errors, weighed as tree-sitter recovered it\n"
     );
 
     let short = ok(&["scan", ".", "--short"]);
     let code: f64 = code.parse().unwrap();
     assert_eq!(stdout(&short), format!("c+{} d+6 t+11\n", code.round()));
+    assert_eq!(stderr(&short), "");
+    let short = ok(&["scan", ".", "--short", "-v"]);
     assert!(stderr(&short).starts_with("warning: src/B.java has syntax errors"));
 
     let json: serde_json::Value =
@@ -954,13 +959,11 @@ fn the_report_s_options_need_one_number_and_short_none() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("A.java"), JAVA).unwrap();
     for args in [
-        &["scan", "A.java", "-v"][..],
-        &["scan", "A.java", "--top", "1"],
+        &["scan", "A.java", "--top", "1"][..],
         &["scan", "A.java", "--by", "file"],
         &["scan", "A.java", "--code", "--tests"],
         &["scan", "A.java", "--docs", "--short"],
         &["scan", "A.java", "--short", "--json"],
-        &["show", "HEAD", "-v"],
         &["diff", "--by", "function"],
         &["diff", "--tests", "--short"],
         &["scan", "A.java", "--format", "json"],

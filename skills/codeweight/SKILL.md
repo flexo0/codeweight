@@ -29,7 +29,8 @@ The tests are the test files and Rust `#[cfg(test)]` items; the docs the Markdow
 Options: `--json` (JSON; without a flag `{code, docs, tests, warnings}`, a commit's with `from` / `to`; with
 `--code`, `--tests` or `--docs` the whole report: `total`, `rows`, `warnings`, a commit's rows with `before`,
 `after`, `delta`, `status`, and its `from` / `to` the hashes, `to` null for `diff`'s uncommitted changes).
-With `--code`, `--tests` or `--docs` only: `-v` (the whole report), `--top N` (only the first N lines), `--by file`
+`-v`: the warnings (syntax errors, unreadable folders) on stderr; with `--code`, `--tests` or `--docs`, the whole
+report. With `--code`, `--tests` or `--docs` only: `--top N` (only the first N lines), `--by file`
 (files instead of functions); `--top` and `--by` imply `-v`. Without them, these are a usage error, as `--short`
 with one of them, two of them, or `--short` with `--json`.
 
@@ -49,7 +50,7 @@ with one of them, two of them, or `--short` with `--json`.
 - The weights file: `--config <file>`, else `./codeweight.toml`, else `codeweight.toml` at the repo root, else the
   built-in defaults. Don't create or edit it unless asked.
 - Files in other languages are left out, unlisted. A file with syntax errors is still weighed, with a warning
-  (on stderr when only the numbers are printed).
+  (in the report and the JSON; with the numbers alone only with `-v`, on stderr).
 - Exit 0 on success (a pipe to `head` that quits early too, silent), 1 on an error (`error: ...` on stderr), 2 on a
   usage error (a bad command or option, options that don't go together).
 - `-C <path>` (`--repo <path>`): any path inside the repo, as `git -C`.

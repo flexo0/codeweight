@@ -1,19 +1,20 @@
 # The CLI
 
 ```
-codeweight scan [<path>...] [<one>|--short] [--json]                     weigh files and folders (default `.`)
-codeweight show [<rev>|<A>..<B>] [-C <path>] [<one>|--short] [--json]    weigh a commit (default `HEAD`) or a range
-codeweight diff [-C <path>] [--staged] [<one>|--short] [--json]          weigh the net delta of the uncommitted changes
+codeweight scan [<path>...] [<one>|--short] [-v] [--json]                     weigh files and folders (default `.`)
+codeweight show [<rev>|<A>..<B>] [-C <path>] [<one>|--short] [-v] [--json]    weigh a commit (default `HEAD`) or a range
+codeweight diff [-C <path>] [--staged] [<one>|--short] [-v] [--json]          weigh the net delta of the uncommitted changes
 codeweight init [<file>|-]         write the default weights file (default ./codeweight.toml), - to stdout
 
-<one>: --code|--tests|--docs [-v] [--top <N>] [--by file|function]
+<one>: --code|--tests|--docs [--top <N>] [--by file|function]
 ```
 
 `scan`, `show` and `diff` take `--config <file>`, before the command or after; `init` doesn't (it reads no
 weights file, so a `--config` there is a usage error, not ignored). The three are each the general command, the three
 numbers, or with `--code`, `--tests` or `--docs` (at most one) the specific one, that number alone and its report;
-`--verbose` (`-v`), `--top <N>` (the N heaviest functions) and `--by file|function` (what the report lists) are the
-specific one's alone. `--json` prints JSON instead of text; `--short`, the general one's alone, one line.
+`--top <N>` (the N heaviest functions) and `--by file|function` (what the report lists) are the specific one's
+alone; `--verbose` (`-v`) is the specific one's whole report, the general one's warnings on stderr. `--json` prints
+JSON instead of text; `--short`, the general one's alone, one line.
 
 - `scan`'s `<path>...` are files and folders, absolute or relative, `.` when left out; `show`'s `<rev>`, `HEAD`
   (as `rg` / `tokei` walk `.` and `git show` shows `HEAD`), so the common case needs no argument.
@@ -56,8 +57,8 @@ the same order, `--config` last before `--help`.
   one walk of the paths, or one `git diff-tree` / `git cat-file --batch` pass, each file weighed once and split
   into its parts (a Rust file with tests counts its code toward the code and its tests toward the tests).
 - A specific command (`--code`, `--tests` or `--docs`) prints that number alone (`scan` a number, a delta
-  signed, `+42.5`); `--verbose`, `--top` or `--by` print its whole report (a list was asked for). They need one of
-  the three flags, and `--short` none: a list of three kinds in one would sum what never sums, and one number is
+  signed, `+42.5`); `--verbose`, `--top` or `--by` print its whole report (a list was asked for). `--top` and `--by`
+  need one of the three flags, and `--short` none: a list of three kinds in one would sum what never sums, and one number is
   short already. The three flags exclude each other, `--short` and `--json` too, all usage errors (exit 2).
   `--code` weighs the code without its tests, `--tests` the tests alone, `--docs` the docs alone, the same for a
   delta: the code, the tests and the docs are always three numbers, never summed into one, so none hides another (a
@@ -69,7 +70,9 @@ the same order, `--config` last before `--help`.
   under `tests/` or the test globs match it, and `--code` and `--tests` never see it. A Markdown file
   is one line of the report, its `(file)` (`--by function` too: it has no functions), and never has a warning.
   With the numbers alone (the three, `--short`, or a specific one's total), the warnings (syntax errors, unreadable
-  folders) go to stderr. A specific command's JSON is its whole report, `--verbose` or not: a machine reads the
+  folders) are left out, and the general one's go to stderr with `--verbose`: a file tree-sitter can't parse cleanly
+  (a grammar behind the language, Java 25's statements before `super(...)`, say) is weighed near enough, and a
+  warning on every run is noise, read when asked for. A specific command's JSON is its whole report, `--verbose` or not: a machine reads the
   fields it wants.
 - `scan`'s text with `--verbose`: the total, then one line per function or class (`<weight>  <path>  <name>`, a class as
   `Name (class)`, a file's code outside any class as `(file)`) or per file with `--by file`, heaviest first, then by
@@ -102,6 +105,6 @@ What a script or a hook relies on stays as it is, so codeweight grows by adding,
   it with a pattern), one number's total; a report's lines may gain a column only at their end;
 - the JSON's fields ([json.md](json.md)): a field is added, never renamed, removed or changed in type.
 
-So: a new option, command or `--by` value is added; a rename keeps the old name as a hidden alias; a combination that is a usage error today (`-v` without `--code`, `--tests` or `--docs`;
-`--short` with one of them) may become a meaning later, never the other way, which is why they are errors now and
-not guessed at.
+So: a new option, command or `--by` value is added; a rename keeps the old name as a hidden alias; a combination that is a usage error today (`--short` with `--code`, `--tests` or
+`--docs`) may become a meaning later, never the other way, which is why they are errors now and
+not guessed at (`-v` without one of them was one, then became the warnings on stderr).

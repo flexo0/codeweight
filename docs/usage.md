@@ -4,31 +4,32 @@ It reads Java (`.java`), TypeScript (`.ts`, `.mts`, `.cts`), TSX (`.tsx`), JavaS
 Python (`.py`, `.pyi`), Rust (`.rs`) and Go (`.go`), and weighs Markdown (`.md`, `.markdown`) as docs.
 
 ```
-codeweight scan [<path>...] [<one>|--short] [--json]         weigh files and folders; several allowed,
+codeweight scan [<path>...] [<one>|--short] [-v] [--json]    weigh files and folders; several allowed,
                                                              default `.`
-codeweight show [<rev>|<A>..<B>] [-C <path>] [<one>|--short] [--json]
+codeweight show [<rev>|<A>..<B>] [-C <path>] [<one>|--short] [-v] [--json]
                                                              weigh the net delta of a commit or a range; default
                                                              `HEAD`
-codeweight diff [-C <path>] [--staged] [<one>|--short] [--json]
+codeweight diff [-C <path>] [--staged] [<one>|--short] [-v] [--json]
                                                              weigh the net delta of the uncommitted changes (or
                                                              the staged ones alone)
 codeweight init [<file>|-]     write the default weights file (default ./codeweight.toml), never over an existing
                                one; `-` prints it to stdout
 
-<one>: --code|--tests|--docs [-v] [--top <N>] [--by file|function]
+<one>: --code|--tests|--docs [--top <N>] [--by file|function]
 ```
 
 `scan`, `show` and `diff` take `--config <file>`: the weights file ([weights-file.md](weights-file.md) says where it is looked up
 without one); `init` doesn't, it reads none. They take too:
 
 - `--code`, `--tests` or `--docs` (at most one): that number alone, and its report;
-- `--verbose` (`-v`): the whole report instead of the total alone;
+- `--verbose` (`-v`): the warnings too, on stderr; with `--code`, `--tests` or `--docs`, the whole report instead of
+  the total alone;
 - `--top <N>`: only the report's first N lines (the heaviest; for a delta, the largest changes);
 - `--by file|function`: what the report lists, the functions by default;
 - `--short`: the three numbers on one line;
 - `--json`: JSON instead of text (described in [json.md](json.md)).
 
-`-v`, `--top` and `--by` need one of `--code`, `--tests` and `--docs`, `--short` none of them, and `--short` and
+`--top` and `--by` need one of `--code`, `--tests` and `--docs`, `--short` none of them, and `--short` and
 `--json` don't go together: each is a usage error (exit 2) otherwise.
 
 Without `--code`, `--tests` or `--docs`, a command prints three numbers, each on its line, in the order code, docs,
@@ -45,8 +46,9 @@ weighed once, a Rust file with tests counting toward the code and the tests both
 
 With `--code`, `--tests` or `--docs`, a command prints that number alone: `scan` its total (`4698.25`), `show` and
 `diff` their net delta, signed (`+42.5`, `-17`, `0`). `--verbose` (`-v`) prints its whole report instead, as
-`--top` and `--by` do. With the numbers alone (the three, `--short`, or one total), a file's syntax errors and a
-folder that can't be read are a warning on stderr.
+`--top` and `--by` do. A file's syntax errors and a folder that can't be read are a warning: in the report, in the
+JSON, and with `-v` on stderr after the three numbers (or `--short`'s line); the numbers alone, without `-v`, print
+none.
 
 The text report (`--code -v`, or `--tests`, `--docs`) starts with the total. After it come the functions and classes, heaviest first, then by path and
 name, each as `<weight>  <path>  <name>`; with `--by file`, the files. A class's line (`Name (class)`) has its code
@@ -67,7 +69,7 @@ are only them. A file the docs globs match (`docs_globs`) is docs alone, though 
 code nor the tests weigh it, the docs only such files, each one line of `--docs`' report (its `(file)`, as it has no
 functions). Files are weighed in parallel; the output is the same on every run.
 
-A file that doesn't parse cleanly is still weighed, as tree-sitter recovered it, with a warning. A file in a language
+A file that doesn't parse cleanly is still weighed, as tree-sitter recovered it, with a warning (above). A file in a language
 codeweight doesn't read is left out, never an error. A folder under the one scanned that can't be read (a
 root-owned docker volume, say) is left out with a warning and the rest weighed; a folder given that can't be read is
 an error.

@@ -129,9 +129,9 @@ struct Output {
     /// The three numbers on one line, each rounded to a whole number: `c+15 d+17 t-5`
     #[arg(long, conflicts_with_all = ["json", "only"])]
     short: bool,
-    /// The whole report: the total, a line per function (or file), the warnings; needs `--code`, `--tests`
-    /// or `--docs`
-    #[arg(short, long, requires = "only")]
+    /// The warnings too (syntax errors, unreadable folders), to stderr; with `--code`, `--tests` or `--docs`,
+    /// the whole report: the total, a line per function (or file), the warnings
+    #[arg(short, long)]
     verbose: bool,
     /// Only the report's N heaviest lines (a delta's: the N largest changes); implies `-v`
     #[arg(long, value_name = "N", requires = "only")]
@@ -165,7 +165,7 @@ impl Output {
     }
 
     /// The general command's three numbers as asked: `--json` (`json`, with the warnings), `--short` or three
-    /// lines, those two with the warnings (`warnings`) to stderr.
+    /// lines, those two with the warnings (`warnings`) to stderr when `--verbose`.
     fn parts(
         &self,
         parts: Parts,
@@ -175,7 +175,9 @@ impl Output {
         if self.json {
             return out(&json());
         }
-        warn(&warnings())?;
+        if self.verbose {
+            warn(&warnings())?;
+        }
         out(&if self.short {
             report::parts_short(parts)
         } else {
@@ -251,7 +253,6 @@ fn scan(cli: &Cli, args: &ScanArgs) -> Result<()> {
     } else if output.report() {
         report::scan_text(&files, &input.unreadable, output.by(), output.top)
     } else {
-        warn(&report::scan_warnings(&files, &input.unreadable))?;
         report::scan_number(&files)
     })
 }
@@ -332,7 +333,6 @@ fn delta(cli: &Cli, changes: Changes, repo: &Path, output: &Output) -> Result<()
     } else if output.report() {
         report::commit_text(&changes, output.by(), output.top)
     } else {
-        warn(&report::commit_warnings_text(&changes))?;
         report::commit_number(&changes)
     })
 }
