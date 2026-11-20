@@ -17,7 +17,7 @@ use crate::markdown;
 use crate::report::{self, By, Changed, Parts, Revisions, Weighted};
 use crate::source::{self, Kind, Mode};
 
-/// Weighs code: every element by its weight, heavier when nested.
+/// Weigh code: every element by its weight, heavier when nested.
 #[derive(Parser)]
 #[command(name = "codeweight", version)]
 struct Cli {
@@ -31,14 +31,24 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// The weight of files and folders: the code's, the docs' and the tests', or one of them
+    /// Weigh files and folders
+    ///
+    /// The code's weight, the docs' and the tests', or one of them alone (`--code`, `--docs`, `--tests`).
     Scan(ScanArgs),
-    /// The net weight delta of a commit or between two revisions: the code's, the docs' and the tests', or one
+    /// Weigh the net delta of a commit or a range
+    ///
+    /// A revision against its first parent, or a range A..B: the net delta of the code's weight, the docs' and the
+    /// tests', or one of them alone (`--code`, `--docs`, `--tests`).
     Commit(CommitArgs),
-    /// The net weight delta of the uncommitted changes (the untracked files too) against HEAD: the code's, the
-    /// docs' and the tests', or one
+    /// Weigh the net delta of the uncommitted changes
+    ///
+    /// The uncommitted changes against HEAD, the untracked files too, or the staged ones alone (`--staged`): the
+    /// net delta of the code's weight, the docs' and the tests', or one of them alone (`--code`, `--docs`,
+    /// `--tests`).
     PreCommit(PreCommitArgs),
-    /// Writes the default weights file
+    /// Write the default weights file
+    ///
+    /// Never over an existing file; `-` prints it to stdout.
     Init {
         /// Where to write it, `-` for stdout
         #[arg(default_value = config::FILE_NAME)]

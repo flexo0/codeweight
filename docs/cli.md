@@ -1,10 +1,10 @@
 # The CLI
 
 ```
-codeweight scan [<path>...] [<one>|--short] [--json]                       files and folders (default `.`)
-codeweight commit [<rev>|<A>..<B>] [-C <repo>] [<one>|--short] [--json]    a commit (default `HEAD`) or a range
-codeweight pre-commit [-C <repo>] [--staged] [<one>|--short] [--json]      the net delta of the uncommitted changes
-codeweight init [<file>|-]         writes the default weights file (default ./codeweight.toml), - to stdout
+codeweight scan [<path>...] [<one>|--short] [--json]                       weigh files and folders (default `.`)
+codeweight commit [<rev>|<A>..<B>] [-C <repo>] [<one>|--short] [--json]    weigh a commit (default `HEAD`) or a range
+codeweight pre-commit [-C <repo>] [--staged] [<one>|--short] [--json]      weigh the net delta of the uncommitted changes
+codeweight init [<file>|-]         write the default weights file (default ./codeweight.toml), - to stdout
 
 <one>: --code|--tests|--docs [-v] [--top <N>] [--by file|function]
 ```
@@ -36,6 +36,9 @@ Built (`cli`, `report`): every command and option. A command of several words is
 git's and cargo's are and as the options are. `init` never overwrites a file (it is created new, else an error);
 `init -` prints the defaults to stdout instead, as `-` means for a file argument. `--by` defaults to `function`;
 `--top` keeps the report's first N lines, whichever `--by` lists (so "the N heaviest functions", or files).
+The help says what a command does in the imperative (`Weigh files and folders`), as clap's own `Print help` and
+cargo's do, and what an option or argument is as a noun phrase (`The weights file ...`); a command's `about` (`-h`
+and the commands' list) is a short line, the rest its `long_about` (`--help`).
 
 - The general command (no `--code`, `--tests` or `--docs`) prints three lines, the code's, the docs' and the
   tests' number in that order, each signed as a delta is, `scan`'s too, a zero without a sign (`code +15.5`,

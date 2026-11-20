@@ -48,15 +48,15 @@ codeweight: link or copy the folder into the agent's skills, e.g. from a clone
 ## Usage
 
 ```
-codeweight scan [<path>...] [<one>|--short] [--json]         the weight of files and folders; several allowed,
+codeweight scan [<path>...] [<one>|--short] [--json]         weigh files and folders; several allowed,
                                                              default `.`
 codeweight commit [<rev>|<A>..<B>] [-C <repo>] [<one>|--short] [--json]
-                                                             the net weight delta of a commit or between two
-                                                             revisions; default `HEAD`
+                                                             weigh the net delta of a commit or a range; default
+                                                             `HEAD`
 codeweight pre-commit [-C <repo>] [--staged] [<one>|--short] [--json]
-                                                             the net weight delta of the uncommitted changes (or
+                                                             weigh the net delta of the uncommitted changes (or
                                                              the staged ones alone)
-codeweight init [<file>|-]     writes the default weights file (default ./codeweight.toml), never over an existing
+codeweight init [<file>|-]     write the default weights file (default ./codeweight.toml), never over an existing
                                one; `-` prints it to stdout
 
 <one>: --code|--tests|--docs [-v] [--top <N>] [--by file|function]
