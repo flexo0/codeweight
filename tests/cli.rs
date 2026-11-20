@@ -41,6 +41,23 @@ fn init_writes_the_defaults_and_never_overwrites() {
         fs::read_to_string(dir.path().join("mine.toml")).unwrap(),
         written
     );
+
+    // `-` is stdout, no file named `-`.
+    let printed = codeweight(dir.path(), &["init", "-"]);
+    assert!(printed.status.success(), "{}", stderr(&printed));
+    assert_eq!(stdout(&printed), written);
+    assert!(!dir.path().join("-").exists());
+
+    // A weights file is no input of `init`'s: `--config` is a usage error, before the command or after.
+    for args in [
+        &["--config", "x.toml", "init", "out.toml"][..],
+        &["init", "out.toml", "--config", "x.toml"],
+    ] {
+        let output = codeweight(dir.path(), args);
+        assert_eq!(output.status.code(), Some(2), "{args:?}");
+        assert!(stderr(&output).starts_with("error: "), "{args:?}");
+        assert!(!dir.path().join("out.toml").exists(), "{args:?}");
+    }
 }
 
 #[test]

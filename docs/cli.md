@@ -4,12 +4,13 @@
 codeweight scan <path>... [<one>|--short] [--json]                         files and folders, absolute or relative
 codeweight commit <rev>|<A>..<B> [-C <repo>] [<one>|--short] [--json]      the net delta of a commit or a range
 codeweight pre-commit [-C <repo>] [--staged] [<one>|--short] [--json]      the net delta of the uncommitted changes
-codeweight init [<file>]           writes the default weights file (default ./codeweight.toml)
+codeweight init [<file>|-]         writes the default weights file (default ./codeweight.toml), - to stdout
 
 <one>: --code|--tests|--docs [-v] [--top <N>] [--by file|function]
 ```
 
-Every command takes `--config <file>`. `scan`, `commit` and `pre-commit` are each the general command, the three
+`scan`, `commit` and `pre-commit` take `--config <file>`, before the command or after; `init` doesn't (it reads no
+weights file, so a `--config` there is a usage error, not ignored). The three are each the general command, the three
 numbers, or with `--code`, `--tests` or `--docs` (at most one) the specific one, that number alone and its report;
 `--verbose` (`-v`), `--top <N>` (the N heaviest functions) and `--by file|function` (what the report lists) are the
 specific one's alone. `--json` prints JSON instead of text; `--short`, the general one's alone, one line.
@@ -30,9 +31,9 @@ specific one's alone. `--json` prints JSON instead of text; `--short`, the gener
   (`| head` quit early) is no error: the writes return `cli::Closed` and `main` ends with 0, silent.
 
 Built (`cli`, `report`): every command and option. A command of several words is kebab-case (`pre-commit`), as
-git's and cargo's are and as the options are. `init` never overwrites a file (it is created new,
-else an error). `--by` defaults to `function`; `--top` keeps the report's first N lines, whichever `--by` lists (so
-"the N heaviest functions", or files).
+git's and cargo's are and as the options are. `init` never overwrites a file (it is created new, else an error);
+`init -` prints the defaults to stdout instead, as `-` means for a file argument. `--by` defaults to `function`;
+`--top` keeps the report's first N lines, whichever `--by` lists (so "the N heaviest functions", or files).
 
 - The general command (no `--code`, `--tests` or `--docs`) prints three lines, the code's, the docs' and the
   tests' number in that order, each signed as a delta is, `scan`'s too, a zero without a sign (`code +15.5`,

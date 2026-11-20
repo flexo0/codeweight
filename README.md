@@ -55,13 +55,14 @@ codeweight commit <rev>|<A>..<B> [-C <repo>] [<one>|--short] [--json]
 codeweight pre-commit [-C <repo>] [--staged] [<one>|--short] [--json]
                                                              the net weight delta of the uncommitted changes (or
                                                              the staged ones alone)
-codeweight init [<file>]       writes the default weights file (default ./codeweight.toml), never over an existing one
+codeweight init [<file>|-]     writes the default weights file (default ./codeweight.toml), never over an existing
+                               one; `-` prints it to stdout
 
 <one>: --code|--tests|--docs [-v] [--top <N>] [--by file|function]
 ```
 
-Every command takes `--config <file>`: the weights file (see below for where it is looked up without one).
-`scan`, `commit` and `pre-commit` take:
+`scan`, `commit` and `pre-commit` take `--config <file>`: the weights file (see below for where it is looked up
+without one); `init` doesn't, it reads none. They take too:
 
 - `--code`, `--tests` or `--docs` (at most one): that number alone, and its report;
 - `--verbose` (`-v`): the whole report instead of the total alone;

@@ -5,7 +5,8 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use clap::{Args, Parser, Subcommand};
+use clap::error::ErrorKind;
+use clap::{Args, CommandFactory, Parser, Subcommand};
 use rayon::prelude::*;
 
 use crate::config::{self, Config, Docs};
@@ -22,7 +23,8 @@ use crate::source::{self, Kind, Mode};
 struct Cli {
     #[command(subcommand)]
     command: Command,
-    /// The weights file (else ./codeweight.toml, else codeweight.toml at the repo's root, else the defaults)
+    /// The weights file (else ./codeweight.toml, else codeweight.toml at the repo's root, else the defaults); not
+    /// `init`'s
     #[arg(long, global = true, value_name = "FILE")]
     config: Option<PathBuf>,
 }
@@ -38,7 +40,7 @@ enum Command {
     PreCommit(PreCommitArgs),
     /// Writes the default weights file
     Init {
-        /// Where to write it
+        /// Where to write it, `-` for stdout
         #[arg(default_value = config::FILE_NAME)]
         file: PathBuf,
     },
@@ -164,6 +166,14 @@ impl Output {
 /// Runs the command line's command, its output to stdout.
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
+    if matches!(cli.command, Command::Init { .. }) && cli.config.is_some() {
+        Cli::command()
+            .error(
+                ErrorKind::ArgumentConflict,
+                "`init` takes no `--config`: it writes the defaults, reading no weights file",
+            )
+            .exit();
+    }
     match &cli.command {
         Command::Scan(a) => scan(&cli, a),
         Command::Commit(a) => commit(&cli, Changes::Rev(&a.rev), &a.repo, &a.output),
@@ -400,7 +410,11 @@ impl<'c> Weighers<'c> {
     }
 }
 
+/// Writes the defaults to `file`, never over an existing one, or to stdout for `-`.
 fn init(file: &Path) -> Result<()> {
+    if file == Path::new("-") {
+        return out(config::DEFAULTS);
+    }
     let mut created = OpenOptions::new()
         .write(true)
         .create_new(true)
