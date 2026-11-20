@@ -13,8 +13,9 @@ Markdown file's docs weight is its words and symbol runs, a number of its own, n
 tests': `scan`, `commit` and `pre-commit` print the three (`--code`, `--tests` or `--docs` one alone, with its
 report).
 
-The design is `docs/`, a file per subject (its index `docs/README.md`). Keep those docs in step with what is built (a
-decision made while building goes into its subject's file, in the same commit).
+The user docs past the README are `docs/usage.md`, `docs/json.md` and `docs/weights-file.md`. The design is the rest
+of `docs/`, a file per subject (its index `docs/README.md`). Keep those docs in step with what is built (a decision
+made while building goes into its subject's file, in the same commit).
 
 ## Checking a change
 
@@ -41,8 +42,8 @@ decision made while building goes into its subject's file, in the same commit).
 - Nesting is the depth of nesting constructs only (branch, loop, `try`, lambda, nested function or class), never of
   plain tree levels; `else if` chains and `switch` / `match` cases are siblings, not deeper.
 - The output is deterministic: sorted by weight, then by path and name, whatever order `rayon` finished in.
-- The JSON output is the machine contract (other tools read it): a change to its fields changes the README's
-  description of it, in the same commit.
+- The JSON output is the machine contract (other tools read it): a change to its fields changes its
+  description, `docs/json.md`, in the same commit.
 - The agents' skill, `skills/codeweight/SKILL.md`, is how agents run codeweight: a change to a command, an option,
   the text output or the JSON's fields changes it too, in the same commit.
 - A file that doesn't parse cleanly is still weighed (tree-sitter recovers) and gets a warning in the report; an
@@ -54,8 +55,9 @@ decision made while building goes into its subject's file, in the same commit).
 
 - A language: a module in `src/lang/` (its grammar, extensions, node kind → category table, nesting kinds, how a
   function is named), its default weights' overrides in `src/default.toml` if any, its tests.
-- A category: `src/default.toml` (its default weight), the languages' tables, the README's list.
-- A command or option: `src/cli.rs`, the README's usage, the skill (`skills/codeweight/SKILL.md`).
+- A category: `src/default.toml` (its default weight), the languages' tables, `docs/weights-file.md`'s list.
+- A command or option: `src/cli.rs`, `docs/usage.md` (and the README's quick start, if it is there), the skill
+  (`skills/codeweight/SKILL.md`).
 - The docs weight (what a Markdown file's words and symbol runs are): `src/markdown.rs`, its `[docs]` weights in
   `src/default.toml`, `docs/weight.md`; which files are docs: `[files] docs_globs`, `src/source.rs`.
 

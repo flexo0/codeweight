@@ -74,7 +74,7 @@ the same order, `--config` last before `--help`.
   file's path `old -> new`. A commit has no "heaviest": its lines sort by the delta's size, a gain before a loss of
   the same size, then by path and name, so `--top` keeps the largest changes either way. A line whose delta is 0 (at
   two decimals) is left out, a pure rename's too: the report is of weight, not of files moved.
-- The JSON is the machine contract, its fields in the README. The general command's is `{code, docs, tests,
+- The JSON is the machine contract, its fields in [json.md](json.md). The general command's is `{code, docs, tests,
   warnings}`, the numbers rounded to two decimals, a commit's `from` / `to` first, as below; the warnings as the
   report's.
 - A specific command's JSON: one object with the text's lines as `rows`, in its

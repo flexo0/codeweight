@@ -1,6 +1,12 @@
-# codeweight's design
+# codeweight's docs
 
-One file per subject. Each is a reference to what is built: what it is, why so, what is left. A decision made while
+Using codeweight (the README is the short start):
+
+- [usage.md](usage.md): the commands and options, the text report, which files are weighed, `commit` and `pre-commit`
+- [json.md](json.md): the JSON report's fields, the machine contract
+- [weights-file.md](weights-file.md): the weights file, the weight, each category in each language
+
+The design, one file per subject. Each is a reference to what is built: what it is, why so, what is left. A decision made while
 building goes into its subject's file, in the same commit.
 
 - [cli.md](cli.md): the commands and options, the text and JSON reports

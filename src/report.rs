@@ -110,7 +110,7 @@ pub fn parts_short(parts: Parts) -> String {
     )
 }
 
-/// A scan's three numbers as JSON, with its warnings (the fields are described in the README).
+/// A scan's three numbers as JSON, with its warnings (the fields are described in `docs/json.md`).
 pub fn scan_parts_json(parts: Parts, files: &[Weighted], unreadable: &[Unreadable]) -> String {
     json(&PartsReport {
         from: None,
@@ -122,7 +122,7 @@ pub fn scan_parts_json(parts: Parts, files: &[Weighted], unreadable: &[Unreadabl
     })
 }
 
-/// A commit's three deltas as JSON, with its revisions and warnings (the fields are described in the README).
+/// A commit's three deltas as JSON, with its revisions and warnings (the fields are described in `docs/json.md`).
 pub fn commit_parts_json(parts: Parts, changes: &[Changed], revisions: &Revisions) -> String {
     json(&PartsReport {
         from: Some(revisions.from),
@@ -347,7 +347,7 @@ pub fn scan_warnings(files: &[Weighted], unreadable: &[Unreadable]) -> String {
     out
 }
 
-/// A scan's report as JSON (its fields are described in the README).
+/// A scan's report as JSON (its fields are described in `docs/json.md`).
 pub fn scan_json(
     files: &[Weighted],
     unreadable: &[Unreadable],
@@ -444,7 +444,7 @@ pub fn commit_warnings_text(changes: &[Changed]) -> String {
     out
 }
 
-/// A commit's report as JSON (its fields are described in the README).
+/// A commit's report as JSON (its fields are described in `docs/json.md`).
 pub fn commit_json(
     changes: &[Changed],
     revisions: &Revisions,
