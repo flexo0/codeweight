@@ -17,7 +17,7 @@ a fixed threshold.
 | `codeweight scan <path>...` | three lines, the weights of the code (tests left out), the docs and the tests: `code +9488.09`, `docs +31321`, `tests +3886.37` |
 | `codeweight commit <rev>` / `A..B` `[-C <repo>]` | the three net deltas of a commit or a range: `code +15.5`, `docs 0`, `tests -5` (a zero has no sign) |
 | `codeweight pre-commit [-C <repo>]` | the three deltas of the uncommitted changes: `HEAD` against the working tree, staged or not, untracked files too, ignored ones left out |
-| `codeweight pre-commit --only-staged` | only the staged changes: `HEAD` against the index, what `git commit` would commit |
+| `codeweight pre-commit --staged` | only the staged changes: `HEAD` against the index, what `git commit` would commit |
 | any of the three `--short` | the three on one line, each rounded to a whole number: `c+15 d0 t-5` |
 | any of the three `--code` / `--tests` / `--docs` | that one number alone: `9488.09`, a delta signed (`+42.5`, `-17`) |
 | `codeweight scan <path>... --code -v` | `total N`, then `<weight>  <path>  <name>` per function/class, heaviest first |
@@ -39,9 +39,8 @@ with one of them, two of them, or `--short` with `--json`.
 - Did my change make it lighter? Not committed yet: `codeweight pre-commit` (it leaves the index alone). Committed:
   `codeweight commit HEAD`, or `main..HEAD` for a branch. For which functions changed: `--code -v` (or `--tests
   -v`, `--docs -v`).
-- The commit about to be made, other changes left in the working tree: stage it, then `codeweight pre-commit
-  --only-staged`.
-- A commit's weight in one short line: `codeweight pre-commit --only-staged --short`.
+- The commit about to be made, other changes left in the working tree: stage it, then `codeweight pre-commit --staged`.
+- A commit's weight in one short line: `codeweight pre-commit --staged --short`.
 - Parsing the output in a script: `--json`, read `.code` / `.docs` / `.tests`; or `--code --json` (or `--tests`,
   `--docs`), read `.total` / `.rows`.
 

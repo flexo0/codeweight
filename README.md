@@ -52,7 +52,7 @@ codeweight scan <path>... [<one>|--short] [--json]           the weight of files
 codeweight commit <rev>|<A>..<B> [-C <repo>] [<one>|--short] [--json]
                                                              the net weight delta of a commit or between two
                                                              revisions
-codeweight pre-commit [-C <repo>] [--only-staged] [<one>|--short] [--json]
+codeweight pre-commit [-C <repo>] [--staged] [<one>|--short] [--json]
                                                              the net weight delta of the uncommitted changes (or
                                                              the staged ones alone)
 codeweight init [<file>]       writes the default weights file (default ./codeweight.toml), never over an existing one
@@ -128,7 +128,7 @@ directly, so a change made and undone between them nets to zero (an empty side i
 
 `codeweight pre-commit` weighs the uncommitted changes, before you commit them: `HEAD` against the
 working tree, staged or not, the untracked files too and the ignored ones left out, as `git add -A && git commit`
-would commit them (in a repo with no commit yet, against the empty tree). With `--only-staged`, only the staged
+would commit them (in a repo with no commit yet, against the empty tree). With `--staged`, only the staged
 changes: `HEAD` against the index, as `git commit` would commit them, the unstaged and untracked ones left out. Your
 index is left as it is: the working tree is added to a copy of it. git writes the changed files' blobs to the repo's objects, which nothing refers to,
 and `git gc` drops them later.

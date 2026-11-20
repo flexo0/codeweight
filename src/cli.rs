@@ -74,7 +74,7 @@ struct PreCommitArgs {
     repo: PathBuf,
     /// Only the staged changes (the index against HEAD, as `git commit` would commit them)
     #[arg(long)]
-    only_staged: bool,
+    staged: bool,
     #[command(flatten)]
     output: Output,
 }
@@ -168,9 +168,7 @@ pub fn run() -> Result<()> {
         Command::Scan(a) => scan(&cli, a),
         Command::Commit(a) => commit(&cli, Changes::Rev(&a.rev), &a.repo, &a.output),
         Command::PreCommit(a) => {
-            let changes = Changes::Uncommitted {
-                staged: a.only_staged,
-            };
+            let changes = Changes::Uncommitted { staged: a.staged };
             commit(&cli, changes, &a.repo, &a.output)
         }
         Command::Init { file } => init(file),

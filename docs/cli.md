@@ -3,7 +3,7 @@
 ```
 codeweight scan <path>... [<one>|--short] [--json]                         files and folders, absolute or relative
 codeweight commit <rev>|<A>..<B> [-C <repo>] [<one>|--short] [--json]      the net delta of a commit or a range
-codeweight pre-commit [-C <repo>] [--only-staged] [<one>|--short] [--json] the net delta of the uncommitted changes
+codeweight pre-commit [-C <repo>] [--staged] [<one>|--short] [--json]      the net delta of the uncommitted changes
 codeweight init [<file>]           writes the default weights file (default ./codeweight.toml)
 
 <one>: --code|--tests|--docs [-v] [--top <N>] [--by file|function]
@@ -20,16 +20,16 @@ specific one's alone. `--json` prints JSON instead of text; `--short`, the gener
 - A range `A..B` diffs the two trees directly, so a change made and undone inside it nets to zero.
 - `pre-commit`: the uncommitted changes, `HEAD` against the working tree, untracked files too
   (the commit `git add -A && git commit` would make), so the weight of a commit can be seen before it is made.
-  `--only-staged`: `HEAD` against the index, the commit `git commit` would make, for a commit staged part by part
-  (`git add -p`) or with other changes left in the working tree.
+  `--staged` (git's name for it, as in `git diff --staged`): `HEAD` against the index, the commit `git commit` would
+  make, for a commit staged part by part (`git add -p`) or with other changes left in the working tree.
 - `commit` and `pre-commit` weigh the code, the docs and the tests of a delta as `scan` does of the files: each
   side of a change kept as `scan` keeps a file, for `--code`, `--tests` or `--docs` as each keeps one.
 - Exit codes: 0 done, 2 an error (a bad path, revision or weights file). `main` prints the error with its context
   chain (`error: ...`) to stderr; clap's own usage errors exit 2 too. A closed stdout or stderr (`| head` quit early)
   is no error: the writes return `cli::Closed` and `main` ends with 0, silent.
 
-Built (`cli`, `report`): every command and option. A command of several words is kebab-case (`pre-commit`,
-`--only-staged`), as git's and cargo's are and as the options are. `init` never overwrites a file (it is created new,
+Built (`cli`, `report`): every command and option. A command of several words is kebab-case (`pre-commit`), as
+git's and cargo's are and as the options are. `init` never overwrites a file (it is created new,
 else an error). `--by` defaults to `function`; `--top` keeps the report's first N lines, whichever `--by` lists (so
 "the N heaviest functions", or files).
 

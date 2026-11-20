@@ -604,7 +604,7 @@ fn commit_docs_weighs_a_doc_added_edited_renamed_and_deleted() {
     );
     repo.git(&["add", "a.py"]);
     assert_eq!(
-        repo.run(&["pre-commit", "--docs"], &["--only-staged"]),
+        repo.run(&["pre-commit", "--docs"], &["--staged"]),
         "total 0\n"
     );
 }
@@ -644,7 +644,7 @@ fn pre_commit_weighs_the_uncommitted_changes_and_leaves_the_index_alone() {
     assert_eq!(state(), before);
     // The staged change alone.
     assert_eq!(
-        repo.pre_commit(&["--only-staged"]),
+        repo.pre_commit(&["--staged"]),
         "total +103\n+103  added    staged.py  f\n"
     );
     assert_eq!(state(), before);
@@ -682,10 +682,10 @@ fn pre_commit_sees_a_rename_into_an_untracked_file_and_a_repo_with_no_commit() {
         "total +103\n+103  added    a.py  f\n"
     );
     // Nothing staged yet (no index at all), then the file staged.
-    assert_eq!(fresh.pre_commit(&["--only-staged"]), "total 0\n");
+    assert_eq!(fresh.pre_commit(&["--staged"]), "total 0\n");
     fresh.git(&["add", "a.py"]);
     assert_eq!(
-        fresh.pre_commit(&["--only-staged"]),
+        fresh.pre_commit(&["--staged"]),
         "total +103\n+103  added    a.py  f\n"
     );
     let json: serde_json::Value = serde_json::from_str(&fresh.pre_commit(&["--json"])).unwrap();
@@ -898,7 +898,7 @@ fn commit_and_pre_commit_print_the_three_deltas() {
     assert_eq!(run(&["pre-commit", "--short"]), "c+3 d+1 t0\n");
     repo.git(&["add", "a.py"]);
     assert_eq!(
-        run(&["pre-commit", "--only-staged"]),
+        run(&["pre-commit", "--staged"]),
         "code +3\ndocs 0\ntests 0\n"
     );
     let json: serde_json::Value = serde_json::from_str(&run(&["pre-commit", "--json"])).unwrap();
@@ -922,6 +922,7 @@ fn the_report_s_options_need_one_number_and_short_none() {
         &["pre-commit", "--by", "function"],
         &["pre-commit", "--tests", "--short"],
         &["scan", "A.java", "--format", "json"],
+        &["pre-commit", "--only-staged"],
         &["init", "--code"],
     ] {
         let output = codeweight(dir.path(), args);
