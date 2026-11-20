@@ -48,10 +48,11 @@ codeweight: link or copy the folder into the agent's skills, e.g. from a clone
 ## Usage
 
 ```
-codeweight scan <path>... [<one>|--short] [--json]           the weight of files and folders; several allowed
-codeweight commit <rev>|<A>..<B> [-C <repo>] [<one>|--short] [--json]
+codeweight scan [<path>...] [<one>|--short] [--json]         the weight of files and folders; several allowed,
+                                                             default `.`
+codeweight commit [<rev>|<A>..<B>] [-C <repo>] [<one>|--short] [--json]
                                                              the net weight delta of a commit or between two
-                                                             revisions
+                                                             revisions; default `HEAD`
 codeweight pre-commit [-C <repo>] [--staged] [<one>|--short] [--json]
                                                              the net weight delta of the uncommitted changes (or
                                                              the staged ones alone)
@@ -125,7 +126,8 @@ ends it quietly, exit 0.
 merge's too), the root commit against the empty tree; in a shallow clone, a commit whose parent wasn't fetched is
 an error (fetch more history), not a root. `codeweight commit A..B` compares the two revisions' trees
 directly, so a change made and undone between them nets to zero (an empty side is `HEAD`; `A...B` is an error).
-`<rev>` is any git revision (a hash, `HEAD~2`, a tag); `-C <path>` is any path inside the repo (default `.`). It runs
+`<rev>` is any git revision (a hash, `HEAD~2`, a tag), `HEAD` when left out (`codeweight commit`, as `git show`);
+`-C <path>` is any path inside the repo (default `.`). It runs
 `git` (`git diff-tree -r -M`, so a renamed file is one file, and one `git cat-file --batch` for the texts).
 
 `codeweight pre-commit` weighs the uncommitted changes, before you commit them: `HEAD` against the

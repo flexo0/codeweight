@@ -223,6 +223,8 @@ fn scan_walks_a_folder_its_excludes_and_tests_left_out_and_scan_tests_weighs_the
     let output = codeweight(root, &["scan", "--code", "."]);
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(stdout(&output), "10.12\n");
+    // No path is `.`.
+    assert_eq!(stdout(&codeweight(root, &["scan", "--code"])), "10.12\n");
 
     let verbose = codeweight(root, &["scan", "--code", ".", "--verbose"]);
     assert_eq!(
@@ -441,6 +443,8 @@ fn commit_weighs_the_root_commit_against_the_empty_tree() {
         "total +103\n\
          +103  added    a.py  f\n"
     );
+    // No revision is `HEAD`.
+    assert_eq!(repo.weigh(&[]), repo.weigh(&["HEAD"]));
 
     // The total delta alone, without `-v`.
     let output = codeweight(repo.path(), &["commit", "--code", "HEAD"]);

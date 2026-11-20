@@ -1,8 +1,8 @@
 # The CLI
 
 ```
-codeweight scan <path>... [<one>|--short] [--json]                         files and folders, absolute or relative
-codeweight commit <rev>|<A>..<B> [-C <repo>] [<one>|--short] [--json]      the net delta of a commit or a range
+codeweight scan [<path>...] [<one>|--short] [--json]                       files and folders (default `.`)
+codeweight commit [<rev>|<A>..<B>] [-C <repo>] [<one>|--short] [--json]    a commit (default `HEAD`) or a range
 codeweight pre-commit [-C <repo>] [--staged] [<one>|--short] [--json]      the net delta of the uncommitted changes
 codeweight init [<file>|-]         writes the default weights file (default ./codeweight.toml), - to stdout
 
@@ -15,6 +15,8 @@ numbers, or with `--code`, `--tests` or `--docs` (at most one) the specific one,
 `--verbose` (`-v`), `--top <N>` (the N heaviest functions) and `--by file|function` (what the report lists) are the
 specific one's alone. `--json` prints JSON instead of text; `--short`, the general one's alone, one line.
 
+- `scan`'s `<path>...` are files and folders, absolute or relative, `.` when left out; `commit`'s `<rev>`, `HEAD`
+  (as `rg` / `tokei` walk `.` and `git show` shows `HEAD`), so the common case needs no argument.
 - `<rev>` is any git revision: a hash, a short hash, `HEAD~2`, a tag. `-C` is any path inside the repo, relative or
   absolute (default `.`); `git -C` finds the repo from it, and the weights file is looked up at its root.
 - A single `<rev>` is compared against its first parent (a merge commit too); the root commit against the empty tree.

@@ -50,7 +50,7 @@ enum Command {
 #[derive(Args)]
 struct ScanArgs {
     /// A file or a folder, absolute or relative
-    #[arg(required = true)]
+    #[arg(default_value = ".")]
     paths: Vec<PathBuf>,
     #[command(flatten)]
     output: Output,
@@ -60,6 +60,7 @@ struct ScanArgs {
 #[derive(Args)]
 struct CommitArgs {
     /// A revision (against its first parent) or a range A..B
+    #[arg(default_value = "HEAD")]
     rev: String,
     /// Any path inside the repo
     #[arg(short = 'C', default_value = ".")]
