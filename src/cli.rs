@@ -1,7 +1,7 @@
 //! The command line: its arguments and the commands.
 
 use std::fs::OpenOptions;
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
@@ -148,20 +148,16 @@ impl Output {
         parts: Parts,
         json: impl FnOnce() -> String,
         warnings: impl FnOnce() -> String,
-    ) {
+    ) -> Result<()> {
         if self.json {
-            print!("{}", json());
-            return;
+            return out(&json());
         }
-        eprint!("{}", warnings());
-        print!(
-            "{}",
-            if self.short {
-                report::parts_short(parts)
-            } else {
-                report::parts_text(parts)
-            }
-        );
+        warn(&warnings())?;
+        out(&if self.short {
+            report::parts_short(parts)
+        } else {
+            report::parts_text(parts)
+        })
     }
 }
 
@@ -212,25 +208,20 @@ fn scan(cli: &Cli, args: &ScanArgs) -> Result<()> {
         .unzip();
     if mode.is_none() {
         let parts = parts.into_iter().sum();
-        output.parts(
+        return output.parts(
             parts,
             || report::scan_parts_json(parts, &files, &input.unreadable),
             || report::scan_warnings(&files, &input.unreadable),
         );
-        return Ok(());
     };
-    print!(
-        "{}",
-        if output.json {
-            report::scan_json(&files, &input.unreadable, output.by(), output.top)
-        } else if output.report() {
-            report::scan_text(&files, &input.unreadable, output.by(), output.top)
-        } else {
-            eprint!("{}", report::scan_warnings(&files, &input.unreadable));
-            report::scan_number(&files)
-        }
-    );
-    Ok(())
+    out(&if output.json {
+        report::scan_json(&files, &input.unreadable, output.by(), output.top)
+    } else if output.report() {
+        report::scan_text(&files, &input.unreadable, output.by(), output.top)
+    } else {
+        warn(&report::scan_warnings(&files, &input.unreadable))?;
+        report::scan_number(&files)
+    })
 }
 
 /// The changes a delta is of.
@@ -298,25 +289,51 @@ fn commit(cli: &Cli, changes: Changes, repo: &Path, output: &Output) -> Result<(
         .unzip();
     if mode.is_none() {
         let parts = parts.into_iter().sum();
-        output.parts(
+        return output.parts(
             parts,
             || report::commit_parts_json(parts, &changes, &revisions),
             || report::commit_warnings_text(&changes),
         );
-        return Ok(());
     };
-    print!(
-        "{}",
-        if output.json {
-            report::commit_json(&changes, &revisions, output.by(), output.top)
-        } else if output.report() {
-            report::commit_text(&changes, output.by(), output.top)
-        } else {
-            eprint!("{}", report::commit_warnings_text(&changes));
-            report::commit_number(&changes)
-        }
-    );
-    Ok(())
+    out(&if output.json {
+        report::commit_json(&changes, &revisions, output.by(), output.top)
+    } else if output.report() {
+        report::commit_text(&changes, output.by(), output.top)
+    } else {
+        warn(&report::commit_warnings_text(&changes))?;
+        report::commit_number(&changes)
+    })
+}
+
+/// stdout or stderr closed before all was written to it (`codeweight scan | head`): no error to report, the
+/// reader has all it wanted.
+#[derive(Debug)]
+pub struct Closed;
+
+impl std::fmt::Display for Closed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("the output was closed")
+    }
+}
+
+impl std::error::Error for Closed {}
+
+/// Writes `text` to stdout.
+fn out(text: &str) -> Result<()> {
+    write_all(io::stdout().lock(), text).context("writing to stdout")
+}
+
+/// Writes `text` (the warnings) to stderr.
+fn warn(text: &str) -> Result<()> {
+    write_all(io::stderr().lock(), text).context("writing to stderr")
+}
+
+/// Writes `text` and flushes it, a closed pipe `Closed`.
+fn write_all(mut to: impl Write, text: &str) -> Result<()> {
+    match to.write_all(text.as_bytes()).and_then(|()| to.flush()) {
+        Err(error) if error.kind() == io::ErrorKind::BrokenPipe => Err(Closed.into()),
+        written => Ok(written?),
+    }
 }
 
 /// The weights file found for a path (`inside`: the first scanned, or the commit's repo), loaded.
@@ -386,7 +403,7 @@ impl<'c> Weighers<'c> {
 }
 
 fn init(file: &Path) -> Result<()> {
-    let mut out = OpenOptions::new()
+    let mut created = OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(file)
@@ -396,8 +413,8 @@ fn init(file: &Path) -> Result<()> {
                 file.display()
             )
         })?;
-    out.write_all(config::DEFAULTS.as_bytes())
+    created
+        .write_all(config::DEFAULTS.as_bytes())
         .with_context(|| format!("writing {}", file.display()))?;
-    println!("wrote {}", file.display());
-    Ok(())
+    out(&format!("wrote {}\n", file.display()))
 }

@@ -25,7 +25,8 @@ specific one's alone. `--json` prints JSON instead of text; `--short`, the gener
 - `commit` and `pre-commit` weigh the code, the docs and the tests of a delta as `scan` does of the files: each
   side of a change kept as `scan` keeps a file, for `--code`, `--tests` or `--docs` as each keeps one.
 - Exit codes: 0 done, 2 an error (a bad path, revision or weights file). `main` prints the error with its context
-  chain (`error: ...`) to stderr; clap's own usage errors exit 2 too.
+  chain (`error: ...`) to stderr; clap's own usage errors exit 2 too. A closed stdout or stderr (`| head` quit early)
+  is no error: the writes return `cli::Closed` and `main` ends with 0, silent.
 
 Built (`cli`, `report`): every command and option. A command of several words is kebab-case (`pre-commit`,
 `--only-staged`), as git's and cargo's are and as the options are. `init` never overwrites a file (it is created new,

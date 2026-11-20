@@ -1,8 +1,9 @@
 //! The command line, run as a binary in throwaway folders.
 
 use std::fs;
+use std::io::Read;
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 
 fn codeweight(cwd: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_codeweight"))
@@ -103,6 +104,47 @@ fn a_bad_path_or_weights_file_ends_with_exit_2() {
 
     let absent = codeweight(dir.path(), &["scan", "A.java", "--config", "absent.toml"]);
     assert_eq!(absent.status.code(), Some(2));
+}
+
+#[test]
+fn a_reader_that_quits_early_ends_it_quietly_with_exit_0() {
+    let dir = tempfile::tempdir().unwrap();
+    // A report past a pipe's buffer, so it is still writing when the reader quits.
+    let methods: String = (0..5000)
+        .map(|i| format!("  void method_with_a_long_name_{i}() {{ g(); }}\n"))
+        .collect();
+    fs::write(
+        dir.path().join("A.java"),
+        format!("class A {{\n{methods}}}\n"),
+    )
+    .unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_codeweight"))
+        .current_dir(dir.path())
+        .args(["scan", "--code", "-v", "A.java"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stdout = child.stdout.take().unwrap();
+    let mut start = [0; 5];
+    stdout.read_exact(&mut start).unwrap();
+    assert_eq!(&start, b"total");
+    drop(stdout);
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(output.status.code(), Some(0), "{}", stderr(&output));
+    assert_eq!(stderr(&output), "");
+
+    // The warnings to a closed stderr the same.
+    fs::write(dir.path().join("B.java"), "class B { void f( }\n").unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_codeweight"))
+        .current_dir(dir.path())
+        .args(["scan", "--code", "B.java"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    drop(child.stderr.take());
+    assert_eq!(child.wait().unwrap().code(), Some(0));
 }
 
 #[test]
