@@ -1,12 +1,12 @@
 //! The inputs as `(path, kind, text)` items, a kind a language's code or Markdown: the files and folders named on
-//! the command line, a folder walked with its `.gitignore` and the weights file's excludes; or a commit's changed
-//! files, both their sides' texts.
+//! the command line, a folder walked with its `.gitignore` and the excludes (the weights file's, `--exclude`'s);
+//! or a commit's changed files, both their sides' texts.
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use globset::{Glob, GlobBuilder, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
 
@@ -186,6 +186,31 @@ pub fn glob(glob: &str) -> Result<Glob> {
     Ok(GlobBuilder::new(glob).literal_separator(true).build()?)
 }
 
+/// An exclude (`[files] exclude` or `--exclude`) as the glob it stands for, checked: a folder, ending in `/`,
+/// every path under it: of that name at any depth (`build/`), or from the globs' base with a `/` before its end
+/// (`src/gen/`, `/build/`); else a glob as is.
+pub fn exclude(pattern: &str) -> Result<String> {
+    let glob_of = match pattern.strip_suffix('/') {
+        None => pattern.to_string(),
+        Some(folder) => {
+            let (anchored, name) = match folder.strip_prefix('/') {
+                Some(name) => (true, name),
+                None => (false, folder),
+            };
+            if name.is_empty() || name.starts_with('/') || name.ends_with('/') {
+                bail!("a folder's name is between single slashes: `build/`, `src/gen/`, `/build/`");
+            }
+            if anchored || name.contains('/') {
+                format!("{name}/**")
+            } else {
+                format!("**/{name}/**")
+            }
+        }
+    };
+    glob(&glob_of)?;
+    Ok(glob_of)
+}
+
 /// The files at `paths`: a file as given, a folder walked (its `.gitignore`s honoured, hidden files and the
 /// excluded ones left out, in the order of the names), the test files and the docs among them. A path given twice,
 /// or found under two given folders, is one item. A path under a folder given that can't be read is left out and
@@ -274,7 +299,7 @@ fn weighed_for(test: bool, kind: Kind, mode: Mode) -> bool {
     }
 }
 
-/// The `[files]` globs, compiled.
+/// The `[files]` globs, compiled, the excludes' folders as their globs.
 struct Matchers {
     exclude: GlobSet,
     /// The excludes that end in `/**` without it: a folder they match has every path under it excluded.
@@ -292,9 +317,14 @@ impl Matchers {
             }
             Ok(set.build()?)
         };
+        let exclude = files
+            .exclude
+            .iter()
+            .map(|p| exclude(p).with_context(|| format!("the exclude `{p}`")))
+            .collect::<Result<Vec<_>>>()?;
         Ok(Matchers {
-            exclude: set(&mut files.exclude.iter().map(String::as_str))?,
-            folders: set(&mut files.exclude.iter().filter_map(|g| g.strip_suffix("/**")))?,
+            exclude: set(&mut exclude.iter().map(String::as_str))?,
+            folders: set(&mut exclude.iter().filter_map(|g| g.strip_suffix("/**")))?,
             tests: set(&mut files.test_globs.iter().map(String::as_str))?,
             docs: set(&mut files.docs_globs.iter().map(String::as_str))?,
         })
@@ -571,6 +601,52 @@ mod tests {
             vec![
                 "tests/notes.md (docs)".to_string(),
                 "tests/test_a.py (docs)".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_exclude_ending_in_a_slash_is_a_folder_at_any_depth_or_from_the_base() {
+        let glob = |pattern| exclude(pattern).unwrap();
+        assert_eq!(glob("build/"), "**/build/**");
+        assert_eq!(glob("gen*/"), "**/gen*/**");
+        assert_eq!(glob("src/gen/"), "src/gen/**");
+        assert_eq!(glob("/build/"), "build/**");
+        assert_eq!(glob("**/build/"), "**/build/**");
+        // Not a folder: a glob as is.
+        assert_eq!(glob("**/*.d.ts"), "**/*.d.ts");
+        assert_eq!(glob("build/**"), "build/**");
+        for bad in ["/", "//", "a//", "//a/", "a/[b/"] {
+            assert!(exclude(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_folder_exclude_leaves_out_the_folders_it_names_and_no_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        fs::create_dir(root.join(".git")).unwrap();
+        write(
+            root,
+            &[
+                "a.py",
+                "build/b.py",
+                "src/build/c.py",
+                "src/gen/d.py",
+                "gen/e.py",
+                "src/build.py",
+                "src/x/gen/f.py",
+            ],
+        );
+        let input =
+            from_paths(&[root.to_path_buf()], &files(&["build/", "src/gen/"], &[])).unwrap();
+        assert_eq!(
+            found(&input, root),
+            vec![
+                "a.py".to_string(),
+                "gen/e.py".to_string(),
+                "src/build.py".to_string(),
+                "src/x/gen/f.py".to_string(),
             ]
         );
     }

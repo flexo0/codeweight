@@ -63,6 +63,7 @@ word = 1                # a run of letters and digits; a URL is one word
 symbol = 1              # a run of anything else that isn't a space, once however long: `**`, `);`, `##` are one each
 
 [files]                 # what a folder walk weighs (globs: * and ? within a path's part, ** across parts)
+# an exclude ending in / is a folder: build/ at any depth, src/gen/ or /build/ from the root; --exclude adds more
 exclude = [
     "**/node_modules/**", "**/build/**", "**/target/**", "**/generated/**", "**/vendor/**", "**/*.d.ts",
     "**/*.min.js", "**/*.pb.go", "**/zz_generated*.go",

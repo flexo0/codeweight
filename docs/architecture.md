@@ -20,9 +20,12 @@ as a command, no `git2` / `gix`.
 
 - `source` (built): a file given is weighed as is, though an exclude matches it; a folder is walked by `ignore`, its
   `.gitignore`s (and `.ignore`s, the global gitignore) honoured, hidden files and folders left out, each folder's
-  entries in the order of their names, so the walk is the same on every run. A file the excludes match is left
-  out, unlisted; a folder whose every path is excluded (an exclude ending in `/**`) isn't walked at all. A file in no
-  language codeweight reads is left out, unlisted. A path under a folder given that the walk can't read (a folder
+  entries in the order of their names, so the walk is the same on every run. A file the excludes match (the
+  weights file's, then `--exclude`'s) is left out, unlisted; a folder whose every path is excluded (an exclude
+  ending in `/**`) isn't walked at all. An exclude ending in `/` is a folder, gitignore's form, turned into the glob
+  it stands for by `source::exclude` (`build/` into `**/build/**`, `src/gen/` and `/build/` into `src/gen/**` and
+  `build/**`), so it is pruned as one; the weights file's is checked when it is loaded, `--exclude`'s by clap (a
+  bad one exit 2). A file in no language codeweight reads is left out, unlisted. A path under a folder given that the walk can't read (a folder
   it may not list) is left out and listed as unreadable, a warning, so one root-owned folder doesn't make the tree
   unscannable; a folder given that can't be read is an error, as it leaves nothing to weigh. The globs (`*` and `?` within a path's part, `**` across parts)
   are matched against a file's path from the root of the git repo it is in (the root `config::find` uses), so one

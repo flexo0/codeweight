@@ -29,6 +29,8 @@ The tests are the test files and Rust `#[cfg(test)]` items; the docs the Markdow
 Options: `--json` (JSON; without a flag `{code, docs, tests, warnings}`, a commit's with `from` / `to`; with
 `--code`, `--tests` or `--docs` the whole report: `total`, `rows`, `warnings`, a commit's rows with `before`,
 `after`, `delta`, `status`, and its `from` / `to` the hashes, `to` null for `diff`'s uncommitted changes).
+`--exclude <pattern>` (`scan`, `show`, `diff`; repeatable): leave out more besides the weights file's excludes,
+a folder ending in `/` (`gen/` at any depth, `src/gen/` from the repo's root) or a glob (`**/*.gen.ts`).
 `-v`: the warnings (syntax errors, unreadable folders) on stderr; with `--code`, `--tests` or `--docs`, the whole
 report. With `--code`, `--tests` or `--docs` only: `--top N` (only the first N lines), `--by file`
 (files instead of functions); `--top` and `--by` imply `-v`. Without them, these are a usage error, as `--short`
@@ -37,6 +39,7 @@ with one of them, two of them, or `--short` with `--json`.
 ## Recipes
 
 - Heaviest functions: `codeweight scan src --code --top 10` (the tests': `--tests --top 10`).
+- Generated or vendored code left out: `codeweight scan --exclude gen/ --exclude src/legacy/`.
 - Did my change make it lighter? Not committed yet: `codeweight diff` (it leaves the index alone). Committed:
   `codeweight show` (`HEAD`), or `main..HEAD` for a branch. For which functions changed: `--code -v` (or `--tests
   -v`, `--docs -v`).

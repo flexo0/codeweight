@@ -68,6 +68,8 @@ struct ScanArgs {
     #[arg(default_value = ".")]
     paths: Vec<PathBuf>,
     #[command(flatten)]
+    excludes: Excludes,
+    #[command(flatten)]
     output: Output,
 }
 
@@ -79,6 +81,8 @@ struct ShowArgs {
     rev: String,
     #[command(flatten)]
     repo: Repo,
+    #[command(flatten)]
+    excludes: Excludes,
     #[command(flatten)]
     output: Output,
 }
@@ -92,6 +96,8 @@ struct DiffArgs {
     #[arg(long)]
     staged: bool,
     #[command(flatten)]
+    excludes: Excludes,
+    #[command(flatten)]
     output: Output,
 }
 
@@ -101,6 +107,29 @@ struct Repo {
     /// Any path inside the git repo (as `git -C`)
     #[arg(short = 'C', long = "repo", value_name = "PATH", default_value = ".")]
     repo: PathBuf,
+}
+
+/// What a run leaves out besides the weights file's excludes, the same for the three.
+#[derive(Args)]
+struct Excludes {
+    /// The paths to leave out besides the weights file's excludes: a folder ending in `/` (`build/` at any depth,
+    /// `src/gen/` from the repo's root), or a glob (`**/*.gen.ts`); repeatable
+    #[arg(long = "exclude", value_name = "PATTERN", value_parser = exclude)]
+    patterns: Vec<String>,
+}
+
+impl Excludes {
+    /// `config`'s excludes with these after them.
+    fn add_to(&self, config: &mut Config) {
+        config.files.exclude.extend(self.patterns.iter().cloned());
+    }
+}
+
+/// An `--exclude` checked, a bad one a usage error.
+fn exclude(pattern: &str) -> Result<String, String> {
+    source::exclude(pattern)
+        .map(|_| pattern.to_string())
+        .map_err(|error| format!("{error:#}"))
 }
 
 /// The one number a specific command prints; none for the three of the general one.
@@ -202,10 +231,16 @@ pub fn run() -> Result<()> {
     }
     match &cli.command {
         Command::Scan(a) => scan(&cli, a),
-        Command::Show(a) => delta(&cli, Changes::Rev(&a.rev), &a.repo.repo, &a.output),
+        Command::Show(a) => delta(
+            &cli,
+            Changes::Rev(&a.rev),
+            &a.repo.repo,
+            &a.excludes,
+            &a.output,
+        ),
         Command::Diff(a) => {
             let changes = Changes::Uncommitted { staged: a.staged };
-            delta(&cli, changes, &a.repo.repo, &a.output)
+            delta(&cli, changes, &a.repo.repo, &a.excludes, &a.output)
         }
         Command::Init { file } => init(file),
     }
@@ -216,7 +251,8 @@ pub fn run() -> Result<()> {
 fn scan(cli: &Cli, args: &ScanArgs) -> Result<()> {
     let output = &args.output;
     let mode = output.mode();
-    let config = load_config(cli, args.paths.first().map(PathBuf::as_path))?;
+    let mut config = load_config(cli, args.paths.first().map(PathBuf::as_path))?;
+    args.excludes.add_to(&mut config);
     let mut input = source::from_paths(&args.paths, &config.files)?;
     if let Some(mode) = mode {
         input.keep(mode);
@@ -269,9 +305,16 @@ enum Changes<'a> {
 /// Weighs the net delta of a commit, a range or the uncommitted changes: of the code, its docs and its tests,
 /// each at its full weight: the three numbers, or the one asked for (`--code`, `--docs`, `--tests`) with its
 /// report.
-fn delta(cli: &Cli, changes: Changes, repo: &Path, output: &Output) -> Result<()> {
+fn delta(
+    cli: &Cli,
+    changes: Changes,
+    repo: &Path,
+    excludes: &Excludes,
+    output: &Output,
+) -> Result<()> {
     let mode = output.mode();
-    let config = load_config(cli, Some(repo))?;
+    let mut config = load_config(cli, Some(repo))?;
+    excludes.add_to(&mut config);
     let range = match changes {
         Changes::Rev(rev) => git::resolve(repo, rev)?,
         Changes::Uncommitted { staged } => git::uncommitted(repo, staged)?,

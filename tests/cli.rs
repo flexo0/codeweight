@@ -572,6 +572,78 @@ fn show_leaves_out_the_excludes_and_its_tests_and_show_tests_weighs_the_tests() 
 }
 
 #[test]
+fn exclude_leaves_out_more_than_the_weights_file_s_excludes() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::create_dir(root.join(".git")).unwrap();
+    for file in [
+        "src/a.py",
+        "src/gen/g.py",
+        "gen/h.py",
+        "node_modules/x/y.py",
+        "b.py",
+    ] {
+        let path = root.join(file);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, F).unwrap();
+    }
+    // The engine's test weights, with an exclude of their own.
+    let weights = fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/weights.toml"))
+        .unwrap()
+        .replace("exclude = []", "exclude = [\"**/node_modules/**\"]");
+    fs::write(root.join("w.toml"), weights).unwrap();
+    let scan = |args: &[&str]| {
+        let mut all = vec!["scan", "--code", "--by", "file"];
+        all.extend_from_slice(args);
+        all.extend_from_slice(&["--config", "w.toml"]);
+        let output = codeweight(root, &all);
+        assert!(output.status.success(), "{}", stderr(&output));
+        stdout(&output)
+    };
+    // The weights file's excludes (node_modules) stay; a folder at any depth, a folder from the root, a glob.
+    assert_eq!(
+        scan(&["--exclude", "gen/"]),
+        "total 206\n\
+         103  b.py\n\
+         103  src/a.py\n"
+    );
+    assert_eq!(
+        scan(&["--exclude", "src/gen/", "--exclude", "b.py"]),
+        "total 206\n\
+         103  gen/h.py\n\
+         103  src/a.py\n"
+    );
+    // Matched from the repo's root, though the folder scanned is under it.
+    assert_eq!(
+        scan(&["src", "--exclude", "/src/gen/"]),
+        "total 103\n\
+         103  src/a.py\n"
+    );
+    // A bad one is a usage error.
+    let output = codeweight(root, &["scan", "--exclude", "/"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(stderr(&output).contains("--exclude"), "{}", stderr(&output));
+}
+
+#[test]
+fn show_and_diff_leave_out_what_exclude_matches() {
+    let repo = Repo::new();
+    repo.commit(&[("a.py", Some(F)), ("gen/g.py", Some(F))]);
+    assert_eq!(
+        repo.weigh(&["--exclude", "gen/"]),
+        "total +103\n\
+         +103  added    a.py  f\n"
+    );
+    fs::write(repo.path().join("gen/h.py"), F).unwrap();
+    fs::write(repo.path().join("b.py"), F).unwrap();
+    assert_eq!(
+        repo.diff(&["--exclude", "gen/"]),
+        "total +103\n\
+         +103  added    b.py  f\n"
+    );
+}
+
+#[test]
 fn show_docs_weighs_a_doc_added_edited_renamed_and_deleted() {
     let repo = Repo::new();
     // Under tests/weights.toml (word 1, symbol 10): `#` and 21 words are 31.
@@ -1006,9 +1078,9 @@ fn every_command_s_help_lists_the_options_in_the_same_order_config_last() {
         "--by",
     ];
     for (command, own) in [
-        ("scan", &[][..]),
-        ("show", &["-C"][..]),
-        ("diff", &["-C", "--staged"][..]),
+        ("scan", &["--exclude"][..]),
+        ("show", &["-C", "--exclude"][..]),
+        ("diff", &["-C", "--staged", "--exclude"][..]),
         ("init", &[][..]),
     ] {
         let output = codeweight(dir.path(), &[command, "-h"]);

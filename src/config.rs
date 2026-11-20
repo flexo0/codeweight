@@ -315,7 +315,7 @@ impl Config {
         check_non_negative("[docs] word", raw.docs.word)?;
         check_non_negative("[docs] symbol", raw.docs.symbol)?;
         for glob in &raw.files.exclude {
-            source::glob(glob).with_context(|| format!("[files] exclude `{glob}`"))?;
+            source::exclude(glob).with_context(|| format!("[files] exclude `{glob}`"))?;
         }
         for glob in &raw.files.test_globs {
             source::glob(glob).with_context(|| format!("[files] test_globs `{glob}`"))?;
@@ -633,6 +633,9 @@ mod tests {
         assert!(error.contains("[files] exclude `a/[b`"), "{error}");
         let error = error_of("[files]\ndocs_globs = [\"a/[b\"]\n");
         assert!(error.contains("[files] docs_globs `a/[b`"), "{error}");
+        // A folder's form too: a folder with no name.
+        let error = error_of("[files]\nexclude = [\"build/\", \"/\"]\n");
+        assert!(error.contains("[files] exclude `/`"), "{error}");
     }
 
     #[test]

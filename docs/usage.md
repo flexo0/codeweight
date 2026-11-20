@@ -4,12 +4,13 @@ It reads Java (`.java`), TypeScript (`.ts`, `.mts`, `.cts`), TSX (`.tsx`), JavaS
 Python (`.py`, `.pyi`), Rust (`.rs`) and Go (`.go`), and weighs Markdown (`.md`, `.markdown`) as docs.
 
 ```
-codeweight scan [<path>...] [<one>|--short] [-v] [--json]    weigh files and folders; several allowed,
+codeweight scan [<path>...] [--exclude <pattern>]... [<one>|--short] [-v] [--json]
+                                                             weigh files and folders; several allowed,
                                                              default `.`
-codeweight show [<rev>|<A>..<B>] [-C <path>] [<one>|--short] [-v] [--json]
+codeweight show [<rev>|<A>..<B>] [-C <path>] [--exclude <pattern>]... [<one>|--short] [-v] [--json]
                                                              weigh the net delta of a commit or a range; default
                                                              `HEAD`
-codeweight diff [-C <path>] [--staged] [<one>|--short] [-v] [--json]
+codeweight diff [-C <path>] [--staged] [--exclude <pattern>]... [<one>|--short] [-v] [--json]
                                                              weigh the net delta of the uncommitted changes (or
                                                              the staged ones alone)
 codeweight init [<file>|-]     write the default weights file (default ./codeweight.toml), never over an existing
@@ -21,6 +22,7 @@ codeweight init [<file>|-]     write the default weights file (default ./codewei
 `scan`, `show` and `diff` take `--config <file>`: the weights file ([weights-file.md](weights-file.md) says where it is looked up
 without one); `init` doesn't, it reads none. They take too:
 
+- `--exclude <pattern>` (repeatable): the paths to leave out besides the weights file's excludes (below);
 - `--code`, `--tests` or `--docs` (at most one): that number alone, and its report;
 - `--verbose` (`-v`): the warnings too, on stderr; with `--code`, `--tests` or `--docs`, the whole report instead of
   the total alone;
@@ -61,11 +63,14 @@ a function too) it is a lambda, its code the function's around it. A Rust method
 (`Foo.method`), so a type's struct and all its `impl` blocks in a file are one class; a Go method by its receiver's
 type (`T.M` for `func (r *T) M()`). A weight has at most two decimals.
 
-A folder is walked for the files in it: its `.gitignore` is honoured, hidden files and the `[files]` excludes are
-left out (a file named on the command line is weighed even if excluded). The globs are matched against a file's path
-from the root of its git repo (outside a repo, from the current folder, or from the folder given when the path is
-outside the current one). The code leaves the test files (`test_globs`) and a Rust file's tests out, the tests
-are only them. A file the docs globs match (`docs_globs`) is docs alone, though it is under `tests/`: neither the
+A folder is walked for the files in it: its `.gitignore` is honoured, hidden files, the `[files]` excludes and
+`--exclude`'s are left out (a file named on the command line is weighed even if excluded). An exclude is a glob, or
+a folder when it ends in `/`: `build/` is a folder of that name at any depth (`**/build/**`), `src/gen/` (with a
+`/` before its end) or `/build/` (a leading `/`) the one from the root (`src/gen/**`, `build/**`); a file named
+`build` isn't one. The globs are matched against a file's path from the root of its git repo (outside a repo, from
+the current folder, or from the folder given when the path is outside the current one), whichever folder is
+scanned: `codeweight scan src --exclude src/gen/`. The code leaves the test files (`test_globs`) and a Rust file's
+tests out, the tests are only them. A file the docs globs match (`docs_globs`) is docs alone, though it is under `tests/`: neither the
 code nor the tests weigh it, the docs only such files, each one line of `--docs`' report (its `(file)`, as it has no
 functions). Files are weighed in parallel; the output is the same on every run.
 
@@ -101,8 +106,8 @@ and `git gc` drops them later.
 A file's delta is its weight after minus before: an added file's is all positive, a deleted one's all negative. Its
 functions and classes are matched by their qualified name within the file (a renamed file's old and new), each one
 `added`, `removed`, `heavier` or `lighter`. The changed files are weighed as a walk of the repo's root weighs them:
-the `[files]` excludes and hidden paths are left out, and so is a file codeweight doesn't read. Their code, docs
-and tests are weighed as `scan` weighs them, with `--code`, `--tests` or `--docs` as `scan` does with it.
+the `[files]` excludes, `--exclude`'s and hidden paths are left out, and so is a file codeweight doesn't read.
+Their code, docs and tests are weighed as `scan` weighs them, with `--code`, `--tests` or `--docs` as `scan` does with it.
 
 With `--code -v` (or `--tests`, `--docs`), the text report starts with the total delta (`total +42.5`, `total -17`). After it comes one line per function and
 class (or per file with `--by file`), `<delta>  <status>  <path>  <name>`, a renamed file's path as `old -> new`; the

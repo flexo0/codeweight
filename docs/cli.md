@@ -1,12 +1,13 @@
 # The CLI
 
 ```
-codeweight scan [<path>...] [<one>|--short] [-v] [--json]                     weigh files and folders (default `.`)
-codeweight show [<rev>|<A>..<B>] [-C <path>] [<one>|--short] [-v] [--json]    weigh a commit (default `HEAD`) or a range
-codeweight diff [-C <path>] [--staged] [<one>|--short] [-v] [--json]          weigh the net delta of the uncommitted changes
+codeweight scan [<path>...] [<excl>] [<one>|--short] [-v] [--json]                     weigh files and folders (default `.`)
+codeweight show [<rev>|<A>..<B>] [-C <path>] [<excl>] [<one>|--short] [-v] [--json]    weigh a commit (default `HEAD`) or a range
+codeweight diff [-C <path>] [--staged] [<excl>] [<one>|--short] [-v] [--json]          weigh the net delta of the uncommitted changes
 codeweight init [<file>|-]         write the default weights file (default ./codeweight.toml), - to stdout
 
 <one>: --code|--tests|--docs [--top <N>] [--by file|function]
+<excl>: --exclude <pattern>, repeatable
 ```
 
 `scan`, `show` and `diff` take `--config <file>`, before the command or after; `init` doesn't (it reads no
@@ -31,6 +32,12 @@ JSON instead of text; `--short`, the general one's alone, one line.
   make, for a commit staged part by part (`git add -p`) or with other changes left in the working tree.
 - `show` and `diff` weigh the code, the docs and the tests of a delta as `scan` does of the files: each
   side of a change kept as `scan` keeps a file, for `--code`, `--tests` or `--docs` as each keeps one.
+- `--exclude <pattern>` (repeatable, `scan`, `show` and `diff`) leaves out more for one run, added to the weights
+  file's `[files] exclude`, not in their place: a folder or two is left out without a weights file, and without
+  copying the default excludes into one (a user's list replaces the defaults', [config.md](config.md)). A pattern
+  is an exclude's: a glob, or a folder ending in `/`, gitignore's form (`build/` at any depth, `src/gen/` or
+  `/build/` from the globs' root), as the shorter way to write `**/build/**`. It is what is weighed, so it comes
+  after the command's own options and before the output's. A bad pattern is a usage error (exit 2).
 - Exit codes: 0 done, 1 an error (a bad path, revision or weights file), 2 a usage error, as is the convention, so a
   script tells a typo in an option from a missing file. `main` prints the error with its context chain
   (`error: ...`) to stderr and ends with 1; the usage errors are clap's own, exit 2. A closed stdout or stderr
