@@ -38,7 +38,8 @@ git's and cargo's are and as the options are. `init` never overwrites a file (it
 `--top` keeps the report's first N lines, whichever `--by` lists (so "the N heaviest functions", or files).
 The help says what a command does in the imperative (`Weigh files and folders`), as clap's own `Print help` and
 cargo's do, and what an option or argument is as a noun phrase (`The weights file ...`); a command's `about` (`-h`
-and the commands' list) is a short line, the rest its `long_about` (`--help`).
+and the commands' list) is a short line, the rest its `long_about` (`--help`). Every command lists its options in
+the same order, `--config` last before `--help`.
 
 - The general command (no `--code`, `--tests` or `--docs`) prints three lines, the code's, the docs' and the
   tests' number in that order, each signed as a delta is, `scan`'s too, a zero without a sign (`code +15.5`,

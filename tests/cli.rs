@@ -967,3 +967,46 @@ fn the_report_s_options_need_one_number_and_short_none() {
     );
     assert_eq!(stdout(&output), "103.04\n");
 }
+
+#[test]
+fn every_command_s_help_lists_the_options_in_the_same_order_config_last() {
+    let dir = tempfile::tempdir().unwrap();
+    let report = [
+        "--code",
+        "--tests",
+        "--docs",
+        "--json",
+        "--short",
+        "--verbose",
+        "--top",
+        "--by",
+    ];
+    for (command, own) in [
+        ("scan", &[][..]),
+        ("commit", &["-C"][..]),
+        ("pre-commit", &["-C", "--staged"][..]),
+        ("init", &[][..]),
+    ] {
+        let output = codeweight(dir.path(), &[command, "-h"]);
+        assert!(output.status.success(), "{}", stderr(&output));
+        let help = stdout(&output);
+        let options: Vec<&str> = help
+            .lines()
+            .skip_while(|line| *line != "Options:")
+            .skip(1)
+            .filter_map(|line| line.split_whitespace().find(|word| word.starts_with('-')))
+            .map(|word| word.trim_end_matches(','))
+            .map(|word| match word {
+                "-v" => "--verbose",
+                "-h" => "--help",
+                word => word,
+            })
+            .collect();
+        let mut expected = own.to_vec();
+        if command != "init" {
+            expected.extend(report);
+        }
+        expected.extend(["--config", "--help"]);
+        assert_eq!(options, expected, "{command}");
+    }
+}

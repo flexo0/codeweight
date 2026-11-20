@@ -25,7 +25,9 @@ struct Cli {
     command: Command,
     /// The weights file (else ./codeweight.toml, else codeweight.toml at the repo's root, else the defaults); not
     /// `init`'s
-    #[arg(long, global = true, value_name = "FILE")]
+    // Last in every command's help, before `--help`: unordered, a global option lands wherever its order ties with
+    // the command's own.
+    #[arg(long, global = true, value_name = "FILE", display_order = 100)]
     config: Option<PathBuf>,
 }
 
