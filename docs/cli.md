@@ -35,7 +35,7 @@ else an error). `--by` defaults to `function`; `--top` keeps the report's first 
 - The general command (no `--code`, `--tests` or `--docs`) prints three lines, the code's, the docs' and the
   tests' number in that order, each signed as a delta is, `scan`'s too, a zero without a sign (`code +15.5`,
   `docs 0`, `tests -5`), so a script or a person reads all three at once. `--short` prints them on one line,
-  `c+15;d0;t-5`: all three always there in that order, each rounded to a whole number (from the two decimals the
+  `c+15 d0 t-5`: all three always there in that order, each rounded to a whole number (from the two decimals the
   text shows, so `0.5` is `+1`), a zero `d0`. `--json` prints them as one object (below). The input is read once:
   one walk of the paths, or one `git diff-tree` / `git cat-file --batch` pass, each file weighed once and split
   into its parts (a Rust file with tests counts its code toward the code and its tests toward the tests).

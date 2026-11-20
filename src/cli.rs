@@ -103,7 +103,7 @@ struct Output {
     /// As JSON: the three numbers and the warnings; with `--code`, `--tests` or `--docs`, the whole report
     #[arg(long)]
     json: bool,
-    /// The three numbers on one line, each rounded to a whole number (`c+15;d+17;t-5`)
+    /// The three numbers on one line, each rounded to a whole number (`c+15 d+17 t-5`)
     #[arg(long, conflicts_with_all = ["json", "only"])]
     short: bool,
     /// The whole report: the total, the functions (or files), and the warnings (with `--code`, `--tests` or

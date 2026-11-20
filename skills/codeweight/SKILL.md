@@ -18,7 +18,7 @@ a fixed threshold.
 | `codeweight commit <rev>` / `A..B` `[-C <repo>]` | the three net deltas of a commit or a range: `code +15.5`, `docs 0`, `tests -5` (a zero has no sign) |
 | `codeweight pre-commit [-C <repo>]` | the three deltas of the uncommitted changes: `HEAD` against the working tree, staged or not, untracked files too, ignored ones left out |
 | `codeweight pre-commit --only-staged` | only the staged changes: `HEAD` against the index, what `git commit` would commit |
-| any of the three `--short` | the three on one line, each rounded to a whole number: `c+15;d0;t-5` |
+| any of the three `--short` | the three on one line, each rounded to a whole number: `c+15 d0 t-5` |
 | any of the three `--code` / `--tests` / `--docs` | that one number alone: `9488.09`, a delta signed (`+42.5`, `-17`) |
 | `codeweight scan <path>... --code -v` | `total N`, then `<weight>  <path>  <name>` per function/class, heaviest first |
 | `codeweight commit <rev> --code -v` (or `pre-commit`, `--tests`, `--docs`) | `total +N`, then `<delta>  <status>  <path>  <name>` per changed function (`added`, `removed`, `heavier`, `lighter`); a Markdown file is one line, `(file)` |

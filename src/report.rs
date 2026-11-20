@@ -94,7 +94,7 @@ pub fn parts_text(parts: Parts) -> String {
     )
 }
 
-/// The three numbers on one line, each rounded to a whole number and signed: `c+15;d0;t-5`.
+/// The three numbers on one line, each rounded to a whole number and signed: `c+15 d0 t-5`.
 pub fn parts_short(parts: Parts) -> String {
     // Rounded from the two decimals the text shows, so the two agree (`0.5` is `+1`).
     let whole = |part: f64| match rounded(part).round() {
@@ -103,7 +103,7 @@ pub fn parts_short(parts: Parts) -> String {
         n => format!("{n}"),
     };
     format!(
-        "c{};d{};t{}\n",
+        "c{} d{} t{}\n",
         whole(parts.code),
         whole(parts.docs),
         whole(parts.tests)
@@ -689,14 +689,14 @@ mod tests {
             tests: -5.0,
         };
         assert_eq!(parts_text(parts), "code +15.5\ndocs 0\ntests -5\n");
-        assert_eq!(parts_short(parts), "c+16;d0;t-5\n");
+        assert_eq!(parts_short(parts), "c+16 d0 t-5\n");
         // Whole from the two decimals the text shows: 0.499 shows as 0.5, so +1; -0.4 is 0, no sign.
         let small = Parts {
             code: 0.499,
             docs: -0.4,
             tests: -2.5,
         };
-        assert_eq!(parts_short(small), "c+1;d0;t-3\n");
+        assert_eq!(parts_short(small), "c+1 d0 t-3\n");
     }
 
     #[test]

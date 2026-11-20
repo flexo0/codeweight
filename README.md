@@ -25,7 +25,7 @@ code +1095.35
 docs +2240
 tests +534.04
 $ codeweight commit b88842c --short
-c+1095;d+2240;t+534
+c+1095 d+2240 t+534
 ```
 
 `--code` (or `--tests`, `--docs`) prints that number alone, and with `-v` the functions behind it, heaviest first
@@ -76,7 +76,7 @@ Every command takes `--config <file>`: the weights file (see below for where it 
 Without `--code`, `--tests` or `--docs`, a command prints three numbers, each on its line, in the order code, docs,
 tests: `code +15.5`, `docs +17`, `tests -5`. Each is signed (`scan`'s too), with at most two decimals, a zero
 without a sign (`docs 0`). `--short` prints them on one line, each rounded to a whole number, all three always
-there: `c+15;d+17;t-5`, a zero part `d0`. The code's is the weight of the code, its tests left out. The tests' is
+there: `c+15 d+17 t-5`, a zero part `d0`. The code's is the weight of the code, its tests left out. The tests' is
 the weight of the tests alone: the test files (`test_globs`), and in a Rust file the items marked `#[cfg(test)]`,
 `#[test]` or a runner's `#[tokio::test]` (any `#[...::test]`), all in them (a `mod tests` and its functions), and a
 whole file marked `#![cfg(test)]`. The docs' is the weight of the Markdown files (`docs_globs`), each by its words

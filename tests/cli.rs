@@ -782,7 +782,7 @@ fn scan_prints_the_code_the_docs_and_the_tests_each_as_its_flag_does() {
 
     let short = ok(&["scan", ".", "--short"]);
     let code: f64 = code.parse().unwrap();
-    assert_eq!(stdout(&short), format!("c+{};d+6;t+11\n", code.round()));
+    assert_eq!(stdout(&short), format!("c+{} d+6 t+11\n", code.round()));
     assert!(stderr(&short).starts_with("warning: src/B.java has syntax errors"));
 
     let json: serde_json::Value =
@@ -804,7 +804,7 @@ fn scan_prints_the_code_the_docs_and_the_tests_each_as_its_flag_does() {
     );
     assert_eq!(
         stdout(&ok(&["scan", "README.md", "--short"])),
-        "c0;d+6;t0\n"
+        "c0 d+6 t0\n"
     );
 }
 
@@ -840,7 +840,7 @@ fn commit_and_pre_commit_print_the_three_deltas() {
     // A test made lighter, a doc deleted, the code untouched.
     let second = repo.commit(&[("tests/test_a.py", Some(F)), ("doc.md", None)]);
     assert_eq!(run(&["commit", "HEAD"]), "code 0\ndocs -12\ntests -3\n");
-    assert_eq!(run(&["commit", "HEAD", "--short"]), "c0;d-12;t-3\n");
+    assert_eq!(run(&["commit", "HEAD", "--short"]), "c0 d-12 t-3\n");
     let json: serde_json::Value =
         serde_json::from_str(&run(&["commit", "HEAD~1..HEAD", "--json"])).unwrap();
     assert_eq!(
@@ -853,7 +853,7 @@ fn commit_and_pre_commit_print_the_three_deltas() {
     // The uncommitted changes: the code heavier, a doc untracked, the staged one alone.
     fs::write(repo.path().join("a.py"), FG).unwrap();
     fs::write(repo.path().join("new.md"), "x\n").unwrap();
-    assert_eq!(run(&["pre-commit", "--short"]), "c+3;d+1;t0\n");
+    assert_eq!(run(&["pre-commit", "--short"]), "c+3 d+1 t0\n");
     repo.git(&["add", "a.py"]);
     assert_eq!(
         run(&["pre-commit", "--only-staged"]),
