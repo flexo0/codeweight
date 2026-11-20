@@ -106,7 +106,7 @@ total        = Σ weight(node) over the nodes that have a category
 ## The conditions
 
 The `[conditions]` table's rules weigh what a node's kind alone doesn't tell, each as an existing category, so they
-add no weight of their own. The example pairs asked for them; the tuning on them ([milestones.md](milestones.md)) turned on
+add no weight of their own. The example pairs asked for them; the tuning on them turned on
 all but `nullish_operator`, which there only ties 11 pairs more; `nested_ternaries`, `free_default` and
 `assignments` were asked for later, once the tuned pairs were read. A file on its own that leaves the table out has them all off.
 

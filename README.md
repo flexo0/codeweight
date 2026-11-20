@@ -278,7 +278,7 @@ docs_globs = ["**/*.md", "**/*.markdown"]   # docs alone, weighed by [docs], tho
 The defaults were first tuned on real Java, TypeScript and Python code (and re-checked on Rust) so that the heaviest
 functions are the hardest ones, then on 8,971 example pairs, a bad snippet and its fix from the linters' tests, so
 that the fix weighs less, and again on those pairs thinned to 1,453, each rule weighing alike, by a search without a
-grid (each tuning and its evidence are in [docs/milestones.md](docs/milestones.md)). A call weighs about half a statement (a long chain of
+grid. A call weighs about half a statement (a long chain of
 getters or a flat run of setters is long, not hard), and each level of nesting adds one and a half base weights (`factor = 1.5`), so nested control flow outweighs flat code. Nesting multiplies the
 structure only (statements, branches, loops, jumps, lambdas, ...): a statement's parts, its calls, operators,
 accesses and `&&` / `||` (`[nesting] flat`), weigh the same at any depth, since their statement already weighs its

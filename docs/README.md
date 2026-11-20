@@ -9,4 +9,3 @@ building goes into its subject's file, in the same commit.
 - [languages.md](languages.md): what TypeScript, TSX and JavaScript's, Python's, Rust's and Go's elements are, beyond the general rules
 - [architecture.md](architecture.md): the modules and dependencies, the inputs, the language tables, the engine
 - [commit.md](commit.md): how `commit` works out a commit's or a range's net delta
-- [milestones.md](milestones.md): how it was built, milestone by milestone, and the tuning of the defaults on real code

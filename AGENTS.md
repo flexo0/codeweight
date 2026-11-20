@@ -13,9 +13,8 @@ Markdown file's docs weight is its words and symbol runs, a number of its own, n
 tests': `scan`, `commit` and `pre-commit` print the three (`--code`, `--tests` or `--docs` one alone, with its
 report).
 
-The design is `docs/`, a file per subject (its index `docs/README.md`); `docs/milestones.md` is how it was built,
-milestone by milestone, and how the defaults were tuned. Keep those docs in step with what is built (a decision made
-while building goes into its subject's file, in the same commit).
+The design is `docs/`, a file per subject (its index `docs/README.md`). Keep those docs in step with what is built (a
+decision made while building goes into its subject's file, in the same commit).
 
 ## Checking a change
 

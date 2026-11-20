@@ -30,13 +30,13 @@ Built (`config`, `config::find`):
   its own table (see [architecture.md](architecture.md)).
 - The defaults hold no `[languages.<name>.weights]` (the example above has one only to show the table): the merge
   never removes a key, so a default per-language weight would beat the same key a user's file sets in `[weights]`,
-  and that change would silently do nothing for that language. The tuning on real code ([milestones.md](milestones.md))
+  and that change would silently do nothing for that language. The tuning on real code
   needed none; should one ever be wanted, the merge must first drop a default per-language key whose base key the
   user's file sets.
 - `[accesses]` is `[parameters]`'s form for an access's place in a row ([weight.md](weight.md)); a file on its own
   may leave it out (`step` 0, `max` 1: every access alike), as the engine's tests do.
 - `[conditions]` are switches, `true` or `false`; the defaults turn all but `nullish_operator` on (the tuning on
-  the example pairs, [milestones.md](milestones.md)); a file on its own may leave the table out (all off), as the engine's
+  the example pairs); a file on its own may leave the table out (all off), as the engine's
   tests do. Each weighs a node as an existing category, so it adds no weight of
   its own; a cast or pattern kind it makes an `operator` is the language's table's, under the user's `node_kinds`
   (a kind mapped there wins). What each one weighs is [weight.md](weight.md)'s.
