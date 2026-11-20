@@ -32,7 +32,7 @@ fn init_writes_the_defaults_and_never_overwrites() {
     assert!(written.contains("[weights]"));
 
     let again = codeweight(dir.path(), &["init"]);
-    assert_eq!(again.status.code(), Some(2));
+    assert_eq!(again.status.code(), Some(1));
     assert!(stderr(&again).contains("not overwritten"));
 
     let named = codeweight(dir.path(), &["init", "mine.toml"]);
@@ -86,16 +86,16 @@ fn scan_leaves_out_an_unsupported_file_and_warns_of_syntax_errors() {
 }
 
 #[test]
-fn a_bad_path_or_weights_file_ends_with_exit_2() {
+fn a_bad_path_or_weights_file_ends_with_exit_1() {
     let dir = tempfile::tempdir().unwrap();
     let missing = codeweight(dir.path(), &["scan", "Missing.java"]);
-    assert_eq!(missing.status.code(), Some(2));
+    assert_eq!(missing.status.code(), Some(1));
     assert!(stderr(&missing).starts_with("error: "));
 
     fs::write(dir.path().join("A.java"), JAVA).unwrap();
     fs::write(dir.path().join("bad.toml"), "[weights]\nloops = 1\n").unwrap();
     let bad = codeweight(dir.path(), &["scan", "A.java", "--config", "bad.toml"]);
-    assert_eq!(bad.status.code(), Some(2));
+    assert_eq!(bad.status.code(), Some(1));
     assert!(
         stderr(&bad).contains("unknown category `loops`"),
         "{}",
@@ -103,7 +103,7 @@ fn a_bad_path_or_weights_file_ends_with_exit_2() {
     );
 
     let absent = codeweight(dir.path(), &["scan", "A.java", "--config", "absent.toml"]);
-    assert_eq!(absent.status.code(), Some(2));
+    assert_eq!(absent.status.code(), Some(1));
 }
 
 #[test]
@@ -326,7 +326,7 @@ fn scan_docs_weighs_the_markdown_files_alone_and_scan_and_scan_tests_never_see_t
     assert_eq!(stdout(&own), "4\n");
     fs::write(root.join("bad.toml"), "[files]\ndocs_globs = [\"a/[b\"]\n").unwrap();
     let bad = codeweight(root, &["scan", "--docs", ".", "--config", "bad.toml"]);
-    assert_eq!(bad.status.code(), Some(2));
+    assert_eq!(bad.status.code(), Some(1));
     assert!(stderr(&bad).contains("docs_globs"), "{}", stderr(&bad));
 }
 
@@ -720,7 +720,7 @@ fn commit_at_a_shallow_clone_s_boundary_is_an_error_not_a_root() {
     clone.git(&["fetch", "-q", "--depth", "1", &url, "main"]);
     clone.git(&["reset", "-q", "--hard", "FETCH_HEAD"]);
     let output = codeweight(clone.path(), &["commit", "--code", "HEAD"]);
-    assert_eq!(output.status.code(), Some(2), "{}", stdout(&output));
+    assert_eq!(output.status.code(), Some(1), "{}", stdout(&output));
     assert!(
         stderr(&output).contains("shallow clone"),
         "{}",
@@ -729,11 +729,11 @@ fn commit_at_a_shallow_clone_s_boundary_is_an_error_not_a_root() {
 }
 
 #[test]
-fn commit_of_a_bad_revision_or_outside_a_repo_ends_with_exit_2() {
+fn commit_of_a_bad_revision_or_outside_a_repo_ends_with_exit_1() {
     let repo = Repo::new();
     repo.commit(&[("a.py", Some(F))]);
     let bad = codeweight(repo.path(), &["commit", "nope"]);
-    assert_eq!(bad.status.code(), Some(2));
+    assert_eq!(bad.status.code(), Some(1));
     assert!(
         stderr(&bad).contains("`nope` is not a commit"),
         "{}",
@@ -741,7 +741,7 @@ fn commit_of_a_bad_revision_or_outside_a_repo_ends_with_exit_2() {
     );
     let outside = tempfile::tempdir().unwrap();
     let none = codeweight(outside.path(), &["commit", "HEAD"]);
-    assert_eq!(none.status.code(), Some(2));
+    assert_eq!(none.status.code(), Some(1));
 }
 
 #[test]

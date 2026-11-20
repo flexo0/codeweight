@@ -50,6 +50,7 @@ with one of them, two of them, or `--short` with `--json`.
   built-in defaults. Don't create or edit it unless asked.
 - Files in other languages are left out, unlisted. A file with syntax errors is still weighed, with a warning
   (on stderr when only the numbers are printed).
-- Exit 0 on success (a pipe to `head` that quits early too, silent), 2 on an error (`error: ...` on stderr).
+- Exit 0 on success (a pipe to `head` that quits early too, silent), 1 on an error (`error: ...` on stderr), 2 on a
+  usage error (a bad command or option, options that don't go together).
 - `codeweight: command not found`: install it, `cargo install --git https://github.com/flexo0/codeweight` (or
   `cargo install --path .` in a clone).

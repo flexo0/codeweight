@@ -47,8 +47,8 @@ decision made while building goes into its subject's file, in the same commit).
   the text output or the JSON's fields changes it too, in the same commit.
 - A file that doesn't parse cleanly is still weighed (tree-sitter recovers) and gets a warning in the report; an
   unsupported file is skipped and listed, never an error.
-- Errors carry context (`anyhow::Context`) and end the CLI with exit 2; no `unwrap` / `expect` outside tests but on
-  invariants that can't fail.
+- Errors carry context (`anyhow::Context`) and end the CLI with exit 1 (2 is a usage error, clap's); no `unwrap` /
+  `expect` outside tests but on invariants that can't fail.
 
 ## Where to change what
 

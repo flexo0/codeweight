@@ -114,8 +114,9 @@ codeweight doesn't read is left out, never an error. A folder under the one scan
 root-owned docker volume, say) is left out with a warning and the rest weighed; a folder given that can't be read is
 an error.
 
-Exit codes: 0 done, 2 an error (a bad path, revision or weights file, or not in a git repo). A reader that quits
-early (`codeweight scan -v . | head`) ends it quietly, exit 0.
+Exit codes: 0 done, 1 an error (a bad path, revision or weights file, or not in a git repo), 2 a usage error (an
+unknown command or option, options that don't go together). A reader that quits early (`codeweight scan -v . | head`)
+ends it quietly, exit 0.
 
 ### `commit`, `pre-commit`
 
