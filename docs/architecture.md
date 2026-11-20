@@ -9,7 +9,7 @@
 | `engine` | one tree walked: each node's weight, summed by function, class and file |
 | `markdown` | a Markdown text's docs weight: its words and symbol runs, line by line, no tree-sitter |
 | `git` | the files a commit, a range or the uncommitted changes changed (`git diff-tree -r -M`; the uncommitted ones as a tree, `git add -A` into a copy of the index, `git write-tree`), their text before and after (`git cat-file --batch`) |
-| `report` | the three numbers (a line each, `--short`'s one line, their JSON), and one number's report, the text table and the JSON; for `commit`, the deltas |
+| `report` | the three numbers (a line each, `--short`'s one line, their JSON), and one number's report, the text table and the JSON; for `show` and `diff`, the deltas |
 
 Files are weighed in parallel (`rayon`).
 
@@ -26,7 +26,7 @@ as a command, no `git2` / `gix`.
   it may not list) is left out and listed as unreadable, a warning, so one root-owned folder doesn't make the tree
   unscannable; a folder given that can't be read is an error, as it leaves nothing to weigh. The globs (`*` and `?` within a path's part, `**` across parts)
   are matched against a file's path from the root of the git repo it is in (the root `config::find` uses), so one
-  glob means the same from any folder scanned, and later for `commit`; outside a repo, from the current folder when
+  glob means the same from any folder scanned, and later for `show` and `diff`; outside a repo, from the current folder when
   the path is in it, else from the folder given (a file given: its name), never with the folders above, so a project
   under a `build` or `tests` folder is neither excluded nor taken for tests whatever the path's spelling. A
   file the test globs match is a test file: the code's number leaves it out, the tests' keeps it and the files of a
@@ -37,7 +37,7 @@ as a command, no `git2` / `gix`.
   keeps only that one's files (`Input::keep`). A path is shown as given,
   or the folder given joined with the path in it, without a leading `./`; a path given twice, or under two folders
   given, is weighed once.
-- `source` for `commit` (`from_commit`): a changed file's each side is kept as a walk of the repo's root would keep
+- `source` for `show` and `diff` (`from_commit`): a changed file's each side is kept as a walk of the repo's root would keep
   it: its path (from the root, as `git diff-tree` gives it) not hidden (no part starting with `.`), not excluded, in
   a language codeweight reads or Markdown, and, with `--code`, `--tests` or `--docs`, kept for that one as a scan keeps a file (never two in
   one number; without them every side is kept, its parts split as a scan's); a side that isn't a regular file (a symlink, a

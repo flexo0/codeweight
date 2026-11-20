@@ -6,10 +6,10 @@ Python (`.py`, `.pyi`), Rust (`.rs`) and Go (`.go`), and weighs Markdown (`.md`,
 ```
 codeweight scan [<path>...] [<one>|--short] [--json]         weigh files and folders; several allowed,
                                                              default `.`
-codeweight commit [<rev>|<A>..<B>] [-C <repo>] [<one>|--short] [--json]
+codeweight show [<rev>|<A>..<B>] [-C <path>] [<one>|--short] [--json]
                                                              weigh the net delta of a commit or a range; default
                                                              `HEAD`
-codeweight pre-commit [-C <repo>] [--staged] [<one>|--short] [--json]
+codeweight diff [-C <path>] [--staged] [<one>|--short] [--json]
                                                              weigh the net delta of the uncommitted changes (or
                                                              the staged ones alone)
 codeweight init [<file>|-]     write the default weights file (default ./codeweight.toml), never over an existing
@@ -18,7 +18,7 @@ codeweight init [<file>|-]     write the default weights file (default ./codewei
 <one>: --code|--tests|--docs [-v] [--top <N>] [--by file|function]
 ```
 
-`scan`, `commit` and `pre-commit` take `--config <file>`: the weights file ([weights-file.md](weights-file.md) says where it is looked up
+`scan`, `show` and `diff` take `--config <file>`: the weights file ([weights-file.md](weights-file.md) says where it is looked up
 without one); `init` doesn't, it reads none. They take too:
 
 - `--code`, `--tests` or `--docs` (at most one): that number alone, and its report;
@@ -43,8 +43,8 @@ The code, the tests and the docs are always three numbers, never one sum, each a
 three has its code in one, its tests in another and its docs in the third. The input is read once and each file
 weighed once, a Rust file with tests counting toward the code and the tests both.
 
-With `--code`, `--tests` or `--docs`, a command prints that number alone: `scan` its total (`4698.25`), `commit` and
-`pre-commit` their net delta, signed (`+42.5`, `-17`, `0`). `--verbose` (`-v`) prints its whole report instead, as
+With `--code`, `--tests` or `--docs`, a command prints that number alone: `scan` its total (`4698.25`), `show` and
+`diff` their net delta, signed (`+42.5`, `-17`, `0`). `--verbose` (`-v`) prints its whole report instead, as
 `--top` and `--by` do. With the numbers alone (the three, `--short`, or one total), a file's syntax errors and a
 folder that can't be read are a warning on stderr.
 
@@ -76,20 +76,23 @@ Exit codes: 0 done, 1 an error (a bad path, revision or weights file, or not in 
 unknown command or option, options that don't go together). A reader that quits early (`codeweight scan -v . | head`)
 ends it quietly, exit 0.
 
-## `commit`, `pre-commit`
+## `show`, `diff`
 
-`codeweight commit <rev>` weighs what a commit changed: its files before and after, against its first parent (a
+`codeweight show <rev>` weighs what a commit changed: its files before and after, against its first parent (a
 merge's too), the root commit against the empty tree; in a shallow clone, a commit whose parent wasn't fetched is
-an error (fetch more history), not a root. `codeweight commit A..B` compares the two revisions' trees
-directly, so a change made and undone between them nets to zero (an empty side is `HEAD`; `A...B` is an error).
-`<rev>` is any git revision (a hash, `HEAD~2`, a tag), `HEAD` when left out (`codeweight commit`, as `git show`);
-`-C <path>` is any path inside the repo (default `.`). It runs
+an error (fetch more history), not a root. `codeweight show A..B` compares the two revisions' trees
+directly, one net delta for the range (not one per commit, as `git show A..B` would), so a change made and undone
+between them nets to zero (an empty side is `HEAD`; `A...B` is an error).
+`<rev>` is any git revision (a hash, `HEAD~2`, a tag), `HEAD` when left out (`codeweight show`, as `git show`);
+`-C <path>` (`--repo <path>`) is any path inside the repo (default `.`), as `git -C`. It runs
 `git` (`git diff-tree -r -M`, so a renamed file is one file, and one `git cat-file --batch` for the texts).
 
-`codeweight pre-commit` weighs the uncommitted changes, before you commit them: `HEAD` against the
+`codeweight diff` weighs the uncommitted changes, before you commit them: `HEAD` against the
 working tree, staged or not, the untracked files too and the ignored ones left out, as `git add -A && git commit`
-would commit them (in a repo with no commit yet, against the empty tree). With `--staged`, only the staged
-changes: `HEAD` against the index, as `git commit` would commit them, the unstaged and untracked ones left out. Your
+would commit them (in a repo with no commit yet, against the empty tree); so not as `git diff`, which compares the
+index with the working tree, the tracked files alone. With `--staged`, only the staged changes, as
+`git diff --staged`: `HEAD` against the index, as `git commit` would commit them, the unstaged and untracked ones
+left out. `-C` / `--repo` as for `show`. Your
 index is left as it is: the working tree is added to a copy of it. git writes the changed files' blobs to the repo's objects, which nothing refers to,
 and `git gc` drops them later.
 

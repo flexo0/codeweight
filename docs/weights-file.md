@@ -1,7 +1,7 @@
 # The weights file
 
 TOML. The first one found wins: `--config`, then `./codeweight.toml`, then `codeweight.toml` at the root of the git
-repo the first scanned path is in (for `commit`, the repo's), then the built-in defaults. Your file is merged over the defaults, so it holds only
+repo the first scanned path is in (for `show` and `diff`, the repo's), then the built-in defaults. Your file is merged over the defaults, so it holds only
 what it changes. A key, category, language or node kind codeweight doesn't know is an error, not ignored.
 `codeweight init` writes out the defaults ([src/default.toml](../src/default.toml)) to start from. The example below is
 the defaults plus the two per-language tables a file of yours can add (the defaults have neither, so a `[weights]` key

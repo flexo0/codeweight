@@ -98,7 +98,7 @@ total        = Σ weight(node) over the nodes that have a category
   `Outer.method.Local.run`. A Java constructor is `Class.Class`, an anonymous class `new Type` (its type arguments
   dropped: `Outer.method.new Runnable.run`), an enum constant's body the constant's name. Same-named entries of one
   kind in a file are one entry, their weights summed, its line the first one's: overloads, a class's constructors,
-  two anonymous classes of a type in one method. The name is then a stable key for `commit` (an added overload is a
+  two anonymous classes of a type in one method. The name is then a stable key for `show` and `diff` (an added overload is a
   heavier function, not a new one), and (path, kind, name) is unique, so the sort is total. A class and a method of
   the same name stay apart.
 - A weight is an `f64`; the text report shows at most two decimals.
@@ -140,7 +140,7 @@ all but `nullish_operator`, which there only ties 11 pairs more; `nested_ternari
 ## The docs weight
 
 A Markdown file's weight is its docs weight, a number of its own, never summed with code's (`markdown`, pure as
-the engine is: text in, weight out); the docs' number of `scan`, `commit` and `pre-commit` weighs it, a file the
+the engine is: text in, weight out); the docs' number of `scan`, `show` and `diff` weighs it, a file the
 `[files] docs_globs` match ([cli.md](cli.md)):
 
 ```

@@ -10,7 +10,7 @@ functions weighs more. The weight of a file, a folder or a function is the sum o
 a git commit (or a range, or the uncommitted changes) is its net delta, after minus before, positive or negative. It
 reads Java, TypeScript (TS, TSX), JavaScript, Python, Rust and Go, parsed by tree-sitter. It weighs docs too: a
 Markdown file's docs weight is its words and symbol runs, a number of its own, never summed with the code's or the
-tests': `scan`, `commit` and `pre-commit` print the three (`--code`, `--tests` or `--docs` one alone, with its
+tests': `scan`, `show` and `diff` print the three (`--code`, `--tests` or `--docs` one alone, with its
 report).
 
 The user docs past the README are `docs/usage.md`, `docs/json.md` and `docs/weights-file.md`. The design is the rest
@@ -23,7 +23,7 @@ made while building goes into its subject's file, in the same commit).
   change by default, `cargo test <filter>`; the whole suite when the change spans modules).
 - The engine's tests are small snippets of each language with their weights worked out by hand in the test, under a
   test weights file of their own (round numbers), never the defaults: tuning the defaults must not break them.
-- The `commit` tests make throwaway git repos in a temp dir (`tempfile`); never run against a real repo.
+- The `show` and `diff` tests make throwaway git repos in a temp dir (`tempfile`); never run against a real repo.
 - Rust 1.100 (`rust-toolchain.toml`, `rust-version` in `Cargo.toml`), edition 2024. Few dependencies: `tree-sitter`
   and its grammars (`tree-sitter-java`, `tree-sitter-typescript`, `tree-sitter-javascript`, `tree-sitter-python`,
   `tree-sitter-rust`, `tree-sitter-go`), `clap`, `serde`, `toml`, `serde_json`, `ignore` and its `globset` (the `[files]` globs), `rayon`,

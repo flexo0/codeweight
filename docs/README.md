@@ -2,7 +2,7 @@
 
 Using codeweight (the README is the short start):
 
-- [usage.md](usage.md): the commands and options, the text report, which files are weighed, `commit` and `pre-commit`
+- [usage.md](usage.md): the commands and options, the text report, which files are weighed, `show` and `diff`
 - [json.md](json.md): the JSON report's fields, the machine contract
 - [weights-file.md](weights-file.md): the weights file, the weight, each category in each language
 
@@ -14,4 +14,4 @@ building goes into its subject's file, in the same commit.
 - [weight.md](weight.md): a node's weight, nesting, each category's rules, how functions and classes are named
 - [languages.md](languages.md): what TypeScript, TSX and JavaScript's, Python's, Rust's and Go's elements are, beyond the general rules
 - [architecture.md](architecture.md): the modules and dependencies, the inputs, the language tables, the engine
-- [commit.md](commit.md): how `commit` works out a commit's or a range's net delta
+- [commit.md](commit.md): how `show` and `diff` work out a commit's or a range's net delta

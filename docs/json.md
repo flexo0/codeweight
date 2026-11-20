@@ -4,10 +4,10 @@ The machine contract: other tools read it, so its fields change only with this f
 
 Without `--code`, `--tests` or `--docs`, `--json` prints one object, the three numbers and the warnings:
 
-- `code`, `docs`, `tests`: the three numbers (for `commit` and `pre-commit`, the deltas), each rounded to two
+- `code`, `docs`, `tests`: the three numbers (for `show` and `diff`, the deltas), each rounded to two
   decimals;
 - `warnings`: as a report's, below;
-- for `commit` and `pre-commit`, also `from` and `to`, as a report's, below.
+- for `show` and `diff`, also `from` and `to`, as a report's, below.
 
 ```json
 {
@@ -29,14 +29,14 @@ text shows it.
 - `by`: `"function"` or `"file"`.
 - `rows`: the report's lines. By file, `{path, weight}`; by function, `{path, kind, name, line, weight}`, `kind`
   one of `"function"`, `"class"` (its code outside its functions) and `"file"` (a file's code outside any class, its
-  `name` and `line` `null`), `name` qualified (`Outer.Inner.method`), `line` the first line, from 1 (for `commit`, the after
+  `name` and `line` `null`), `name` qualified (`Outer.Inner.method`), `line` the first line, from 1 (for `show` and `diff`, the after
 side's, a removed one's the before side's).
 - `warnings`: the files with syntax errors, `{path, kind: "syntax_errors", side}`, `side` `null` for a scan (a
   Markdown file never has one); then, for a scan, the paths under a folder given that couldn't be read and were left out,
   `{path, kind: "unreadable", side: null}`.
 
-For `commit`, also `from` (the full hash compared from, `null` for the root commit's empty tree) and `to` (the full
-hash compared to, `null` for `pre-commit`'s uncommitted changes); each row has, instead of `weight`, `before`, `after` (0 on the
+For `show` and `diff`, also `from` (the full hash compared from, `null` for the root commit's empty tree) and `to` (the full
+hash compared to, `null` for `diff`'s uncommitted changes); each row has, instead of `weight`, `before`, `after` (0 on the
 side it isn't), `delta` and `status` (`"added"`, `"removed"`, `"heavier"` or `"lighter"`), and `old_path` (the path
 before a rename, else `null`); a warning's `side` is `"before"` or `"after"`.
 

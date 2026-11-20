@@ -23,8 +23,8 @@ use crate::source::{self, Kind, Mode};
 struct Cli {
     #[command(subcommand)]
     command: Command,
-    /// The weights file (else ./codeweight.toml, else codeweight.toml at the repo's root, else the defaults); not
-    /// `init`'s
+    /// The weights file [default: ./codeweight.toml, else the repo root's codeweight.toml, else the built-in
+    /// weights]; `init` takes none
     // Last in every command's help, before `--help`: unordered, a global option lands wherever its order ties with
     // the command's own.
     #[arg(long, global = true, value_name = "FILE", display_order = 100)]
@@ -35,24 +35,27 @@ struct Cli {
 enum Command {
     /// Weigh files and folders
     ///
-    /// The code's weight, the docs' and the tests', or one of them alone (`--code`, `--docs`, `--tests`).
+    /// Prints three weights: the code's (its tests left out), the docs' and the tests'; with `--code`, `--docs` or
+    /// `--tests`, that one alone.
     Scan(ScanArgs),
     /// Weigh the net delta of a commit or a range
     ///
-    /// A revision against its first parent, or a range A..B: the net delta of the code's weight, the docs' and the
-    /// tests', or one of them alone (`--code`, `--docs`, `--tests`).
-    Commit(CommitArgs),
+    /// A commit against its first parent, or a range A..B its two trees against each other (one net delta, not a
+    /// delta per commit): prints the net delta, after minus before, of three weights: the code's (its tests left
+    /// out), the docs' and the tests'; with `--code`, `--docs` or `--tests`, that one alone.
+    Show(ShowArgs),
     /// Weigh the net delta of the uncommitted changes
     ///
-    /// The uncommitted changes against HEAD, the untracked files too, or the staged ones alone (`--staged`): the
-    /// net delta of the code's weight, the docs' and the tests', or one of them alone (`--code`, `--docs`,
-    /// `--tests`).
-    PreCommit(PreCommitArgs),
+    /// HEAD against the working tree, the untracked files too (unlike `git diff`, which compares the index with
+    /// the working tree), or against the index alone (`--staged`, as `git diff --staged`): prints the net delta,
+    /// after minus before, of three weights: the code's (its tests left out), the docs' and the tests'; with
+    /// `--code`, `--docs` or `--tests`, that one alone.
+    Diff(DiffArgs),
     /// Write the default weights file
     ///
     /// Never over an existing file; `-` prints it to stdout.
     Init {
-        /// Where to write it, `-` for stdout
+        /// The file to write, `-` for stdout
         #[arg(default_value = config::FILE_NAME)]
         file: PathBuf,
     },
@@ -61,51 +64,56 @@ enum Command {
 /// The arguments of `scan`.
 #[derive(Args)]
 struct ScanArgs {
-    /// A file or a folder, absolute or relative
+    /// The files and folders to weigh
     #[arg(default_value = ".")]
     paths: Vec<PathBuf>,
     #[command(flatten)]
     output: Output,
 }
 
-/// The arguments of `commit`.
+/// The arguments of `show`.
 #[derive(Args)]
-struct CommitArgs {
-    /// A revision (against its first parent) or a range A..B
+struct ShowArgs {
+    /// The commit to weigh (against its first parent: a hash, a tag, `HEAD~2`), or a range A..B
     #[arg(default_value = "HEAD")]
     rev: String,
-    /// Any path inside the repo
-    #[arg(short = 'C', default_value = ".")]
-    repo: PathBuf,
+    #[command(flatten)]
+    repo: Repo,
     #[command(flatten)]
     output: Output,
 }
 
-/// The arguments of `pre-commit`.
+/// The arguments of `diff`.
 #[derive(Args)]
-struct PreCommitArgs {
-    /// Any path inside the repo
-    #[arg(short = 'C', default_value = ".")]
-    repo: PathBuf,
-    /// Only the staged changes (the index against HEAD, as `git commit` would commit them)
+struct DiffArgs {
+    #[command(flatten)]
+    repo: Repo,
+    /// Only the staged changes: the index against HEAD, what `git commit` would commit
     #[arg(long)]
     staged: bool,
     #[command(flatten)]
     output: Output,
 }
 
+/// The repo a delta is of, the same for `show` and `diff`.
+#[derive(Args)]
+struct Repo {
+    /// Any path inside the git repo (as `git -C`)
+    #[arg(short = 'C', long = "repo", value_name = "PATH", default_value = ".")]
+    repo: PathBuf,
+}
+
 /// The one number a specific command prints; none for the three of the general one.
 #[derive(Args)]
 #[group(id = "only", multiple = false)]
 struct Only {
-    /// Only the code's weight, its tests left out: the total, or with `-v` the whole report
+    /// Only the code's weight, its tests left out; with `-v`, its report
     #[arg(long)]
     code: bool,
-    /// Only the tests' weight (the test files, a Rust file's tests): the total, or with `-v` the whole report
+    /// Only the tests' weight (the test files, a Rust file's `#[cfg(test)]` code); with `-v`, its report
     #[arg(long)]
     tests: bool,
-    /// Only the docs weight of the Markdown files (those the docs globs match): the total, or with `-v` the whole
-    /// report
+    /// Only the docs' weight (the Markdown files); with `-v`, its report
     #[arg(long)]
     docs: bool,
 }
@@ -115,20 +123,20 @@ struct Only {
 struct Output {
     #[command(flatten)]
     only: Only,
-    /// As JSON: the three numbers and the warnings; with `--code`, `--tests` or `--docs`, the whole report
+    /// JSON instead of text: the three numbers and the warnings; with `--code`, `--tests` or `--docs`, the whole report
     #[arg(long)]
     json: bool,
-    /// The three numbers on one line, each rounded to a whole number (`c+15 d+17 t-5`)
+    /// The three numbers on one line, each rounded to a whole number: `c+15 d+17 t-5`
     #[arg(long, conflicts_with_all = ["json", "only"])]
     short: bool,
-    /// The whole report: the total, the functions (or files), and the warnings (with `--code`, `--tests` or
-    /// `--docs`)
+    /// The whole report: the total, a line per function (or file), the warnings; needs `--code`, `--tests`
+    /// or `--docs`
     #[arg(short, long, requires = "only")]
     verbose: bool,
-    /// Only the N heaviest lines of the report (with `--code`, `--tests` or `--docs`)
+    /// Only the report's N heaviest lines (a delta's: the N largest changes); implies `-v`
     #[arg(long, value_name = "N", requires = "only")]
     top: Option<usize>,
-    /// What the report lists [default: function] (with `--code`, `--tests` or `--docs`)
+    /// The report's lines, a function or a file each [default: function]; implies `-v`
     #[arg(long, value_enum, requires = "only")]
     by: Option<By>,
 }
@@ -180,19 +188,22 @@ impl Output {
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
     if matches!(cli.command, Command::Init { .. }) && cli.config.is_some() {
-        Cli::command()
-            .error(
-                ErrorKind::ArgumentConflict,
-                "`init` takes no `--config`: it writes the defaults, reading no weights file",
-            )
-            .exit();
+        let mut command = Cli::command();
+        // Built, so the error's usage is `init`'s, `codeweight init`, not the whole CLI's.
+        command.build();
+        let mut init = command.find_subcommand("init").cloned().unwrap_or(command);
+        init.error(
+            ErrorKind::ArgumentConflict,
+            "`init` takes no `--config`: it writes the defaults, reading no weights file",
+        )
+        .exit();
     }
     match &cli.command {
         Command::Scan(a) => scan(&cli, a),
-        Command::Commit(a) => commit(&cli, Changes::Rev(&a.rev), &a.repo, &a.output),
-        Command::PreCommit(a) => {
+        Command::Show(a) => delta(&cli, Changes::Rev(&a.rev), &a.repo.repo, &a.output),
+        Command::Diff(a) => {
             let changes = Changes::Uncommitted { staged: a.staged };
-            commit(&cli, changes, &a.repo, &a.output)
+            delta(&cli, changes, &a.repo.repo, &a.output)
         }
         Command::Init { file } => init(file),
     }
@@ -257,7 +268,7 @@ enum Changes<'a> {
 /// Weighs the net delta of a commit, a range or the uncommitted changes: of the code, its docs and its tests,
 /// each at its full weight: the three numbers, or the one asked for (`--code`, `--docs`, `--tests`) with its
 /// report.
-fn commit(cli: &Cli, changes: Changes, repo: &Path, output: &Output) -> Result<()> {
+fn delta(cli: &Cli, changes: Changes, repo: &Path, output: &Output) -> Result<()> {
     let mode = output.mode();
     let config = load_config(cli, Some(repo))?;
     let range = match changes {

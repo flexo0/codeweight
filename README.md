@@ -20,9 +20,9 @@ $ codeweight scan src
 code +9649.96
 docs 0
 tests +3036.49
-$ codeweight commit f4de918 --short
+$ codeweight show f4de918 --short
 c+112 d+67 t+65
-$ codeweight commit f4de918 --code -v --top 2
+$ codeweight show f4de918 --code -v --top 2
 total +112.46
 +30.06  added    src/cli.rs  write_all
 +24.18  heavier  src/cli.rs  scan
@@ -43,8 +43,8 @@ agent's skills, e.g. from a clone `ln -s "$PWD/skills/codeweight" ~/.claude/skil
 
 ```
 codeweight scan [<path>...]     weigh files and folders (default `.`)
-codeweight commit [<rev>]       weigh the net delta of a commit (default `HEAD`), or of a range `A..B`
-codeweight pre-commit           weigh the net delta of the uncommitted changes (`--staged`: the staged ones alone)
+codeweight show [<rev>]         weigh the net delta of a commit (default `HEAD`), or of a range `A..B`
+codeweight diff                 weigh the net delta of the uncommitted changes (`--staged`: the staged ones alone)
 codeweight init                 write the default weights file to ./codeweight.toml, to tune
 ```
 
@@ -53,8 +53,8 @@ number alone, and with `-v` the functions behind it, heaviest first; `--json` th
 
 ## More
 
-- [docs/usage.md](docs/usage.md): every command and option, the text report, which files are weighed, how `commit`
-  and `pre-commit` compare
+- [docs/usage.md](docs/usage.md): every command and option, the text report, which files are weighed, how `show`
+  and `diff` compare
 - [docs/json.md](docs/json.md): the JSON report's fields
 - [docs/weights-file.md](docs/weights-file.md): the weights file, the weight formula, and what each category is in
   each language
