@@ -214,4 +214,9 @@ function's.
   tells such a macro from a name; `--exclude 'compat/**'` (or `[files] exclude`) leaves vendored code out. A loop
   macro of one name (`FOR_EACH(x) { ... }`) parses cleanly as a function definition in the function (`f.x`), and
   weighs so. Both arms of an `#if` / `#else` weigh, summed, and so does an `#if 0` block. A `return` in an `#if`
-  block is never its body's last statement: it is a jump, even at the end.
+  block is never its body's last statement: it is a jump, even at the end. A recovered construct named by a keyword is
+  no function: an `else if (b) { ... }` that an `#if` splits from its `if` (nginx's `ngx_cidr_match`) recovers as a
+  definition named `if`, and a struct before an `if` (`struct s {...} if (a) { ... }`) as one whose type is the
+  struct. A definition or a prototype named by `if`, `while`, `return`, `sizeof` or another keyword (`KEYWORDS` in
+  `src/lang/c.rs`) weighs no `function`, no parameters and no nesting: its code weighs in its enclosing entry (the
+  function, or the file), and the struct is a class of its own there.

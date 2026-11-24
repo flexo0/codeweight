@@ -109,22 +109,27 @@ fn operator(node: Node) -> Option<Operator> {
     }
 }
 
-/// An empty statement (`;`), and a loop macro's, whose call is the loop (`for_each(x, list) { ... }`); a `#define` without a value (`#define A_H`), a flag; a function declarator but a
-/// prototype's; a declaration of prototypes alone, which are functions, no statement; a struct, union or enum that
-/// declares no class (a reference to one, `struct S *p`, or an anonymous one); a `typedef` of a struct, union or
-/// enum it defines (`typedef struct {...} P;`), which only names the class; a field that is a call's callee
-/// (`p->f(x)`, a function pointer's call: the call weighs).
+/// An empty statement (`;`), and a loop macro's, whose call is the loop (`for_each(x, list) { ... }`); a `#define`
+/// without a value (`#define A_H`), a flag; a function definition named by a keyword, no function (`is_keyword`); a
+/// function declarator but a prototype's; a declaration of prototypes alone, which are functions, no statement; a
+/// struct, union or enum that declares no class (a reference to one, `struct S *p`, or an anonymous one); a `typedef`
+/// of a struct, union or enum it defines (`typedef struct {...} P;`), which only names the class; a field that is a
+/// call's callee (`p->f(x)`, a function pointer's call: the call weighs).
 fn exempt(node: Node, source: &[u8]) -> bool {
     match node.kind() {
         "expression_statement" => first_child(node).is_none_or(|e| loop_body(e).is_some()),
         "preproc_def" => node.child_by_field_name("value").is_none(),
-        "function_declarator" => function_of(node) != Some(Declares::Prototype),
+        "function_definition" => node
+            .child_by_field_name("declarator")
+            .and_then(declared_name)
+            .is_some_and(|name| is_keyword(name, source)),
+        "function_declarator" => function_of(node, source) != Some(Declares::Prototype),
         "declaration" => {
             let mut cursor = node.walk();
             let mut declarators = node
                 .children_by_field_name("declarator", &mut cursor)
                 .peekable();
-            declarators.peek().is_some() && declarators.all(is_prototype)
+            declarators.peek().is_some() && declarators.all(|d| is_prototype(d, source))
         }
         kind if SPECIFIERS.contains(&kind) => scope(node, source).is_none(),
         "type_definition" => node.child_by_field_name("type").is_some_and(|t| {
@@ -169,7 +174,9 @@ fn next_sibling(node: Node) -> Option<Node> {
 /// A definition's or a prototype's parameters, each one (`...` too); none for `(void)`, nor a function pointer's,
 /// nor the function type a function returns (`int (*f(void))(int)` has none).
 fn parameters(node: Node, source: &[u8]) -> usize {
-    if node.kind() != "parameter_list" || node.parent().and_then(function_of).is_none() {
+    if node.kind() != "parameter_list"
+        || node.parent().and_then(|p| function_of(p, source)).is_none()
+    {
         return 0;
     }
     count_children(node, |c| match c.kind() {
@@ -223,10 +230,12 @@ fn declared_name(declarator: Node) -> Option<Node> {
 /// What a function declarator declares, if it is its function's own (the one nearest the name: `f(void)` in
 /// `int (*f(void))(int)`, the one further out being the function type `f` returns): a definition's, or a
 /// prototype's at the file's level (one in a function is a statement there, no function of its own). A function
-/// pointer's (`int (*fp)(int)`, a parameter's) declares none.
-fn function_of(declarator: Node) -> Option<Declares> {
+/// pointer's (`int (*fp)(int)`, a parameter's) declares none, nor one named by a keyword (`is_keyword`).
+fn function_of(declarator: Node, source: &[u8]) -> Option<Declares> {
+    let name = declarator.child_by_field_name("declarator")?;
     if declarator.kind() != "function_declarator"
-        || declarator.child_by_field_name("declarator")?.kind() != "identifier"
+        || name.kind() != "identifier"
+        || is_keyword(name, source)
     {
         return None;
     }
@@ -253,6 +262,20 @@ fn function_of(declarator: Node) -> Option<Declares> {
     }
 }
 
+/// The keywords no function can be named by: a construct the grammar's error recovery reads as a function's
+/// definition or prototype (an `else if (x) { ... }` an `#if` splits from its `if` is a definition named `if`).
+const KEYWORDS: &[&str] = &[
+    "if", "else", "for", "while", "do", "switch", "case", "default", "return", "goto", "break",
+    "continue", "sizeof", "alignof", "_Alignof", "_Generic",
+];
+
+/// Whether a declared name is a C keyword (`KEYWORDS`): no function's.
+fn is_keyword(name: Node, source: &[u8]) -> bool {
+    KEYWORDS
+        .iter()
+        .any(|keyword| keyword.as_bytes() == &source[name.byte_range()])
+}
+
 /// What a function's own declarator declares.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Declares {
@@ -261,10 +284,10 @@ enum Declares {
 }
 
 /// Whether a declaration's declarator declares a prototype (`f(int)`, `*f(int)`).
-fn is_prototype(declarator: Node) -> bool {
+fn is_prototype(declarator: Node, source: &[u8]) -> bool {
     let mut node = Some(declarator);
     while let Some(at) = node {
-        if function_of(at) == Some(Declares::Prototype) {
+        if function_of(at, source) == Some(Declares::Prototype) {
             return true;
         }
         node = inner_declarator(at);
@@ -272,17 +295,20 @@ fn is_prototype(declarator: Node) -> bool {
     false
 }
 
-/// A function definition or a prototype by its name (a prototype and its definition are one entry, summed, as
-/// TS's overloads); a struct, union or enum with a body by its name, else by the `typedef` that
-/// names it (`typedef struct {...} P;` is `P`); an anonymous one (`struct {...} s;`, a struct's `union {...} u;`)
-/// is no class.
+/// A function definition or a prototype by its name (a prototype and its definition are one entry, summed, as TS's
+/// overloads), but one named by a keyword (`is_keyword`), whose code is its enclosing entry's; a struct, union or
+/// enum with a body by its name, else by the `typedef` that names it (`typedef struct {...} P;` is `P`); an anonymous
+/// one (`struct {...} s;`, a struct's `union {...} u;`) is no class.
 fn scope(node: Node, source: &[u8]) -> Option<Scope> {
     let (kind, name) = match node.kind() {
-        "function_definition" => (
-            ScopeKind::Function,
-            declared_name(node.child_by_field_name("declarator")?)?,
-        ),
-        "function_declarator" if function_of(node) == Some(Declares::Prototype) => {
+        "function_definition" => {
+            let name = declared_name(node.child_by_field_name("declarator")?)?;
+            if is_keyword(name, source) {
+                return None;
+            }
+            (ScopeKind::Function, name)
+        }
+        "function_declarator" if function_of(node, source) == Some(Declares::Prototype) => {
             (ScopeKind::Function, node.child_by_field_name("declarator")?)
         }
         kind if SPECIFIERS.contains(&kind) => {
@@ -630,6 +656,41 @@ mod tests {
              }",
         );
         assert_eq!(function(&weighed, "f"), 100.0 + 6.0 + 6.0);
+    }
+
+    #[test]
+    fn a_definition_or_prototype_named_by_a_keyword_is_no_function() {
+        // The `#if` splits the `else if` from its `if`: it recovers as a definition named `if`, no function,
+        // no nesting.
+        let weighed = weigh(
+            "int f(int a, int b) {
+               if (a) {              // branch 10
+                 g();                // at 1: 3 × 2
+               }
+             #if X
+               else if (b) {         // nothing
+                 if (a) return 1;    // at 0: branch 10; an early return: jump 3 × 2
+                 h();                // at 0: 3
+               }
+             #endif
+               return 0;             // statement 1
+             }",
+        );
+        assert_eq!(
+            function(&weighed, "f"),
+            100.0 + 16.0 + 10.0 + 6.0 + 3.0 + 1.0
+        );
+        assert_eq!(weighed.entries.len(), 1);
+        // At the file's level, a struct the definition's type: the struct a class there, the code the file's.
+        let weighed = weigh(
+            "struct s { int x; }
+             if (a) { g(); }              // at 0: 3
+             struct t { int y; } if (b);  // a prototype named `if`: no function, a declaration, statement 1",
+        );
+        assert_eq!(class(&weighed, "s"), 1001.0);
+        assert_eq!(class(&weighed, "t"), 1001.0);
+        assert_eq!(weighed.file, 4.0);
+        assert_eq!(weighed.entries.len(), 2);
     }
 
     #[test]
