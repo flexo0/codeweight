@@ -143,8 +143,13 @@ fn exempt(node: Node, source: &[u8]) -> bool {
 /// A loop macro's block (`for_each_string_list_item(item, list) { ... }`, `list_for_each(p, head) { ... }`): a
 /// call that is a statement missing its `;`, the grammar's reading of a macro that is no C syntax, right before a
 /// block, which C has only after a construct, so a loop or a scope the macro opens. The block is the statement's
-/// next sibling, or its construct's when the statement ends one (`if (a) for_each(x, l) { ... }`: the `if`'s).
+/// next sibling, or its construct's when the statement ends one (`if (a) for_each(x, l) { ... }`: the `if`'s). A
+/// macro of one argument (`FOR_EACH(x) { ... }`) parses cleanly as a definition instead (`is_loop_definition`),
+/// its block its body.
 fn loop_body(node: Node) -> Option<Node> {
+    if is_loop_definition(node) {
+        return node.child_by_field_name("body");
+    }
     if node.kind() != "call_expression" {
         return None;
     }
@@ -160,6 +165,18 @@ fn loop_body(node: Node) -> Option<Node> {
             None => end = end.parent()?,
         }
     }
+}
+
+/// Whether a function definition is a loop macro of one argument (`FOR_EACH(x) { ... }`), which the grammar reads
+/// as a definition of `x` of the type `FOR_EACH`, its name in parentheses: one in a function, where C has no
+/// definition but GCC's nested function, whose declarator is a function's (`int g(int a) { ... }`).
+fn is_loop_definition(node: Node) -> bool {
+    node.kind() == "function_definition"
+        && node
+            .child_by_field_name("declarator")
+            .is_some_and(|d| d.kind() == "parenthesized_declarator")
+        && std::iter::successors(node.parent(), |n| n.parent())
+            .any(|n| n.kind() == "function_definition")
 }
 
 /// A node's next sibling, named or not, comments aside.
@@ -296,14 +313,14 @@ fn is_prototype(declarator: Node, source: &[u8]) -> bool {
 }
 
 /// A function definition or a prototype by its name (a prototype and its definition are one entry, summed, as TS's
-/// overloads), but one named by a keyword (`is_keyword`), whose code is its enclosing entry's; a struct, union or
-/// enum with a body by its name, else by the `typedef` that names it (`typedef struct {...} P;` is `P`); an anonymous
-/// one (`struct {...} s;`, a struct's `union {...} u;`) is no class.
+/// overloads), but one named by a keyword (`is_keyword`) and a loop macro's (`is_loop_definition`), whose code is
+/// its enclosing entry's; a struct, union or enum with a body by its name, else by the `typedef` that names it
+/// (`typedef struct {...} P;` is `P`); an anonymous one (`struct {...} s;`, a struct's `union {...} u;`) is no class.
 fn scope(node: Node, source: &[u8]) -> Option<Scope> {
     let (kind, name) = match node.kind() {
         "function_definition" => {
             let name = declared_name(node.child_by_field_name("declarator")?)?;
-            if is_keyword(name, source) {
+            if is_keyword(name, source) || is_loop_definition(node) {
                 return None;
             }
             (ScopeKind::Function, name)
@@ -643,6 +660,32 @@ mod tests {
         );
         // The missing `;` is still a syntax error: the file warns.
         assert!(!weighed.clean);
+    }
+
+    #[test]
+    fn a_loop_macro_of_one_argument_in_a_function_is_a_loop_and_gcc_s_nested_function_a_function() {
+        // The grammar reads `FOR_EACH(x) { ... }` as a definition of `x`, cleanly: in a function, a loop.
+        let weighed = weigh(
+            "void f(int a) {
+               FOR_EACH(x) {            // loop 20: no function of its own
+                 g(x);                  // at 1: 3 × 2
+                 if (a) return;         // at 1: branch 10 × 2; an early return at 2: jump 3 × 3
+               }
+               LIST(*p) { h(); }        // loop 20; at 1: 3 × 2
+               int nested(int b) {      // GCC's nested function: `f.nested`, 100
+                 return b;              // its last statement at 1: 1 × 2
+               }
+             }
+             FOR_EACH(y) { h(); }       // at the file's level, a function `y` (a macro defining one): 100, 3",
+        );
+        assert_eq!(
+            function(&weighed, "f"),
+            100.0 + (20.0 + 6.0 + 20.0 + 9.0) + (20.0 + 6.0)
+        );
+        assert_eq!(function(&weighed, "f.nested"), 102.0);
+        assert_eq!(function(&weighed, "y"), 103.0);
+        assert_eq!(weighed.entries.len(), 3);
+        assert!(weighed.clean);
     }
 
     #[test]

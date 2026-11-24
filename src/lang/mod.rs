@@ -88,9 +88,10 @@ pub struct Lang {
     /// Whether a return that is its body's last weighs no statement, its value weighing for it: Java's `return
     /// switch (x) { ... };`, as a switch statement there would weigh none.
     pub carried_return: fn(Node) -> bool,
-    /// Whether a node is a loop its kind doesn't tell, and if so the node after it that is its body: C's loop
-    /// macro (`for_each(x, list) { ... }`), which the grammar reads as a call missing its `;` beside a block. The
-    /// node weighs a `loop`, not its kind's category; its body, not its child, is one level deeper than it.
+    /// Whether a node is a loop its kind doesn't tell, and if so its body: C's loop macro, which the grammar reads
+    /// as a call missing its `;` beside a block, the node after it (`for_each(x, list) { ... }`), or with one
+    /// argument as a definition, its body (`FOR_EACH(x) { ... }`). The node weighs a `loop`, not its kind's
+    /// category; its body, a child or not, is one level deeper than it.
     pub loop_body: for<'t> fn(Node<'t>) -> Option<Node<'t>>,
 }
 

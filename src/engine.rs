@@ -203,7 +203,7 @@ impl<'c> Weigher<'c> {
             test: false,
         }];
         let mut children = Vec::new();
-        // A loop's body that is no child of it (C's loop macro's block), by its node id: its depth.
+        // A loop's body its kind doesn't nest (C's loop macro's block), by its node id: its depth.
         let mut bodies: HashMap<usize, u32> = HashMap::new();
 
         while let Some(frame) = stack.pop() {

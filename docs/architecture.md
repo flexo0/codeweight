@@ -70,8 +70,8 @@ crates.io as well, needs a C compiler.
   `bool_op`, any other an `operator`), `exempt` (a node that weighs nothing though its kind has a category, where
   the kind can't tell: a docstring, a case's guard, a call's callee, `this.x`), `also_statement` (a node that
   weighs a statement beside its kind's category: Rust's block ending in a value, Go's `i++` and `x += 1`, statements
-  that are their own operator), `loop_body` (a node that is a loop its kind doesn't tell, and the node after it
-  that is its body, nested one level deeper though it is no child: C's loop macro), `scope` (the function or class a node declares, and its own name) and `tests` (a
+  that are their own operator), `loop_body` (a node that is a loop its kind doesn't tell, and its body, nested
+  one level deeper: C's loop macro, its block the node after it, no child, or a definition's body), `scope` (the function or class a node declares, and its own name) and `tests` (a
   node that is test code inside a source file, it and all in it: Rust's `#[cfg(test)]` items; none for a language whose tests are files of their own). A lambda `scope` names a function weighs and nests as a function (TS's named
   arrows). A test checks that
   every kind and field the tables name is in the grammar, so a typo can't silently weigh nothing.

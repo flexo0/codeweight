@@ -197,7 +197,12 @@ function's.
   where the macro opens a loop or a scope. Its call weighs `loop` (no statement, no call, no arguments), and its
   block, the statement's next sibling (or its construct's, in `if (a) for_each(x, l) { ... }`), is one level
   deeper, as a `for`'s body (`Lang::loop_body`, which the engine nests though it is no child). The missing `;`
-  stays a syntax error: the file still warns.
+  stays a syntax error: the file still warns. A loop macro of one argument (`FOR_EACH(x) { ... }`, `LIST(*p) {
+  ... }`) parses cleanly as a definition of `x` of the type `FOR_EACH`; in a function, where C has no definition
+  but GCC's nested function (`int g(int a) { ... }`, its declarator a function's, which stays a function `f.g`),
+  such a definition, its name in parentheses, is the loop macro: it weighs `loop`, no function and no entry of its
+  own, and its body is one level deeper. At the file's level it stays a function (`y` in `FOR_EACH(y) { ... }`),
+  as a macro that defines one would be.
 - The preprocessor's `#if`, `#ifdef`, `#ifndef`, `#elif` and `#else` blocks weigh nothing of their own and nest
   nothing: they pick the code that is compiled, no control flow read at run time, so their code weighs where it is
   (an include guard adds nothing, a function inside `#ifdef` weighs as outside). An `#if`'s condition weighs as any
@@ -211,9 +216,7 @@ function's.
   with a warning. An attribute macro between a function's type and its name (`static int internal_function
   check_matching(...)`) is such a one, and the recovered tree may take it for the name: in glibc's regex (vendored
   in git's `compat/regex/`) 89 functions merge into 3 entries `internal_function`, one a file, summed. No grammar
-  tells such a macro from a name; `--exclude 'compat/**'` (or `[files] exclude`) leaves vendored code out. A loop
-  macro of one name (`FOR_EACH(x) { ... }`) parses cleanly as a function definition in the function (`f.x`), and
-  weighs so. Both arms of an `#if` / `#else` weigh, summed, and so does an `#if 0` block. A `return` in an `#if`
+  tells such a macro from a name; `--exclude 'compat/**'` (or `[files] exclude`) leaves vendored code out. Both arms of an `#if` / `#else` weigh, summed, and so does an `#if 0` block. A `return` in an `#if`
   block is never its body's last statement: it is a jump, even at the end. A recovered construct named by a keyword is
   no function: an `else if (b) { ... }` that an `#if` splits from its `if` (nginx's `ngx_cidr_match`) recovers as a
   definition named `if`, and a struct before an `if` (`struct s {...} if (a) { ... }`) as one whose type is the
