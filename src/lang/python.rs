@@ -31,6 +31,7 @@ pub static PYTHON: Lang = Lang {
     tests: None,
     default_case,
     carried_return: |_| false,
+    loop_body: |_| None,
 };
 
 /// The number literals.

@@ -30,6 +30,7 @@ pub static C: Lang = Lang {
     tests: None,
     default_case: |node, _| node.child_by_field_name("value").is_none(),
     carried_return: |_| false,
+    loop_body,
 };
 
 const KINDS: &[(&str, Category)] = &[
@@ -51,7 +52,8 @@ const KINDS: &[(&str, Category)] = &[
     // MSVC's structured exceptions: `__try`, `__except`.
     ("seh_try_statement", Try),
     ("seh_except_clause", Catch),
-    // A macro's call (`MAX(a, b)`) parses as a call, which it stays: no syntax tells it from a function's.
+    // A macro's call (`MAX(a, b)`) parses as a call, which it stays: no syntax tells it from a function's; but a
+    // loop macro's (`for_each(x, list) { ... }`), a loop (`loop_body`).
     ("call_expression", Call),
     // `(struct P){1, 2}`: a constructor, as Go's composite literal is (a bare `{1, 2}` initializer is none).
     ("compound_literal_expression", Constructor),
@@ -107,14 +109,14 @@ fn operator(node: Node) -> Option<Operator> {
     }
 }
 
-/// An empty statement (`;`); a `#define` without a value (`#define A_H`), a flag; a function declarator but a
+/// An empty statement (`;`), and a loop macro's, whose call is the loop (`for_each(x, list) { ... }`); a `#define` without a value (`#define A_H`), a flag; a function declarator but a
 /// prototype's; a declaration of prototypes alone, which are functions, no statement; a struct, union or enum that
 /// declares no class (a reference to one, `struct S *p`, or an anonymous one); a `typedef` of a struct, union or
 /// enum it defines (`typedef struct {...} P;`), which only names the class; a field that is a call's callee
 /// (`p->f(x)`, a function pointer's call: the call weighs).
 fn exempt(node: Node, source: &[u8]) -> bool {
     match node.kind() {
-        "expression_statement" => first_child(node).is_none(),
+        "expression_statement" => first_child(node).is_none_or(|e| loop_body(e).is_some()),
         "preproc_def" => node.child_by_field_name("value").is_none(),
         "function_declarator" => function_of(node) != Some(Declares::Prototype),
         "declaration" => {
@@ -131,6 +133,37 @@ fn exempt(node: Node, source: &[u8]) -> bool {
         "field_expression" => is_field_of(node, &["call_expression"], "function"),
         _ => false,
     }
+}
+
+/// A loop macro's block (`for_each_string_list_item(item, list) { ... }`, `list_for_each(p, head) { ... }`): a
+/// call that is a statement missing its `;`, the grammar's reading of a macro that is no C syntax, right before a
+/// block, which C has only after a construct, so a loop or a scope the macro opens. The block is the statement's
+/// next sibling, or its construct's when the statement ends one (`if (a) for_each(x, l) { ... }`: the `if`'s).
+fn loop_body(node: Node) -> Option<Node> {
+    if node.kind() != "call_expression" {
+        return None;
+    }
+    let statement = node.parent().filter(|p| {
+        p.kind() == "expression_statement"
+            && p.child(p.child_count().saturating_sub(1))
+                .is_some_and(|semicolon| semicolon.is_missing())
+    })?;
+    let mut end = statement;
+    loop {
+        match next_sibling(end) {
+            Some(next) => return (next.kind() == "compound_statement").then_some(next),
+            None => end = end.parent()?,
+        }
+    }
+}
+
+/// A node's next sibling, named or not, comments aside.
+fn next_sibling(node: Node) -> Option<Node> {
+    let mut next = node.next_sibling();
+    while let Some(sibling) = next.filter(|s| s.is_extra()) {
+        next = sibling.next_sibling();
+    }
+    next
 }
 
 /// A definition's or a prototype's parameters, each one (`...` too); none for `(void)`, nor a function pointer's,
@@ -558,6 +591,45 @@ mod tests {
         assert_eq!(weighed.file, 12.0);
         assert_eq!(function(&weighed, "f"), 100.0 + 3.0 + 16.0 + 1.0);
         assert_eq!(function(&weighed, "g"), 106.0);
+    }
+
+    #[test]
+    fn a_loop_macro_before_a_block_is_a_loop_its_block_its_body() {
+        let weighed = testing::weigh_under(
+            &C,
+            WEIGHTS,
+            "void f(int a) {
+               for_each_string_list_item(item, list) {  // loop 20: no statement, no call
+                 g(item);                               // at 1: 3 × 2
+                 list_for_each(p, &head) {              // at 1: loop 20 × 2
+                   if (p) break;                        // at 2: branch 10 × 3; jump 3 × 4
+                 }
+               }
+               if (a) hashmap_for_each_entry(&m, e, ent) {  // branch 10; at 1: loop 20 × 2
+                 g(e);                                      // at 2: 3 × 3
+               }
+               h();                                     // at 0: 3
+             }",
+        );
+        assert_eq!(
+            function(&weighed, "f"),
+            100.0 + (20.0 + 6.0 + 40.0 + 30.0 + 12.0) + (10.0 + 40.0 + 9.0) + 3.0
+        );
+        // The missing `;` is still a syntax error: the file warns.
+        assert!(!weighed.clean);
+    }
+
+    #[test]
+    fn a_call_before_a_block_is_no_loop_with_its_semicolon_nor_one_before_no_block() {
+        let weighed = testing::weigh_under(
+            &C,
+            WEIGHTS,
+            "void f(void) {
+               g(); { h(); }               // 3; a bare block: 3 at 0
+               list_for_each(p, &l) g(p);  // no block: a call missing its `;`, 3; 3 at 0
+             }",
+        );
+        assert_eq!(function(&weighed, "f"), 100.0 + 6.0 + 6.0);
     }
 
     #[test]

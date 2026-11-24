@@ -35,6 +35,7 @@ pub static JAVA: Lang = Lang {
                 .named_child(0)
                 .is_some_and(|value| value.kind() == "switch_expression")
     },
+    loop_body: |_| None,
 };
 
 const KINDS: &[(&str, Category)] = &[

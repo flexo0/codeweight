@@ -28,6 +28,7 @@ pub static GO: Lang = Lang {
     tests: None,
     default_case: |node, _| node.kind() == "default_case",
     carried_return: |_| false,
+    loop_body: |_| None,
 };
 
 const KINDS: &[(&str, Category)] = &[

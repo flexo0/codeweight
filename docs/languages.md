@@ -192,6 +192,12 @@ function's.
 - A compound literal (`(struct P){1, 2}`) is a `constructor`, as Go's composite literal; a bare initializer
   (`int a[] = {1, 2}`, `struct S s = { .a = 1 }`) is none. A function-like macro's call (`MAX(a, b)`) parses as a
   call, and is one: no syntax tells it from a function's.
+- A loop macro (`for_each_string_list_item(item, list) { ... }`, the kernel's `list_for_each(p, head) { ... }`) is
+  a `loop`: the grammar reads it as a call missing its `;` beside a block, and C has a block after a call only
+  where the macro opens a loop or a scope. Its call weighs `loop` (no statement, no call, no arguments), and its
+  block, the statement's next sibling (or its construct's, in `if (a) for_each(x, l) { ... }`), is one level
+  deeper, as a `for`'s body (`Lang::loop_body`, which the engine nests though it is no child). The missing `;`
+  stays a syntax error: the file still warns.
 - The preprocessor's `#if`, `#ifdef`, `#ifndef`, `#elif` and `#else` blocks weigh nothing of their own and nest
   nothing: they pick the code that is compiled, no control flow read at run time, so their code weighs where it is
   (an include guard adds nothing, a function inside `#ifdef` weighs as outside). An `#if`'s condition weighs as any
@@ -200,7 +206,8 @@ function's.
   language has no `tests` hook.
 - Known gaps: a macro's body is text the grammar doesn't parse, so a function-like macro (`#define MAX(a, b) ...`)
   weighs nothing and what is in it nothing, as Rust's `macro_rules!`. A macro used where it is no C syntax
-  (`LIST_FOREACH(x, l) { ... }`, `EXPORT int f(void)`) and directives that split a construct (`#ifdef X if (a) {
-  #else if (b) { #endif`) leave syntax errors, weighed as tree-sitter recovered them, with a warning. Both arms of
-  an `#if` / `#else` weigh, summed, and so does an `#if 0` block. A `return` in an `#if` block is never its body's
-  last statement: it is a jump, even at the end.
+  (`EXPORT int f(void)`, a loop macro without a block, `list_for_each(p, l) g(p);`) and directives that split a
+  construct (`#ifdef X if (a) { #else if (b) { #endif`) leave syntax errors, weighed as tree-sitter recovered them,
+  with a warning. A loop macro of one name (`FOR_EACH(x) { ... }`) parses cleanly as a function definition in the
+  function (`f.x`), and weighs so. Both arms of an `#if` / `#else` weigh, summed, and so does an `#if 0` block. A
+  `return` in an `#if` block is never its body's last statement: it is a jump, even at the end.

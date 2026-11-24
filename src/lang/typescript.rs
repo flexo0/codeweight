@@ -67,6 +67,7 @@ pub(super) const BASE: Lang = Lang {
     tests: None,
     default_case: |node, _| node.kind() == "switch_default",
     carried_return: |_| false,
+    loop_body: |_| None,
 };
 
 /// The number literal.

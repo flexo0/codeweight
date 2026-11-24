@@ -203,10 +203,21 @@ impl<'c> Weigher<'c> {
             test: false,
         }];
         let mut children = Vec::new();
+        // A loop's body that is no child of it (C's loop macro's block), by its node id: its depth.
+        let mut bodies: HashMap<usize, u32> = HashMap::new();
 
         while let Some(frame) = stack.pop() {
             let node = frame.node;
             let id = node.kind_id() as usize;
+            let depth = if bodies.is_empty() {
+                frame.depth
+            } else {
+                bodies.remove(&node.id()).unwrap_or(frame.depth)
+            };
+            let loop_body = (self.lang.loop_body)(node);
+            if let Some(body) = loop_body {
+                bodies.insert(body.id(), depth + 1);
+            }
 
             let mut entry = frame.entry;
             let mut in_function = frame.in_function;
@@ -246,6 +257,7 @@ impl<'c> Weigher<'c> {
                 }
                 Some(Operator::Logical | Operator::Nullish) => Some(Category::BoolOp),
                 Some(_) => Some(Category::Operator),
+                None if loop_body.is_some() => Some(Category::Loop),
                 None if self.conditions.magic_numbers
                     && flag(&self.numbers, id)
                     && is_magic(&lang::text(node, source)) =>
@@ -297,12 +309,12 @@ impl<'c> Weigher<'c> {
                 .into_iter()
                 .chain((self.lang.also_statement)(node).then_some((Category::Statement, 1.0)))
                 .chain(assigns.then_some((Category::Operator, 1.0)))
-                .map(|(c, n)| n * self.weights.weight(c) * self.nesting.factor_of(c, frame.depth))
+                .map(|(c, n)| n * self.weights.weight(c) * self.nesting.factor_of(c, depth))
                 .sum::<f64>()
-                + self.parameters((self.lang.parameters)(node, source), frame.depth)
+                + self.parameters((self.lang.parameters)(node, source), depth)
                 + match category {
                     Some(Category::Call | Category::Constructor) => {
-                        self.arguments(lang::arguments(node), frame.depth)
+                        self.arguments(lang::arguments(node), depth)
                     }
                     _ => 0.0,
                 };
@@ -354,7 +366,7 @@ impl<'c> Weigher<'c> {
                 };
                 stack.push(Frame {
                     node: child,
-                    depth: frame.depth + u32::from(deeper),
+                    depth: depth + u32::from(deeper),
                     entry,
                     in_function,
                     test,

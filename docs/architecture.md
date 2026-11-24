@@ -58,7 +58,7 @@ crates.io as well, needs a C compiler.
   never all in memory; the results are collected in the listed order, and the report sorts them (weight, then path
   and name), so the output doesn't depend on which thread finished first.
 
-- `lang::Lang` is a table of plain data and five hooks: its name and its weights file key, the extensions, the
+- `lang::Lang` is a table of plain data and hooks: its name and its weights file key, the extensions, the
   grammar, the node kind → category list, the nesting constructs (each with its body: the children it nests, by
   field name or node kind, either listed or all but those listed, or by their place among the named children; and
   its chain, the children of its own kind that stay at its depth, for `else if`), the return, lambda and parenthesis
@@ -70,7 +70,8 @@ crates.io as well, needs a C compiler.
   `bool_op`, any other an `operator`), `exempt` (a node that weighs nothing though its kind has a category, where
   the kind can't tell: a docstring, a case's guard, a call's callee, `this.x`), `also_statement` (a node that
   weighs a statement beside its kind's category: Rust's block ending in a value, Go's `i++` and `x += 1`, statements
-  that are their own operator), `scope` (the function or class a node declares, and its own name) and `tests` (a
+  that are their own operator), `loop_body` (a node that is a loop its kind doesn't tell, and the node after it
+  that is its body, nested one level deeper though it is no child: C's loop macro), `scope` (the function or class a node declares, and its own name) and `tests` (a
   node that is test code inside a source file, it and all in it: Rust's `#[cfg(test)]` items; none for a language whose tests are files of their own). A lambda `scope` names a function weighs and nests as a function (TS's named
   arrows). A test checks that
   every kind and field the tables name is in the grammar, so a typo can't silently weigh nothing.

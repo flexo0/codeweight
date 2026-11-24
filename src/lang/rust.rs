@@ -34,6 +34,7 @@ pub static RUST: Lang = Lang {
             .is_some_and(|pattern| text(pattern, source) == "_")
     },
     carried_return: |_| false,
+    loop_body: |_| None,
 };
 
 /// The number literals.
