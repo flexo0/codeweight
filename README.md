@@ -64,6 +64,8 @@ number alone, and with `-v` the functions behind it, heaviest first; `--json` th
 - [docs/weights-file.md](https://github.com/flexo0/codeweight/blob/master/docs/weights-file.md): the weights file, the
   weight formula, and what each category is in each language
 - [docs/README.md](https://github.com/flexo0/codeweight/blob/master/docs/README.md): the design, for contributors
+- [CHANGELOG.md](https://github.com/flexo0/codeweight/blob/master/CHANGELOG.md): what each version changed, and what
+  a version's bump promises
 
 ## Building
 

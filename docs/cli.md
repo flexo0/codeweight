@@ -115,3 +115,6 @@ What a script or a hook relies on stays as it is, so codeweight grows by adding,
 So: a new option, command or `--by` value is added; a rename keeps the old name as a hidden alias; a combination that is a usage error today (`--short` with `--code`, `--tests` or
 `--docs`) may become a meaning later, never the other way, which is why they are errors now and
 not guessed at (`-v` without one of them was one, then became the warnings on stderr).
+
+Should a break happen all the same, the version says so: [releasing.md](releasing.md)'s table, a minor bump while
+0.x, a major one from 1.0.

@@ -60,9 +60,11 @@ made while building goes into its subject's file, in the same commit).
   (`skills/codeweight/SKILL.md`).
 - The docs weight (what a Markdown file's words and symbol runs are): `src/markdown.rs`, its `[docs]` weights in
   `src/default.toml`, `docs/weight.md`; which files are docs: `[files] docs_globs`, `src/source.rs`.
+- A release: `docs/releasing.md` (the version's bump, `CHANGELOG.md`'s section, the tag); a commit's subject is its
+  changelog line, so no commit adds to `CHANGELOG.md` but a release's.
 
 ## Style
 
 - rustfmt defaults, clippy clean. Doc comments say what a thing is for, not how.
 - Commit messages: one line, `<area>: <what changed and how it behaves>`, the area a module (`engine`, `lang/java`,
-  `config`, `git`, `report`, `cli`) or `docs`, `tests`, `ci`.
+  `config`, `git`, `report`, `cli`) or `docs`, `tests`, `ci`, `release`.

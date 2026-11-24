@@ -53,3 +53,11 @@ before a rename, else `null`); a warning's `side` is `"before"` or `"after"`.
   "warnings": []
 }
 ```
+
+## Versions
+
+The JSON is what codeweight's version (semver, [releasing.md](releasing.md)) promises most to: other tools read
+it. A field is only added, never renamed, removed or changed in type ([cli.md](cli.md)'s compatibility); should one
+change all the same, the version says so. While codeweight is 0.x, a changed field is a minor bump (0.1.x → 0.2.0)
+and an added one a patch (0.1.0 → 0.1.1); from 1.0, a changed field is a major bump and an added one a minor.
+[CHANGELOG.md](../CHANGELOG.md) names every changed field.
