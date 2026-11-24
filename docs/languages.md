@@ -208,6 +208,10 @@ function's.
   weighs nothing and what is in it nothing, as Rust's `macro_rules!`. A macro used where it is no C syntax
   (`EXPORT int f(void)`, a loop macro without a block, `list_for_each(p, l) g(p);`) and directives that split a
   construct (`#ifdef X if (a) { #else if (b) { #endif`) leave syntax errors, weighed as tree-sitter recovered them,
-  with a warning. A loop macro of one name (`FOR_EACH(x) { ... }`) parses cleanly as a function definition in the
-  function (`f.x`), and weighs so. Both arms of an `#if` / `#else` weigh, summed, and so does an `#if 0` block. A
-  `return` in an `#if` block is never its body's last statement: it is a jump, even at the end.
+  with a warning. An attribute macro between a function's type and its name (`static int internal_function
+  check_matching(...)`) is such a one, and the recovered tree may take it for the name: in glibc's regex (vendored
+  in git's `compat/regex/`) 89 functions merge into 3 entries `internal_function`, one a file, summed. No grammar
+  tells such a macro from a name; `--exclude 'compat/**'` (or `[files] exclude`) leaves vendored code out. A loop
+  macro of one name (`FOR_EACH(x) { ... }`) parses cleanly as a function definition in the function (`f.x`), and
+  weighs so. Both arms of an `#if` / `#else` weigh, summed, and so does an `#if 0` block. A `return` in an `#if`
+  block is never its body's last statement: it is a jump, even at the end.
