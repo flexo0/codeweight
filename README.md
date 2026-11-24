@@ -10,7 +10,7 @@ of its elements' weights; a commit's is its net delta, after minus before.
 Use it to see where the heavy code is, how much a commit or your uncommitted changes add or take away, or to let a
 coding agent check its own changes.
 
-It reads Java, TypeScript (TSX too), JavaScript, Python, Rust and Go, parsed by tree-sitter. Markdown files get a docs
+It reads Java, TypeScript (TSX too), JavaScript, Python, Rust, Go and C, parsed by tree-sitter. Markdown files get a docs
 weight of their own.
 
 The default weights aren't guessed: they are tuned on 1,400+ pairs of a bad snippet beside its simpler good

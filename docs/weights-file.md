@@ -81,6 +81,7 @@ test_globs = [
     "**/test/**", "**/tests/**", "**/__tests__/**", "**/*Test.java", "**/*Tests.java",
     "**/*.test.ts", "**/*.spec.ts", "**/*.test.tsx", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py",
     "**/*.test.js", "**/*.spec.js", "**/*.test.jsx", "**/*.spec.jsx", "**/*_test.go",
+    "**/test_*.c", "**/*_test.c",
 ]
 docs_globs = ["**/*.md", "**/*.markdown"]   # docs alone, weighed by [docs], though a test glob matches them too
 ```
@@ -121,34 +122,35 @@ tree levels don't count (`a.b().c()` is not deep). An `else if` (Python's `elif`
 are the cases of a `switch` or a `match`.
 
 The languages' keys are `java`, `typescript` (for `.ts` and `.tsx` alike: its `node_kinds` may name a kind of either
-grammar, the `jsx_*` ones being TSX's), `javascript` (its own, not `typescript`'s), `python`, `rust` and `go`. A
+grammar, the `jsx_*` ones being TSX's), `javascript` (its own, not `typescript`'s), `python`, `rust`, `go` and `c`. A
 node kind is a tree-sitter one, as the language's grammar names it.
 
 ## The categories
 
-| Category | Java | TypeScript, TSX, JavaScript | Python | Rust | Go |
-|---|---|---|---|---|---|
-| `statement` | an expression statement, a local variable, a field, a `return` that ends its function or lambda, a lambda's expression body (`x -> f(x)`, as `{ return f(x); }`), `yield`, `assert`, `synchronized`, an enum constant | an expression statement, `const` / `let` / `var`, a class field, an interface's property, a `type` alias, a `return` that ends its function, an arrow's expression body (`x => f(x)`) | an expression statement (an assignment too; not a docstring or a bare `...`), `assert`, `del`, a `type` alias, a `return` that ends its function, a lambda's body, a comprehension's element | an expression statement, `let`, `const`, `static`, a `type` alias, a field, an enum variant, a block's tail expression (its value, no `;`), a closure's expression body, a `match` arm's value that is no block, a `return` that ends its function or closure | an expression statement, an assignment, `:=`, each `var` / `const` spec, a send, `defer`, `go`, a type alias, a field, `i++` / `x += 1` (an `operator` too; not as a `for` clause's update), a `return` that ends its function or literal |
-| `call` | a method call | a call; in TSX and JavaScript each JSX element | a call (a class's `Foo()` too: no syntax tells it from a function's) | a call (a tuple struct's `P(1)` too) | a call (`new(T)`, `make(...)` too) |
-| `constructor` | `new Foo()`, an array's `new int[3]` / `new T[] {...}` (not a bare `{...}` initializer), `this(...)` / `super(...)` | `new Foo()` | — | a struct literal (`P { x: 1 }`) | a composite literal (`P{X: 1}`, `[]int{1}`, `map[K]V{}`; not an element's own `{...}`) |
-| `macro` | — | — | — | a macro invocation (`println!(...)`, `vec![...]`: its arguments aren't parsed) | — |
-| `argument` | each argument of a call or constructor (not an enum constant's) | each argument of a call or `new`, a tagged template's string one; none of a JSX element | each argument of a call (`*a`, `k=v`, `**kw` too), a lone generator (`f(x for x in xs)`) one; not a class's bases | each argument of a call; none of a macro | each argument of a call (a type, as `make`'s, too) |
-| `branch` | `if`, a ternary `?:` | `if`, a ternary `?:` | `if`, `elif`, `x if c else y`, a comprehension's `if` | `if` (`if let` too) | `if` |
-| `case` | each `switch` case (`default` too), of a statement or an expression | each `switch` case (`default` too) | each `match` case | each `match` arm | each `switch`, type switch or `select` case (`default` too) |
-| `loop` | `for`, for-each, `while`, `do` | `for`, `for ... in` / `of`, `while`, `do` | `for`, `while`, a comprehension's `for` | `for`, `while`, `loop` | `for` |
-| `try` | `try`, try-with-resources | `try` | `try`, `with` | — | — |
-| `catch` | a `catch` clause | a `catch` clause | an `except` clause | — | — |
-| `lambda` | a lambda | an arrow or function expression not bound to a name at the file's level or as a field | a `lambda` | a closure | a `func` literal |
-| `function` | a method or constructor | a function, method, signature, an arrow bound to a name at the file's level or as a field | a `def` | a `fn`, a trait's signature | a function, a method, a named interface's method |
-| `class` | a class, interface, enum, record or annotation type | a class, interface, enum, namespace | a `class` | a struct, enum, union, trait, `mod`; an `impl` is its type's class, weighing nothing of its own | a type definition (`type T struct {...}`, `interface`, `type C float64`), not an alias |
-| `bool_op` | each `&&` / `\|\|` | each `&&` / `\|\|` / `??` | each `and` / `or` | each `&&` / `\|\|`, a let chain's | each `&&` / `\|\|` |
-| `jump` | `break`, `continue`, `throw`, an early `return` | `break`, `continue`, `throw`, an early `return` | `break`, `continue`, `raise`, an early `return` | `break`, `continue`, `?`, an early `return` | `break`, `continue`, `goto`, `fallthrough`, an early `return` |
-| `operator` | each arithmetic, comparison (`instanceof` too), bitwise or unary operator, a compound assignment (a plain `=` under `assignments`), `++` / `--` | the same (`in`, `typeof`, `void`, `delete` too) | the same (`not`, `in`, `is` too) | the same (not `*x`, `&x`) | the same (`&^` too; not `*p`, `&x`, `<-ch`) |
-| `access` | a field access, an array index | a member (`a.b`, `a?.b`), a subscript | an attribute, a subscript | a field (`a.b`, `a.0`), an index | a selector (`a.b`), an index, a slice (`a[i:j]`) |
-| `parameter` | a method's, constructor's or lambda's parameter (a record's component too), not a receiver (`A this`) | a function's, method's, signature's or arrow's parameter, not a `this` one nor a function type's | a function's or lambda's parameter (`*args`, `**kwargs` too), not the first `self` / `cls` nor a bare `*` / `/` | a function's or closure's parameter, not `self` nor a `fn(...)` type's | each name of a function's, method's, literal's or interface method's parameters (an unnamed one once), not the receiver, the results nor a function type's |
+| Category | Java | TypeScript, TSX, JavaScript | Python | Rust | Go | C |
+|---|---|---|---|---|---|---|
+| `statement` | an expression statement, a local variable, a field, a `return` that ends its function or lambda, a lambda's expression body (`x -> f(x)`, as `{ return f(x); }`), `yield`, `assert`, `synchronized`, an enum constant | an expression statement, `const` / `let` / `var`, a class field, an interface's property, a `type` alias, a `return` that ends its function, an arrow's expression body (`x => f(x)`) | an expression statement (an assignment too; not a docstring or a bare `...`), `assert`, `del`, a `type` alias, a `return` that ends its function, a lambda's body, a comprehension's element | an expression statement, `let`, `const`, `static`, a `type` alias, a field, an enum variant, a block's tail expression (its value, no `;`), a closure's expression body, a `match` arm's value that is no block, a `return` that ends its function or closure | an expression statement, an assignment, `:=`, each `var` / `const` spec, a send, `defer`, `go`, a type alias, a field, `i++` / `x += 1` (an `operator` too; not as a `for` clause's update), a `return` that ends its function or literal | an expression statement (not an empty `;`), a declaration, a `typedef` (not one defining a struct), a field, an enumerator, `#define N 10`, a `return` that ends its function |
+| `call` | a method call | a call; in TSX and JavaScript each JSX element | a call (a class's `Foo()` too: no syntax tells it from a function's) | a call (a tuple struct's `P(1)` too) | a call (`new(T)`, `make(...)` too) | a call (a macro's `MAX(a, b)` too) |
+| `constructor` | `new Foo()`, an array's `new int[3]` / `new T[] {...}` (not a bare `{...}` initializer), `this(...)` / `super(...)` | `new Foo()` | — | a struct literal (`P { x: 1 }`) | a composite literal (`P{X: 1}`, `[]int{1}`, `map[K]V{}`; not an element's own `{...}`) | a compound literal (`(struct P){1, 2}`; not a bare `{...}`) |
+| `macro` | — | — | — | a macro invocation (`println!(...)`, `vec![...]`: its arguments aren't parsed) | — | — |
+| `argument` | each argument of a call or constructor (not an enum constant's) | each argument of a call or `new`, a tagged template's string one; none of a JSX element | each argument of a call (`*a`, `k=v`, `**kw` too), a lone generator (`f(x for x in xs)`) one; not a class's bases | each argument of a call; none of a macro | each argument of a call (a type, as `make`'s, too) | each argument of a call |
+| `branch` | `if`, a ternary `?:` | `if`, a ternary `?:` | `if`, `elif`, `x if c else y`, a comprehension's `if` | `if` (`if let` too) | `if` | `if`, a ternary `?:` |
+| `case` | each `switch` case (`default` too), of a statement or an expression | each `switch` case (`default` too) | each `match` case | each `match` arm | each `switch`, type switch or `select` case (`default` too) | each `switch` case (`default` too) |
+| `loop` | `for`, for-each, `while`, `do` | `for`, `for ... in` / `of`, `while`, `do` | `for`, `while`, a comprehension's `for` | `for`, `while`, `loop` | `for` | `for`, `while`, `do` |
+| `try` | `try`, try-with-resources | `try` | `try`, `with` | — | — | MSVC's `__try` |
+| `catch` | a `catch` clause | a `catch` clause | an `except` clause | — | — | MSVC's `__except` |
+| `lambda` | a lambda | an arrow or function expression not bound to a name at the file's level or as a field | a `lambda` | a closure | a `func` literal | — |
+| `function` | a method or constructor | a function, method, signature, an arrow bound to a name at the file's level or as a field | a `def` | a `fn`, a trait's signature | a function, a method, a named interface's method | a definition, a prototype at the file's level |
+| `class` | a class, interface, enum, record or annotation type | a class, interface, enum, namespace | a `class` | a struct, enum, union, trait, `mod`; an `impl` is its type's class, weighing nothing of its own | a type definition (`type T struct {...}`, `interface`, `type C float64`), not an alias | a struct, union or enum with a body |
+| `bool_op` | each `&&` / `\|\|` | each `&&` / `\|\|` / `??` | each `and` / `or` | each `&&` / `\|\|`, a let chain's | each `&&` / `\|\|` | each `&&` / `\|\|` |
+| `jump` | `break`, `continue`, `throw`, an early `return` | `break`, `continue`, `throw`, an early `return` | `break`, `continue`, `raise`, an early `return` | `break`, `continue`, `?`, an early `return` | `break`, `continue`, `goto`, `fallthrough`, an early `return` | `break`, `continue`, `goto`, an early `return` |
+| `operator` | each arithmetic, comparison (`instanceof` too), bitwise or unary operator, a compound assignment (a plain `=` under `assignments`), `++` / `--` | the same (`in`, `typeof`, `void`, `delete` too) | the same (`not`, `in`, `is` too) | the same (not `*x`, `&x`) | the same (`&^` too; not `*p`, `&x`, `<-ch`) | the same (not `*p`, `&x`, `sizeof`) |
+| `access` | a field access, an array index | a member (`a.b`, `a?.b`), a subscript | an attribute, a subscript | a field (`a.b`, `a.0`), an index | a selector (`a.b`), an index, a slice (`a[i:j]`) | a field (`a.b`, `p->b`), a subscript |
+| `parameter` | a method's, constructor's or lambda's parameter (a record's component too), not a receiver (`A this`) | a function's, method's, signature's or arrow's parameter, not a `this` one nor a function type's | a function's or lambda's parameter (`*args`, `**kwargs` too), not the first `self` / `cls` nor a bare `*` / `/` | a function's or closure's parameter, not `self` nor a `fn(...)` type's | each name of a function's, method's, literal's or interface method's parameters (an unnamed one once), not the receiver, the results nor a function type's | a definition's or prototype's parameter (`...` too), not `(void)` nor a function pointer's |
 
 JavaScript's elements are TypeScript's but for the type ones (an interface, an enum, a namespace, a signature, an
-interface's property, a `type` alias); a `using` declaration is a statement, as `let`.
+interface's property, a `type` alias); a `using` declaration is a statement, as `let`. C's `#if` / `#ifdef` blocks
+weigh nothing of their own: their code weighs where it is, their condition its operators.
 
 Every operator counts: `a && b && c` is 2 `bool_op`, `a + b - c` 2 `operator`, `a * b + c * d` 3, `x += b + c` 2,
 `!!x` 2, Python's `a < b < c` 2; a plain `=` is 1 under `[conditions] assignments` (a declaration's initializer

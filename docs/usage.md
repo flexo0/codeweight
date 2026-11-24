@@ -1,7 +1,7 @@
 # Using codeweight
 
 It reads Java (`.java`), TypeScript (`.ts`, `.mts`, `.cts`), TSX (`.tsx`), JavaScript (`.js`, `.jsx`, `.mjs`, `.cjs`),
-Python (`.py`, `.pyi`), Rust (`.rs`) and Go (`.go`), and weighs Markdown (`.md`, `.markdown`) as docs.
+Python (`.py`, `.pyi`), Rust (`.rs`), Go (`.go`) and C (`.c`, `.h`), and weighs Markdown (`.md`, `.markdown`) as docs.
 
 ```
 codeweight scan [<path>...] [--exclude <pattern>]... [<one>|--short] [-v] [--json]

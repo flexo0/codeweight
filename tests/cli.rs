@@ -287,6 +287,36 @@ fn scan_weighs_go_its_test_files_and_vendor_and_generated_files_left_out() {
 }
 
 #[test]
+fn scan_weighs_c_its_headers_and_its_test_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    for (file, text) in [
+        // Under the defaults: m is function 1.55, statement 1, call 0.49 (`void` no parameter).
+        ("src/a.c", "void m(void) { g(); }\n"),
+        // A header's prototype: function 1.55, its declaration no statement.
+        (
+            "src/a.h",
+            "#ifndef A_H\n#define A_H\nvoid n(void);\n#endif\n",
+        ),
+        // A test file: 3.04.
+        ("src/test_a.c", "void test_m(void) { g(); }\n"),
+    ] {
+        let path = root.join(file);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    }
+
+    let output = codeweight(root, &["scan", "--code", ".", "-v"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(
+        stdout(&output),
+        "total 4.59\n3.04  src/a.c  m\n1.55  src/a.h  n\n"
+    );
+    let tests = codeweight(root, &["scan", "--tests", ".", "-v"]);
+    assert_eq!(stdout(&tests), "total 3.04\n3.04  src/test_a.c  test_m\n");
+}
+
+#[test]
 fn scan_docs_weighs_the_markdown_files_alone_and_scan_and_scan_tests_never_see_them() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();

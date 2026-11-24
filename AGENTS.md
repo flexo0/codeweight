@@ -8,7 +8,7 @@ Guidance for coding agents working in this repository.
 function, a class, ...) has a weight, set in a weights file; an element nested in branches, loops, lambdas and nested
 functions weighs more. The weight of a file, a folder or a function is the sum of its elements' weights; the weight of
 a git commit (or a range, or the uncommitted changes) is its net delta, after minus before, positive or negative. It
-reads Java, TypeScript (TS, TSX), JavaScript, Python, Rust and Go, parsed by tree-sitter. It weighs docs too: a
+reads Java, TypeScript (TS, TSX), JavaScript, Python, Rust, Go and C, parsed by tree-sitter. It weighs docs too: a
 Markdown file's docs weight is its words, punctuation and symbol runs, a number of its own, never summed with the code's or the
 tests': `scan`, `show` and `diff` print the three (`--code`, `--tests` or `--docs` one alone, with its
 report).
@@ -26,7 +26,7 @@ made while building goes into its subject's file, in the same commit).
 - The `show` and `diff` tests make throwaway git repos in a temp dir (`tempfile`); never run against a real repo.
 - Rust 1.100 (`rust-toolchain.toml`, `rust-version` in `Cargo.toml`), edition 2024. Few dependencies: `tree-sitter`
   and its grammars (`tree-sitter-java`, `tree-sitter-typescript`, `tree-sitter-javascript`, `tree-sitter-python`,
-  `tree-sitter-rust`, `tree-sitter-go`), `clap`, `serde`, `toml`, `serde_json`, `ignore` and its `globset` (the `[files]` globs), `rayon`,
+  `tree-sitter-rust`, `tree-sitter-go`, `tree-sitter-c`), `clap`, `serde`, `toml`, `serde_json`, `ignore` and its `globset` (the `[files]` globs), `rayon`,
   `anyhow`; `tempfile` for the tests. A new one needs a reason.
 - External tool: `git` (the commit mode runs it, `git diff-tree` and `git cat-file --batch`, for the uncommitted
   changes `git add -A` into a copy of the index and `git write-tree`; no `git2` / `gix`).

@@ -445,10 +445,12 @@ impl<'c> Weigher<'c> {
     }
 }
 
-/// Whether a number literal is a magic one: its value neither 0 nor 1 (`_` separators, a radix prefix and a type
-/// suffix aside: `1_000`, `0x1`, `1u8`, `1.0f`, `1L`, `1j`).
+/// Whether a number literal is a magic one: its value neither 0 nor 1 (a sign, which C's grammar puts in the
+/// literal, `_` separators, a radix prefix and a type suffix aside: `-1`, `1_000`, `0x1`, `1u8`, `1.0f`, `1L`,
+/// `1j`).
 fn is_magic(literal: &str) -> bool {
     let text: String = literal
+        .trim_start_matches(['-', '+'])
         .chars()
         .filter(|c| *c != '_')
         .collect::<String>()
@@ -511,12 +513,12 @@ mod tests {
     fn a_magic_number_is_one_but_0_and_1() {
         for literal in [
             "0", "1", "0.0", "1.", "1.0", "1_0e-1", "0x1", "0b0", "0o1", "1u8", "1.0f64", "1L",
-            "1d", "1j", "01",
+            "1d", "1j", "01", "-1", "+0", "-0x1UL",
         ] {
             assert!(!is_magic(literal), "{literal}");
         }
         for literal in [
-            "2", "3.14", "42u32", "1e3", "0x1f", "1_000", "0.5", ".5", "100L", "2j",
+            "2", "3.14", "42u32", "1e3", "0x1f", "1_000", "0.5", ".5", "100L", "2j", "-2",
         ] {
             assert!(is_magic(literal), "{literal}");
         }

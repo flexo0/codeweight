@@ -43,7 +43,7 @@ total        = Σ weight(node) over the nodes that have a category
   per comparison, 2), `&`, `|`, `^`, and the unary ones (`-x`, `!x`, `not x`, `~x`, TS's `typeof`, `++` and `--`;
   `!!x` is 2). A compound assignment (`x += 1`) is its operator, so `x += b + c` is 2; a plain `=` is none, the
   statement already weighing it, but under `[conditions] assignments` (on by default), where it is one too. A negative number (`-1`) is a literal, no operator. A Rust
-  dereference (`*x`) and a borrow (`&x`) are none, and so are Go's (`*p`, `&x`) and its receive (`<-ch`). `&&=`,
+  dereference (`*x`) and a borrow (`&x`) are none, and so are Go's (`*p`, `&x`) and its receive (`<-ch`), and C's (`*p`, `&x`). `&&=`,
   `||=`, `??=` are logical: `bool_op`.
 - `access`: one per field access or index, so `obj.a` is 1, `obj.a.b` and `a[i][j]` are 2, each weighed by its
   place in a row of them, from 0: `access × min(1 + step × place, max)` (`[accesses]`). The place is how many
@@ -78,7 +78,7 @@ total        = Σ weight(node) over the nodes that have a category
   `matches!(x, P)` by a call (`x.is_ipv4()`), which with a macro weighing a call's 0.55 came out heavier.
 - `constructor`: a constructor, apart from `call`: Java's `new Foo()`, an array's `new int[3]` / `new T[] {...}`
   and `this(...)` / `super(...)`, TS's and JS's `new`, Rust's struct literal (`P { x: 1 }`), Go's composite
-  literal (`P{X: 1}`, `[]int{1}`). It makes a new object where a method call asks one, so it weighs a bit more,
+  literal (`P{X: 1}`, `[]int{1}`), C's compound literal (`(struct P){1, 2}`). It makes a new object where a method call asks one, so it weighs a bit more,
   0.9 against 0.55 (by judgment: for Java's, TS's and Go's the pairs score the same for any weight
   from 0.25 to 5). Its
   arguments count as a call's; it is flat by default, as `call`. A bare initializer (`int[] a = {1, 2}`, a Go
@@ -110,7 +110,7 @@ add no weight of their own. The example pairs asked for them; the tuning on them
 all but `nullish_operator`, which there only ties 11 pairs more; `nested_ternaries`, `free_default` and
 `assignments` were asked for later, once the tuned pairs were read. A file on its own that leaves the table out has them all off.
 
-- `casts`: a cast or type assertion is an `operator`, one per cast (no run): Java's `(T) x`, TS's `x as T`,
+- `casts`: a cast or type assertion is an `operator`, one per cast (no run): Java's and C's `(T) x`, TS's `x as T`,
   `x satisfies T`, `x!` and `<T>x` (TS only: TSX reads it as JSX), Rust's `x as T`, Go's `x.(T)`. A cast is
   something to read and check, as an arithmetic operator is; without the rule an unneeded cast weighs nothing.
   JavaScript and Python have none (Python's `cast(T, x)` is a call); Go's conversion `T(x)` is a call already.
@@ -118,7 +118,7 @@ all but `nullish_operator`, which there only ties 11 pairs more; `nested_ternari
   `operator`, as the comparison it stands for (`if let Ok(_) = x` as `x.is_ok()` is a call) would be.
 - `magic_numbers`: a number literal whose value is neither 0 nor 1 is an `access`, as the named constant in its
   place (`math.pi`) would be. The value is read past `_` separators, a radix prefix and a type suffix (`1_000`,
-  `0x1`, `1u8`, `1.0f`, `1L`, `1j`); a negative one (`-2`) is its literal's, the `-` no operator. Every literal
+  `0x1`, `1u8`, `1.0f`, `1L`, `1j`), and past a sign C's grammar puts in the literal (`-1`); a negative one (`-2`) is its literal's, the `-` no operator. Every literal
   counts, a constant's definition and a case's label too.
 - `nullish_operator`: `??` and `??=` are an `operator`, not a `bool_op`: a default value (as `unwrap_or` is a
   call), not a branch of control flow; `a ?? b ?? c` is 2.
@@ -126,7 +126,7 @@ all but `nullish_operator`, which there only ties 11 pairs more; `nested_ternari
   b else z`) nests, as one in its consequence does, rather than being a sibling, as an `else if` is: a nested
   ternary is one expression to unravel, where an `else if` chain is a list of statements. On by default.
 - `free_default`: a switch's or match's default case weighs nothing, as an `else` weighs nothing: Java's `default`
-  (`default:`, `default ->`), TS's and JS's `default:`, Go's `default:` (of a switch or a select), a bare `_` of
+  (`default:`, `default ->`), TS's and JS's `default:`, Go's `default:` (of a switch or a select), C's `default:`, a bare `_` of
   Rust's `match` and Python's `match` (not one with a guard, `_ if x`). So a switch weighs less than the if-chain it
   replaces as long as a `case` weighs less than a `branch`, which the tuning keeps. Its body still nests. On by
   default.
@@ -134,7 +134,7 @@ all but `nullish_operator`, which there only ties 11 pairs more; `nested_ternari
   statement: writing a variable is something to follow, so `case 1 -> x = f();` weighs more than the switch
   expression's `case 1 -> f();`, and `int x; x = 1;` more than `int x = 1;`. Each counts: `a = b = c` is 2. A
   declaration's initializer is none: Java's `int x = 1`, TS's and JS's `let` / `const` / `var`, Rust's `let`, Go's
-  `:=` and `var x = 1`; nor is Python's `=`, which is its declaration too (only `+=` and its like weigh). Go's
+  `:=` and `var x = 1`, C's `int x = 1`; nor is Python's `=`, which is its declaration too (only `+=` and its like weigh). Go's
   assignment is a statement of its own and stays one. On by default.
 
 ## The docs weight

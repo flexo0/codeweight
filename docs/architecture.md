@@ -5,7 +5,7 @@
 | `cli` | the arguments (`clap`), the commands |
 | `config` | loads the weights file, merges it over the defaults, validates it |
 | `source` | an input as `(path, kind, text)` items, a kind a language's code or Markdown: from disk (`ignore`, the excludes) or git blobs at a revision |
-| `lang` | a module per language (Java, TS and TSX, JavaScript, Python, Rust, Go): grammar, extensions, node kind → category, nesting kinds, function names |
+| `lang` | a module per language (Java, TS and TSX, JavaScript, Python, Rust, Go, C): grammar, extensions, node kind → category, nesting kinds, function names |
 | `engine` | one tree walked: each node's weight, summed by function, class and file |
 | `markdown` | a Markdown text's docs weight: its words, punctuation and symbol runs, line by line, no tree-sitter |
 | `git` | the files a commit, a range or the uncommitted changes changed (`git diff-tree -r -M`; the uncommitted ones as a tree, `git add -A` into a copy of the index, `git write-tree`), their text before and after (`git cat-file --batch`) |
@@ -14,7 +14,7 @@
 Files are weighed in parallel (`rayon`).
 
 Built: every module. The dependencies: `tree-sitter`, `tree-sitter-java`, `tree-sitter-typescript`,
-`tree-sitter-javascript`, `tree-sitter-python`, `tree-sitter-rust`, `tree-sitter-go`, `clap`, `serde`, `serde_json` (the JSON report), `toml`, `anyhow`, `ignore`, `globset` (the
+`tree-sitter-javascript`, `tree-sitter-python`, `tree-sitter-rust`, `tree-sitter-go`, `tree-sitter-c`, `clap`, `serde`, `serde_json` (the JSON report), `toml`, `anyhow`, `ignore`, `globset` (the
 `[files]` globs; `ignore` is built on it, so it costs no build), `rayon`, and `tempfile` for the tests. `git` is run
 as a command, no `git2` / `gix`.
 

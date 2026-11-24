@@ -1,6 +1,7 @@
 //! The languages: each one's grammar, file extensions, node kind → category table, nesting constructs and how its
 //! functions and classes are named. The engine reads these tables; it knows no language itself.
 
+pub mod c;
 pub mod go;
 pub mod java;
 pub mod javascript;
@@ -23,6 +24,7 @@ pub const ALL: &[&Lang] = &[
     &python::PYTHON,
     &rust::RUST,
     &go::GO,
+    &c::C,
 ];
 
 /// A language's tables.
@@ -586,6 +588,8 @@ mod tests {
         );
         assert_eq!(for_path(Path::new("a/b.rs")).map(|l| l.name), Some("rust"));
         assert_eq!(for_path(Path::new("a/b.go")).map(|l| l.name), Some("go"));
+        assert_eq!(for_path(Path::new("a/b.c")).map(|l| l.name), Some("c"));
+        assert_eq!(for_path(Path::new("a/b.h")).map(|l| l.name), Some("c"));
         assert!(for_path(Path::new("a/b.txt")).is_none());
         assert!(for_path(Path::new("Makefile")).is_none());
     }

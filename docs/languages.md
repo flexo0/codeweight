@@ -3,7 +3,7 @@
 What each language's elements are, where it adds to or differs from the general rules ([weight.md](weight.md)),
 which are Java's as they stand. Every constructor is a `constructor`: Java's `new Foo()`, an array's `new int[3]` /
 `new Integer[] {1, 2}` (a bare `{1, 2}` initializer is none) and `this(...)` / `super(...)`, TS's and JS's `new`,
-Rust's struct literal, Go's composite literal; Python's `Foo()` stays a `call`, no syntax telling it from a
+Rust's struct literal, Go's composite literal, C's compound literal; Python's `Foo()` stays a `call`, no syntax telling it from a
 function's.
 
 ## TypeScript, TSX and JavaScript
@@ -152,3 +152,55 @@ function's.
   conversion (`[]byte(s)`; `int(x)` parses as a call) and a type assertion (`x.(T)`) weigh nothing of their own,
   as Rust's struct expression.
 - Tests are files of their own, `*_test.go` (a test glob), so the language has no `tests` hook.
+
+## C
+
+- Read from `.c` and `.h` files: a header is C (its prototypes, structs, inline functions, macros). A C++
+  project's `.h` parses with errors and is weighed as tree-sitter recovered it, with a warning;
+  `--exclude '**/*.h'` (or `[files] exclude`) leaves headers out.
+- A function definition is a function, named by the name its declarator chain ends in (`f` in
+  `static int *const f(int)`, `getf` in `int (*getf(void))(int)`, the function returning a function pointer). A
+  prototype at the file's level (`int f(int);`, `extern int g(char *);`) is a function too, as Rust's `extern`
+  signature and TS's `declare function` are: a header's API weighs its functions, and a prototype and its
+  definition in one file are one entry, summed, its line the prototype's (as TS's overloads). A declaration of
+  prototypes alone weighs no statement beside them; a prototype inside a function is a statement there, no function
+  of its own. A function pointer (`void (*handler)(int)`, a parameter's `int (*cb)(int)`, a `typedef` of one)
+  declares no function: a statement.
+- A function's parameters are those of the declarator nearest its name (not the function type it returns), `...`
+  one; `(void)` is none, and so are a function pointer's.
+- A struct, union or enum with a body is a class, named by its own name, else by the `typedef` that names it
+  (`typedef struct {...} P;` is `P`, `typedef struct node {...} Node;` is `node`); that `typedef` weighs nothing of
+  its own, the class weighing for it. A reference to one (`struct S *p`) weighs nothing; an anonymous one (`struct {...} s;`,
+  a struct's `union {...} u;`) is no class, its fields statements where it is, as Go's. One declared in a function is
+  a class nested in it (`f.local`). C has no methods and no lambdas.
+- `if` nests its consequence; its `else` is a clause beside it, as TS's: its statement deeper, its `if`
+  (`else if`) at the depth. A ternary `?:` is a branch, as Java's. A `switch` is no nesting construct; each `case`
+  (`default` too) is a `case`, its value at its depth, its statements deeper (the grammar puts a case's statements
+  in it, up to the next case). `for`, `while`, `do` are loops. MSVC's structured exceptions: `__try` is a `try`,
+  `__except` a `catch`, `__finally`'s block deeper, `__leave` a jump.
+- `break`, `continue`, `goto` and an early `return` are jumps; a label (`out:`) weighs nothing, and a labeled
+  `return` at a body's end is its last statement (the language's `wrappers`).
+- Statements: an expression statement (an empty `;` none), a declaration (`int a, b = 1;` one), a `typedef`, a
+  field declaration (`int x, y;` one), an enumerator (as Java's enum constant), an object-like `#define N 10` (a
+  constant, as Rust's `const`). `#include`, `#pragma` and a `#define` without a value (a flag, an include guard's)
+  weigh nothing.
+- `&&` / `||` are the logical operators; `~x` is a unary operator, `*p`, `&x`, `sizeof` and `,` none. A cast
+  (`(T) x`) is an `operator` under `[conditions] casts`. The grammar puts a sign in a number literal (`-1` is one
+  literal), so `-1` is no operator, as elsewhere, and under `magic_numbers` its sign is read past. `access` counts a
+  field (`a.b` and `p->b` alike) and a subscript (`a[i]`); a call's callee (`p->f(x)`, a function pointer's) is the
+  call's.
+- A compound literal (`(struct P){1, 2}`) is a `constructor`, as Go's composite literal; a bare initializer
+  (`int a[] = {1, 2}`, `struct S s = { .a = 1 }`) is none. A function-like macro's call (`MAX(a, b)`) parses as a
+  call, and is one: no syntax tells it from a function's.
+- The preprocessor's `#if`, `#ifdef`, `#ifndef`, `#elif` and `#else` blocks weigh nothing of their own and nest
+  nothing: they pick the code that is compiled, no control flow read at run time, so their code weighs where it is
+  (an include guard adds nothing, a function inside `#ifdef` weighs as outside). An `#if`'s condition weighs as any
+  expression (`defined(A) && !defined(B)` is a `bool_op` and an `operator`, `defined` itself nothing).
+- Tests are files of their own (`test_*.c`, `*_test.c`, or in a `test` / `tests` folder: test globs), so the
+  language has no `tests` hook.
+- Known gaps: a macro's body is text the grammar doesn't parse, so a function-like macro (`#define MAX(a, b) ...`)
+  weighs nothing and what is in it nothing, as Rust's `macro_rules!`. A macro used where it is no C syntax
+  (`LIST_FOREACH(x, l) { ... }`, `EXPORT int f(void)`) and directives that split a construct (`#ifdef X if (a) {
+  #else if (b) { #endif`) leave syntax errors, weighed as tree-sitter recovered them, with a warning. Both arms of
+  an `#if` / `#else` weigh, summed, and so does an `#if 0` block. A `return` in an `#if` block is never its body's
+  last statement: it is a jump, even at the end.
