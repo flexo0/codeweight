@@ -48,7 +48,8 @@ a change to the JSON, the CLI or the weights file changes its doc in the same co
 5. Commit Cargo.toml, Cargo.lock and CHANGELOG.md: `release: [c0 d+N t0] 0.2.0, ...` (its weight as any
    commit's).
 6. `git tag v0.2.0` on that commit and `git push origin master v0.2.0`. If the push is rejected (master moved),
-   rebase and tag again before pushing, never move a pushed tag.
+   rebase and tag again before pushing, never move a pushed tag. The tag's push starts the release workflow (below):
+   watch it make the GitHub release.
 7. `cargo publish`. A published version can't be published again: a mistake is the next patch (`cargo yank` takes a
    broken one off).
 
@@ -66,5 +67,29 @@ saves here:
   the way (above, why not).
 - Both write the release commit from a fixed template, without the weight every subject carries.
 
-Left: no version is tagged or published yet, 0.1.0 is the first; the binaries for a tag (a release workflow on a `v*`
-push) aren't built.
+## The binaries
+
+`.github/workflows/release.yml`, on a `v*` tag's push: a `--release` binary for each target, archived with README.md
+and LICENSE as `codeweight-vX.Y.Z-<target>.tar.gz` (`.zip` for Windows) holding a folder of the same name, and a
+GitHub release of the tag with the archives attached, its notes CHANGELOG.md's section for the version. It fails,
+releasing nothing, when the tag isn't `v` and Cargo.toml's version or CHANGELOG.md has no section for it: the tagged
+commit is wrong then, and a pushed tag isn't moved, so the fix is the next patch's release. A run that failed on its
+own (a runner, the network) is rerun from GitHub.
+
+| Target | Runner |
+|---|---|
+| `x86_64-unknown-linux-musl` | `ubuntu-latest`, with `musl-tools` for the grammars' C |
+| `x86_64-apple-darwin` | `macos-latest` (arm64), cross-built |
+| `aarch64-apple-darwin` | `macos-latest` |
+| `x86_64-pc-windows-msvc` | `windows-latest` |
+
+- Linux is musl, a static binary, not gnu: a gnu one links the runner's glibc and fails (`GLIBC_2.xx not found`) on
+  any older one (RHEL 9, Debian 11, an Ubuntu older than the runner's) and on Alpine, where a downloaded binary runs
+  too (a CI container, a self-hosted runner). The grammars are C, no C++, so `musl-gcc` is all they need. musl's
+  allocator is slower under many threads, which a `scan` of a big tree on many cores pays; a fix would need both a
+  Rust `#[global_allocator]` and `tree_sitter::set_allocator` for the grammars' C allocations.
+- The toolchain is rust-toolchain.toml's, its target added with `rustup toolchain install <channel> --target`: a
+  target added to another toolchain (the runner's stable) isn't the one cargo builds with.
+- The target triple is in the archive's name, so a tool downloading the binary for its platform maps to it plainly.
+
+Left: no version is tagged or published yet, 0.1.0 is the first, so the workflow hasn't run on GitHub yet.

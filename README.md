@@ -33,7 +33,12 @@ total +112.46
 
 ## Install
 
-With Rust 1.100 or later and a C compiler (the tree-sitter grammars are C, built from source with the crate):
+A binary for Linux (x86_64, static), macOS (x86_64 and Apple silicon) or Windows (x86_64) from
+[the releases](https://github.com/flexo0/codeweight/releases/latest): unpack the archive for your platform and put
+`codeweight` (`codeweight.exe`) on your `PATH`.
+
+Or from source, with Rust 1.100 or later and a C compiler (the tree-sitter grammars are C, built from source with the
+crate):
 
 ```
 cargo install codeweight

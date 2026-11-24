@@ -1,0 +1,92 @@
+# On a `vX.Y.Z` tag: the release binaries, each archived with README.md and LICENSE, attached to a GitHub release of
+# that tag, its notes CHANGELOG.md's section for the version. How a release is made: docs/releasing.md.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          # musl: a static binary, so it runs on any x86_64 Linux (old glibc, Alpine) the release is downloaded to.
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+          # macos-latest is arm64: the x86_64 binary is cross-built there by Xcode's toolchain.
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: The tag is Cargo.toml's version
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME is not Cargo.toml's version v$version"
+            exit 1
+          fi
+      # The toolchain rust-toolchain.toml pins, with the target added to it (not to the runner's stable).
+      - name: Toolchain
+        run: |
+          channel=$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)
+          rustup toolchain install "$channel" --profile minimal --target ${{ matrix.target }}
+      - name: musl-gcc, for the grammars' C
+        if: contains(matrix.target, 'musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - name: Build
+        run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Archive
+        run: |
+          name="codeweight-$GITHUB_REF_NAME-${{ matrix.target }}"
+          exe=codeweight
+          if [[ "${{ matrix.target }}" == *windows* ]]; then exe=codeweight.exe; fi
+          mkdir -p "dist/$name"
+          cp "target/${{ matrix.target }}/release/$exe" README.md LICENSE "dist/$name/"
+          cd dist
+          if [[ "${{ matrix.target }}" == *windows* ]]; then
+            7z a "$name.zip" "$name"
+          else
+            tar -czf "$name.tar.gz" "$name"
+          fi
+          rm -r "$name"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '/^## / { if (p) exit; if ($2 == v) { p = 1; next } } p' CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "::error::CHANGELOG.md has no section for $version"
+            exit 1
+          fi
+          gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag
