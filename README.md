@@ -3,34 +3,38 @@
 [![crates.io](https://img.shields.io/crates/v/codeweight.svg)](https://crates.io/crates/codeweight)
 [![CI](https://github.com/flexo0/codeweight/actions/workflows/ci.yml/badge.svg)](https://github.com/flexo0/codeweight/actions/workflows/ci.yml)
 
-A CLI that weighs code. Every element of a file (a statement, a call, a branch, a loop, a function, ...) has a
-weight, and an element nested in branches, loops and lambdas weighs more. A file's or a function's weight is the sum
-of its elements' weights; a commit's is its net delta, after minus before.
+A CLI that weighs code. Our ambition is to weigh the code's cognitive volume. 
+Every element of a file (a statement, a call, a branch, a loop, a function, ...) has a weight; 
+an element nested in branches, loops and lambdas weighs more,
+a long argument list weighs more, a long dereference chain weighs more, etc. A file's or a function's weight is the
+sum of its elements' weights; a commit's is its net delta.
 
-Use it to see where the heavy code is, how much a commit or your uncommitted changes add or take away, or to let a
-coding agent check its own changes.
+Designed for autonomous agentic pipelines, for automatic decision-making.
+Use it to see how much module/feature/service/project/you-name-it weights; what delta a commit or uncommitted changes yield;
+to validate amount of docs matches amount of code; to check that refactor reduced weight; etc.
 
-It reads Java, TypeScript (TSX too), JavaScript, Python, Rust, Go and C, parsed by tree-sitter. Markdown files get a docs
-weight of their own.
+It reads Java, TypeScript (TSX too), JavaScript, Python, Rust, Go and C, each parsed by tree-sitter. Markdown files,
+not to be left out, receive a docs weight of their own.
 
-The default weights aren't guessed: they are tuned on 1,400+ pairs of a bad snippet beside its simpler good
-counterpart, with the same behaviour, from linters' rule examples, fixers' tests and real refactoring commits
-([code-snippet-pairs](https://github.com/flexo0/code-snippet-pairs)). The docs weight is calibrated on snippets of code
-beside their descriptions, so a doc weighs what the code it describes does.
+The default coefficients are calibrated on 1,400+ pairs, each a bad snippet beside its simpler good
+counterpart with the same behaviour, from linters' rule examples, fixers' tests and real refactoring commits
+([code-snippet-pairs](https://github.com/flexo0/code-snippet-pairs)). The docs-weight coefficients are calibrated
+on snippets of code beside their descriptions, each description presumed to carry the very same cognitive volume as
+its code, so that a doc weighs precisely what the code it describes does.
 
 ## Example
 
-codeweight run on its own sources, and on what a commit added or took away: its code, its docs and its tests, three
-numbers, never one sum:
+codeweight run on its own repo, and on what a commit added or took away, as three numbers: code, docs and
+tests:
 
 ```
-$ codeweight scan src
-code +9649.96
-docs 0
-tests +3036.49
+$ codeweight scan .
+code +10805.82
+docs +16196.34
+tests +4982.29
 $ codeweight show f4de918 --short
-c+112 d+67 t+65
-$ codeweight show f4de918 --code -v --top 2
+c+112 d+33 t+65
+$ codeweight show f4de918 --code --top 2
 total +112.46
 +30.06  added    src/cli.rs  write_all
 +24.18  heavier  src/cli.rs  scan
@@ -40,7 +44,7 @@ total +112.46
 
 A binary for Linux (x86_64, static), macOS (x86_64 and Apple silicon) or Windows (x86_64) from
 [the releases](https://github.com/flexo0/codeweight/releases/latest): unpack the archive for your platform and put
-`codeweight` (`codeweight.exe`) on your `PATH`.
+`codeweight` (`codeweight.exe` on Windows) on your `PATH`.
 
 Or from source, with Rust 1.100 or later and a C compiler (the tree-sitter grammars are C, built from source with the
 crate):
@@ -51,8 +55,8 @@ cargo install codeweight
 
 or the latest from GitHub, `cargo install --git https://github.com/flexo0/codeweight`.
 
-For a coding agent that reads `SKILL.md` skills (Claude Code and others), link or copy `skills/codeweight/` into the
-agent's skills, e.g. from a clone `ln -s "$PWD/skills/codeweight" ~/.claude/skills/codeweight`.
+For a coding agent that reads `SKILL.md` skills, link or copy `skills/codeweight/` into the
+agent's skills folder, e.g. from a clone: `ln -s "$PWD/skills/codeweight" ~/.claude/skills/codeweight`.
 
 ## Quick start
 
@@ -60,10 +64,10 @@ agent's skills, e.g. from a clone `ln -s "$PWD/skills/codeweight" ~/.claude/skil
 codeweight scan [<path>...]     weigh files and folders (default `.`)
 codeweight show [<rev>]         weigh the net delta of a commit (default `HEAD`), or of a range `A..B`
 codeweight diff                 weigh the net delta of the uncommitted changes (`--staged`: the staged ones alone)
-codeweight init                 write the default weights file to ./codeweight.toml, to tune
+codeweight init                 write the default weights file to ./codeweight.toml, for you to tune
 ```
 
-Each prints three numbers, code, docs and tests (`--short`: on one line). `--code`, `--tests` or `--docs` prints that
+Each prints three numbers: code, docs and tests (`--short`: on one line). `--code`, `--tests` or `--docs` prints that
 number alone, and with `-v` the functions behind it, heaviest first; `--json` the same as JSON.
 
 ## More
@@ -79,9 +83,9 @@ number alone, and with `-v` the functions behind it, heaviest first; `--json` th
 
 ## Building
 
-Rust 1.100 (pinned in `rust-toolchain.toml`, so rustup picks it) and a C compiler for the grammars:
+Rust 1.100 (pinned in `rust-toolchain.toml`, so rustup picks it up) and a C compiler for the grammars:
 `cargo build --release`; checks: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`.
 
-## License
+## Licence
 
 MIT, see [LICENSE](https://github.com/flexo0/codeweight/blob/master/LICENSE).
