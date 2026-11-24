@@ -9,7 +9,7 @@ function, a class, ...) has a weight, set in a weights file; an element nested i
 functions weighs more. The weight of a file, a folder or a function is the sum of its elements' weights; the weight of
 a git commit (or a range, or the uncommitted changes) is its net delta, after minus before, positive or negative. It
 reads Java, TypeScript (TS, TSX), JavaScript, Python, Rust and Go, parsed by tree-sitter. It weighs docs too: a
-Markdown file's docs weight is its words and symbol runs, a number of its own, never summed with the code's or the
+Markdown file's docs weight is its words, punctuation and symbol runs, a number of its own, never summed with the code's or the
 tests': `scan`, `show` and `diff` print the three (`--code`, `--tests` or `--docs` one alone, with its
 report).
 
@@ -58,7 +58,7 @@ made while building goes into its subject's file, in the same commit).
 - A category: `src/default.toml` (its default weight), the languages' tables, `docs/weights-file.md`'s list.
 - A command or option: `src/cli.rs`, `docs/usage.md` (and the README's quick start, if it is there), the skill
   (`skills/codeweight/SKILL.md`).
-- The docs weight (what a Markdown file's words and symbol runs are): `src/markdown.rs`, its `[docs]` weights in
+- The docs weight (what a Markdown file's words, punctuation and symbol runs are): `src/markdown.rs`, its `[docs]` weights in
   `src/default.toml`, `docs/weight.md`; which files are docs: `[files] docs_globs`, `src/source.rs`.
 - A release: `docs/releasing.md` (the version's bump, `CHANGELOG.md`'s section, the tag); a commit's subject is its
   changelog line, so no commit adds to `CHANGELOG.md` but a release's.

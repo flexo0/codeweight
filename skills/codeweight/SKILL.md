@@ -6,15 +6,15 @@ description: Measure how heavy code is with the `codeweight` CLI.
 # codeweight
 
 Every element of code (statement, call, branch, loop, lambda, function, class, ...) has a weight; nesting makes it
-heavier. A function's, file's or folder's weight is the sum. A Markdown file has a docs weight instead: its words
-and symbol runs (`## Setup` is 2). The numbers are relative: compare code under the same weights file, never against
+heavier. A function's, file's or folder's weight is the sum. A Markdown file has a docs weight instead: its words,
+punctuation and symbol runs, on the code's scale (`## Setup` is 1.26, a function word like `the` half a word). The numbers are relative: compare code under the same weights file, never against
 a fixed threshold.
 
 ## Commands
 
 | Command | Prints |
 |---|---|
-| `codeweight scan [<path>...]` (default `.`) | three lines, the weights of the code (tests left out), the docs and the tests: `code +9488.09`, `docs +31321`, `tests +3886.37` |
+| `codeweight scan [<path>...]` (default `.`) | three lines, the weights of the code (tests left out), the docs and the tests: `code +9966.53`, `docs +14870.74`, `tests +4656.52` |
 | `codeweight show [<rev>]` (default `HEAD`) / `A..B` `[-C <path>]` | the three net deltas of a commit or a range: `code +15.5`, `docs 0`, `tests -5` (a zero has no sign) |
 | `codeweight diff [-C <path>]` | the three deltas of the uncommitted changes: `HEAD` against the working tree, staged or not, untracked files too, ignored ones left out |
 | `codeweight diff --staged` | only the staged changes: `HEAD` against the index, what `git commit` would commit |

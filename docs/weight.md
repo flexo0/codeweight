@@ -139,19 +139,32 @@ all but `nullish_operator`, which there only ties 11 pairs more; `nested_ternari
 
 ## The docs weight
 
-A Markdown file's weight is its docs weight, a number of its own, never summed with code's (`markdown`, pure as
-the engine is: text in, weight out); the docs' number of `scan`, `show` and `diff` weighs it, a file the
-`[files] docs_globs` match ([cli.md](cli.md)):
+A Markdown file's weight is its docs weight, a number of its own, never summed with code's but on its scale
+(`markdown`, pure as the engine is: text in, weight out); the docs' number of `scan`, `show` and `diff` weighs it,
+a file the `[files] docs_globs` match ([cli.md](cli.md)):
 
 ```
-docs weight = words × word + symbol runs × symbol      ([docs], 1 and 1 by default)
+docs weight = words × word + function words × function_word
+            + punctuation runs × punctuation + symbol runs × symbol
+                                  ([docs], 0.64, 0.32, 0.32 and 0.62 by default)
 ```
 
-- A word is a run of Unicode letters and digits (any script: `мир` is one); a symbol run is a run of anything else
-  that isn't a space, counted once however long. One rule everywhere, prose, markup, inline code and fenced blocks
-  alike, with no nesting: `a = b + c` is 5, `Hello, world.` 4, `## Setup` 2, `**important**` 3, `a == b` 3,
-  `snake_case`, `well-known` and `don't` 3 each, `foo(a, b);` 6. Markup is what a reader of the source reads too,
-  so `**`, `##` and a fence's backticks are a symbol run each.
+- A word is a run of Unicode letters and digits (any script: `мир` is one); a run of anything else that isn't a
+  space is counted once however long, as punctuation or a symbol. One rule everywhere, prose, markup, inline code
+  and fenced blocks alike, with no nesting: `a = b + c` is 5 runs, `Hello, world.` 4, `## Setup` 2,
+  `**important**` 3, `a == b` 3, `snake_case`, `well-known` and `don't` 3 each, `foo(a, b);` 6. Markup is what a
+  reader of the source reads too, so `**`, `##` and a fence's backticks are a run each.
+- A punctuation run is prose's: sentence punctuation, quotes, parentheses, dashes and backticks, any of them
+  together (`,`, `),`, `."`, `...`, `—`, inline code's `` ` ``), or a lone `-` or `_` (`well-known`, `snake_case`).
+  Any other run is a symbol: an operator (`=`, `->`, `!=`, `--`), markup (`**`, `##`, `](`, a table's `|`), a
+  path's `/`, and a punctuation run with one of them in it (`)[`). So `Hello, world.` is 2 words and 2
+  punctuation runs, `a -> b` 2 words and a symbol, `foo(a, b);` 3 words and 3 punctuation runs.
+- A function word is a word of `[docs] function_words`, whatever its case, in prose: the glue between the words
+  that say something (`a`, `the`, `of`, `is`, `it`, a possessive's `s`), not a word of logic (`and`, `or`, `not`,
+  `if`, `each`), which a description of code leans on. In inline code and in fenced blocks it is a word, a name or
+  a keyword there (`` `a` ``, `for`, `in`). A word only, not a part of one: `the_end` has `the`, `theory` none. The
+  defaults' list is English; a list of one's own replaces it whole, so another language's words go in beside the
+  English ones.
 - Outside fenced blocks only (fenced by three or more backticks or tildes, at any indentation, as a list's are; one
   never closed runs to the end), which a scanner of lines tells:
   - YAML front matter at the top (a first line `---`, up to the next `---` or `...`) weighs nothing, nor does a
@@ -163,8 +176,19 @@ docs weight = words × word + symbol runs × symbol      ([docs], 1 and 1 by def
     unmatched `)`; and a link's or an image's destination whatever its form, the text after `](` up to a space or
     its `)` (a `(` in it matched by a `)`), or in `<...>`. A relative link is one reference as an absolute one is,
     and a doc's renaming rewrites the links to it without weighing their paths' lengths:
-    `[weight.md](weight.md)` is 3 words (`weight`, `md`, the destination) and 4 symbol runs (`[`, `.`, `](`, `)`),
-    `see https://a.org/b.` 2 words and 1 symbol run. A link's title is text; a reference definition
-    (`[id]: url`) is text but its absolute URL; inline code's `](` is code, no link.
+    `[weight.md](weight.md)` is 3 words (`weight`, `md`, the destination), 2 symbol runs (`[`, `](`) and 2
+    punctuation runs (`.`, `)`), `see https://a.org/b.` 2 words and 1 punctuation run. A link's title is text;
+    a reference definition (`[id]: url`) is text but its absolute URL; inline code's `](` is code, no link.
 - A Markdown file is one row, its weight its file's (no functions nor classes), and always clean: any text is
   Markdown.
+- The defaults put the docs on the code's scale, a weight being what a text costs to read and keep: a
+  description that says all a snippet does, no more, weighs what the snippet does. They are fitted on such pairs,
+  code-snippet-pairs' `calib/`: seven snippets of Rust, Python and Java (50 to 170), each described in prose, six
+  of them also as a terse spec of expressions, operators and tables. At 1 each a description weighed twice its
+  code; one factor for all four would be 0.49. The thirteen descriptions pin down the scale, not each kind's share:
+  fitted apart, the shares swing (punctuation from 0.6 to 2 with inline code's backticks standing in for code,
+  function words near 0), for little gain. So the shares are a judgement: a function word and a punctuation run
+  weigh half a word, glue a reader passes over, and the fit sets the scale and the symbol, 0.64 a word and 0.62 a
+  symbol. A third of prose's words are function words, so a word that says something weighs more than one factor
+  would make it. The descriptions miss by 10% on the mean, 33% at worst (the terse `Retry.apply`); `## Setup` is
+  1.26, `the end of it` 1.6, `a -> b` 1.58.

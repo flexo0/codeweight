@@ -73,7 +73,7 @@ the same order, `--config` last before `--help`.
   them.
   The tests are the test files (by path) and the test code inside a source file (Rust's, see [languages.md](languages.md)). The docs
   are the Markdown files, those the docs globs match (by path, `[files] docs_globs`, see [config.md](config.md)),
-  each weighed by its words and symbol runs ([weight.md](weight.md)); a file they match is docs alone, though it is
+  each weighed by its words, punctuation and symbol runs ([weight.md](weight.md)); a file they match is docs alone, though it is
   under `tests/` or the test globs match it, and `--code` and `--tests` never see it. A Markdown file
   is one line of the report, its `(file)` (`--by function` too: it has no functions), and never has a warning.
   With the numbers alone (the three, `--short`, or a specific one's total), the warnings (syntax errors, unreadable

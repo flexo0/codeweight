@@ -33,7 +33,10 @@ max = 2
 
 [docs]
 word = 1
-symbol = 10        # a symbol run apart from a word, so a hand-worked sum reads back both counts
+function_word = 1000  # each kind of run apart, so a hand-worked sum reads back the four counts
+punctuation = 100
+symbol = 10
+function_words = ["the", "of"]
 
 [files]
 exclude = []

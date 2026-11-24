@@ -1,14 +1,24 @@
-//! The docs weight of a Markdown text: its words and its symbol runs, each weighed by `[docs]`. Pure: text in,
-//! weight out; it knows nothing of files, folders or git.
+//! The docs weight of a Markdown text: its words, function words, punctuation runs and symbol runs, each weighed
+//! by `[docs]`. Pure: text in, weight out; it knows nothing of files, folders or git.
+
+use std::collections::HashSet;
 
 use crate::config::Docs;
 use crate::engine::Weighed;
 
-/// A Markdown text's docs weight, `words × word + symbol runs × symbol`, as a file's weight: no entries, always
-/// clean (any text is Markdown).
+/// A Markdown text's docs weight, `words × word + function words × function_word + punctuation runs ×
+/// punctuation + symbol runs × symbol`, as a file's weight: no entries, always clean (any text is Markdown).
 pub fn weigh(text: &str, docs: &Docs) -> Weighed {
-    let counts = count(text);
-    let weight = counts.words as f64 * docs.word + counts.symbols as f64 * docs.symbol;
+    let function_words: HashSet<String> = docs
+        .function_words
+        .iter()
+        .map(|w| w.to_lowercase())
+        .collect();
+    let counts = count(text, &function_words);
+    let weight = counts.words as f64 * docs.word
+        + counts.function_words as f64 * docs.function_word
+        + counts.punctuation as f64 * docs.punctuation
+        + counts.symbols as f64 * docs.symbol;
     Weighed {
         total: weight,
         file: weight,
@@ -18,19 +28,22 @@ pub fn weigh(text: &str, docs: &Docs) -> Weighed {
     }
 }
 
-/// How many words and symbol runs a text has.
+/// How many words, function words, punctuation runs and symbol runs a text has.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct Counts {
     words: usize,
+    function_words: usize,
+    punctuation: usize,
     symbols: usize,
 }
 
-/// The text's words and symbol runs, line by line. A fenced block's lines (its fences too) are counted as they
-/// are; outside them, YAML front matter at the top, a table's separator line and `<!-- comments -->` count
-/// nothing, and a URL and a link's destination (`[a](b/c.md)`'s `b/c.md`) are one word each.
-fn count(text: &str) -> Counts {
+/// The text's words, function words (of `function_words`, lowercase), punctuation runs and symbol runs, line by
+/// line. A fenced block's lines (its fences too) are
+/// counted as they are; outside them, YAML front matter at the top, a table's separator line and `<!-- comments
+/// -->` count nothing, and a URL and a link's destination (`[a](b/c.md)`'s `b/c.md`) are one word each.
+fn count(text: &str, function_words: &HashSet<String>) -> Counts {
     let text = text.strip_prefix('\u{feff}').unwrap_or(text);
-    let mut runs = Runs::default();
+    let mut runs = Runs::new(function_words);
     // A comment opened here closes when a `-->` comes after its `<!--`; with none, its `<!--` is text.
     let last_close = text.rfind("-->");
     let mut fence: Option<Fence> = None;
@@ -62,6 +75,7 @@ fn count(text: &str) -> Counts {
         let closes_after = |at: usize| last_close.is_some_and(|close| close >= start + at + 4);
         in_comment = runs.prose(line, from, closes_after);
     }
+    runs.end();
     runs.counts
 }
 
@@ -137,14 +151,85 @@ enum Run {
     Symbol,
 }
 
-/// The runs counted so far, and the one the last character is in.
+/// The run of characters that are neither letters, digits nor spaces going on, told apart once it ends: prose's
+/// punctuation or a symbol.
 #[derive(Default)]
-struct Runs {
-    counts: Counts,
-    current: Option<Run>,
+struct SymbolRun {
+    length: usize,
+    first: char,
+    /// Whether every character so far is prose's punctuation.
+    prose: bool,
 }
 
-impl Runs {
+impl SymbolRun {
+    fn push(&mut self, c: char) {
+        self.prose = (self.length == 0 || self.prose) && is_prose_punctuation(c);
+        if self.length == 0 {
+            self.first = c;
+        }
+        self.length += 1;
+    }
+
+    /// Whether the run is punctuation: prose's alone (`,`, `),`, `."`, a backtick), or a lone `-` or `_` (a
+    /// hyphen, a name's underscore).
+    fn is_punctuation(&self) -> bool {
+        self.prose || (self.length == 1 && matches!(self.first, '-' | '_'))
+    }
+}
+
+/// Whether `c` is prose's punctuation, any number of which together are still a punctuation run: a sentence's,
+/// quotes, parentheses, a backtick (inline code's), a dash.
+fn is_prose_punctuation(c: char) -> bool {
+    matches!(
+        c,
+        '.' | ','
+            | ':'
+            | ';'
+            | '!'
+            | '?'
+            | '\''
+            | '"'
+            | '('
+            | ')'
+            | '`'
+            | '…'
+            | '‘'
+            | '’'
+            | '“'
+            | '”'
+            | '«'
+            | '»'
+            | '—'
+            | '–'
+    )
+}
+
+/// The runs counted so far, and the one the last character is in.
+struct Runs<'a> {
+    counts: Counts,
+    current: Option<Run>,
+    symbol: SymbolRun,
+    /// The word going on, and whether it began in code (inline or fenced), where a function word is a word.
+    word: String,
+    word_in_code: bool,
+    /// Whether the next character is in code.
+    code: bool,
+    function_words: &'a HashSet<String>,
+}
+
+impl<'a> Runs<'a> {
+    fn new(function_words: &'a HashSet<String>) -> Runs<'a> {
+        Runs {
+            counts: Counts::default(),
+            current: None,
+            symbol: SymbolRun::default(),
+            word: String::new(),
+            word_in_code: false,
+            code: false,
+            function_words,
+        }
+    }
+
     /// One more character.
     fn push(&mut self, c: char) {
         let run = if c.is_whitespace() {
@@ -155,35 +240,63 @@ impl Runs {
             Some(Run::Symbol)
         };
         if run != self.current {
-            match run {
-                Some(Run::Word) => self.counts.words += 1,
-                Some(Run::Symbol) => self.counts.symbols += 1,
-                None => {}
+            self.end();
+            if run == Some(Run::Word) {
+                self.word_in_code = self.code;
             }
+        }
+        match run {
+            Some(Run::Word) => self.word.push(c),
+            Some(Run::Symbol) => self.symbol.push(c),
+            None => {}
         }
         self.current = run;
     }
 
-    /// A URL: one word on its own.
-    fn url(&mut self) {
-        self.counts.words += 1;
+    /// The end of the run going on, counted now: a word as a function word or a word, a symbol run as punctuation
+    /// or a symbol.
+    fn end(&mut self) {
+        if self.current == Some(Run::Word) {
+            if !self.word_in_code && self.function_words.contains(&self.word.to_lowercase()) {
+                self.counts.function_words += 1;
+            } else {
+                self.counts.words += 1;
+            }
+            self.word.clear();
+        }
+        if self.current == Some(Run::Symbol) {
+            if self.symbol.is_punctuation() {
+                self.counts.punctuation += 1;
+            } else {
+                self.counts.symbols += 1;
+            }
+            self.symbol = SymbolRun::default();
+        }
         self.current = None;
     }
 
-    /// A line counted as it is, every character by the rule.
+    /// A URL: one word on its own.
+    fn url(&mut self) {
+        self.end();
+        self.counts.words += 1;
+    }
+
+    /// A line of a fenced block, its fences too: code, every character by the rule.
     fn plain(&mut self, line: &str) {
+        self.code = true;
         line.chars().for_each(|c| self.push(c));
     }
 
     /// A line of prose from byte `from`: a URL one word, a link's destination one word, a comment nothing (both
-    /// outside inline code, whose `](` and `<!--` are code), `closes_after(at)` telling whether a comment at byte `at` closes. Whether the line ends in a comment
-    /// that goes on.
+    /// outside inline code, whose `](` and `<!--` are code), `closes_after(at)` telling whether a comment at byte
+    /// `at` closes. Whether the line ends in a comment that goes on.
     fn prose(&mut self, line: &str, from: usize, closes_after: impl Fn(usize) -> bool) -> bool {
         let mut at = from;
         // Where the inline code the scan is in ends, its closing backticks' end.
         let mut code_until = 0;
         while let Some(c) = line[at..].chars().next() {
             let rest = &line[at..];
+            self.code = at < code_until;
             if at >= code_until {
                 if c == '`' {
                     let ticks = rest.len() - rest.trim_start_matches('`').len();
@@ -306,37 +419,70 @@ mod tests {
     use super::*;
     use crate::config::Config;
 
-    /// The docs weight under the test `[docs]`: a word 1, a symbol run 10.
+    /// The docs weight under the test `[docs]`: a word 1, a symbol run 10, a punctuation run 100, a function word
+    /// (`the`, `of`) 1000.
     fn weight(text: &str) -> f64 {
         let config = Config::from_str_alone(crate::lang::testing::WEIGHTS).unwrap();
-        assert_eq!((config.docs.word, config.docs.symbol), (1.0, 10.0));
+        let docs = &config.docs;
+        assert_eq!(
+            (docs.word, docs.symbol, docs.punctuation, docs.function_word),
+            (1.0, 10.0, 100.0, 1000.0)
+        );
+        assert_eq!(docs.function_words, ["the", "of"]);
         weigh(text, &config.docs).total
     }
 
     #[test]
-    fn words_and_symbol_runs() {
+    fn words_punctuation_and_symbol_runs() {
         assert_eq!(weight("a = b + c"), 3.0 + 20.0);
-        assert_eq!(weight("Hello, world."), 2.0 + 20.0);
+        assert_eq!(weight("Hello, world."), 2.0 + 200.0);
         assert_eq!(weight("## Setup"), 1.0 + 10.0);
         assert_eq!(weight("**important**"), 1.0 + 20.0);
         assert_eq!(weight("a == b"), 2.0 + 10.0);
-        assert_eq!(weight("snake_case"), 2.0 + 10.0);
-        assert_eq!(weight("well-known"), 2.0 + 10.0);
-        assert_eq!(weight("don't"), 2.0 + 10.0);
-        assert_eq!(weight("foo(a, b);"), 3.0 + 30.0);
+        assert_eq!(weight("snake_case"), 2.0 + 100.0);
+        assert_eq!(weight("well-known"), 2.0 + 100.0);
+        assert_eq!(weight("don't"), 2.0 + 100.0);
+        assert_eq!(weight("foo(a, b);"), 3.0 + 300.0);
         assert_eq!(weight("x1 42"), 2.0);
     }
 
     #[test]
+    fn punctuation_is_prose_s_and_a_lone_hyphen_or_underscore() {
+        // Prose's punctuation together is one punctuation run, however long.
+        // `(`, `),`, `...`, `«`, `»`, `—`, `“`, `”!`.
+        assert_eq!(weight("(see a), b... «c» — “d”!"), 5.0 + 800.0);
+        assert_eq!(weight("`x`, y"), 2.0 + 200.0);
+        // A lone `-` or `_` is one; two, or with another character, are a symbol.
+        assert_eq!(weight("a - b"), 2.0 + 100.0);
+        assert_eq!(weight("--flag a__b"), 3.0 + 20.0);
+        // Any other character makes the run a symbol: an operator, markup, a path's `/`.
+        assert_eq!(weight("a -> b != c"), 3.0 + 20.0);
+        assert_eq!(weight("a/b.md"), 3.0 + 10.0 + 100.0);
+        // `)[`, `]` and `=` symbols, `(` and `;` punctuation.
+        assert_eq!(weight("f(x)[0] = y;"), 4.0 + 30.0 + 200.0);
+    }
+
+    #[test]
+    fn a_function_word_in_prose_whatever_its_case() {
+        assert_eq!(weight("the end of it"), 2000.0 + 2.0);
+        assert_eq!(weight("The THE then"), 2000.0 + 1.0);
+        // In inline code and fenced blocks, it is a word: a name or a keyword there.
+        assert_eq!(weight("`the` of"), 1.0 + 200.0 + 1000.0);
+        assert_eq!(weight("```\nthe of\n```\n"), 2.0 + 200.0);
+        // A part of a word isn't one: `the_end` is `the`, `_`, `end`.
+        assert_eq!(weight("theory the_end"), 1000.0 + 2.0 + 100.0);
+    }
+
+    #[test]
     fn letters_of_any_script_are_words() {
-        assert_eq!(weight("Привет, мир!"), 2.0 + 20.0);
-        assert_eq!(weight("ёлка-палка"), 2.0 + 10.0);
+        assert_eq!(weight("Привет, мир!"), 2.0 + 200.0);
+        assert_eq!(weight("ёлка-палка"), 2.0 + 100.0);
     }
 
     #[test]
     fn one_rule_in_inline_code_and_fenced_blocks() {
-        assert_eq!(weight("`foo(a, b);`"), 3.0 + 40.0);
-        assert_eq!(weight("```rust\nfoo(a, b);\n```\n"), 4.0 + 50.0);
+        assert_eq!(weight("`foo(a, b);`"), 3.0 + 400.0);
+        assert_eq!(weight("```rust\nfoo(a, b);\n```\n"), 4.0 + 500.0);
         assert_eq!(weight("~~~~\na = b\n~~~~\n"), 2.0 + 30.0);
     }
 
@@ -355,15 +501,15 @@ mod tests {
         assert_eq!(weight("---\ntitle: A b\ntags: [x]\n---\ntext\n"), 1.0);
         assert_eq!(weight("---\ntitle: A\n...\n"), 0.0);
         // Not at the top, or never closed, it is text.
-        assert_eq!(weight("text\n---\nt: x\n---\n"), 3.0 + 30.0);
-        assert_eq!(weight("---\nt: x\n"), 2.0 + 20.0);
+        assert_eq!(weight("text\n---\nt: x\n---\n"), 3.0 + 20.0 + 100.0);
+        assert_eq!(weight("---\nt: x\n"), 2.0 + 10.0 + 100.0);
     }
 
     #[test]
     fn a_comment_weighs_nothing() {
         assert_eq!(weight("a <!-- b c --> d"), 2.0);
         assert_eq!(weight("<!--\nb c\n-->\nd\n"), 1.0);
-        assert_eq!(weight("a <!-- b\nc --> d, e\n"), 3.0 + 10.0);
+        assert_eq!(weight("a <!-- b\nc --> d, e\n"), 3.0 + 100.0);
         assert_eq!(weight("a<!-- b -->c"), 1.0);
         // Never closed, it is text.
         assert_eq!(weight("a <!-- b"), 2.0 + 10.0);
@@ -376,38 +522,41 @@ mod tests {
         assert_eq!(
             weight("```\n<!-- x -->\n|---|\n```\n"),
             // The fences, the comment (`<!--`, x, `-->`), the separator.
-            20.0 + 1.0 + 20.0 + 10.0
+            200.0 + 1.0 + 20.0 + 10.0
         );
         // A fence first: no front matter.
-        assert_eq!(weight("```\n---\nt: x\n---\n```\n"), 2.0 + 50.0);
+        assert_eq!(weight("```\n---\nt: x\n---\n```\n"), 2.0 + 20.0 + 300.0);
         // A comment's `-->` in a block doesn't close one opened before it, nor is one opened in it.
-        assert_eq!(weight("a\n```\n<!-- b\n```\nc -->\n"), 3.0 + 40.0);
+        assert_eq!(weight("a\n```\n<!-- b\n```\nc -->\n"), 3.0 + 20.0 + 200.0);
     }
 
     #[test]
     fn a_url_is_one_word() {
         assert_eq!(
             weight("[the docs](https://example.com/a/b?c=d&e=f)"),
-            3.0 + 30.0
+            1000.0 + 2.0 + 20.0 + 100.0
         );
-        assert_eq!(weight("see https://example.com/a-b.html."), 2.0 + 10.0);
+        assert_eq!(weight("see https://example.com/a-b.html."), 2.0 + 100.0);
         assert_eq!(weight("<https://example.com/x>"), 1.0 + 20.0);
         assert_eq!(
             weight("(see https://en.wikipedia.org/wiki/A_(b))"),
-            2.0 + 20.0
+            2.0 + 200.0
         );
         // A link's destination is one word, whatever its form; its title is text.
-        assert_eq!(weight("[weight.md](weight.md)"), 3.0 + 40.0);
-        assert_eq!(weight("[a](../docs/a.md#b-c)"), 2.0 + 30.0);
-        assert_eq!(weight("![logo](img/logo.png \"The logo\")"), 4.0 + 40.0);
-        assert_eq!(weight("[a](<b c.md>) [d](e_(f).md)"), 4.0 + 60.0);
+        assert_eq!(weight("[weight.md](weight.md)"), 3.0 + 20.0 + 200.0);
+        assert_eq!(weight("[a](../docs/a.md#b-c)"), 2.0 + 20.0 + 100.0);
+        assert_eq!(
+            weight("![logo](img/logo.png \"The logo\")"),
+            1000.0 + 3.0 + 20.0 + 200.0
+        );
+        assert_eq!(weight("[a](<b c.md>) [d](e_(f).md)"), 4.0 + 40.0 + 200.0);
         assert_eq!(weight("[]()"), 10.0);
-        // In inline code, it is code.
-        assert_eq!(weight("`[a](b.md)`"), 3.0 + 40.0);
+        // In inline code, it is code: `` `[ ``, `](`, `.`, `` )` ``.
+        assert_eq!(weight("`[a](b.md)`"), 3.0 + 20.0 + 200.0);
         // No scheme, no URL.
-        assert_eq!(weight("example.com"), 2.0 + 10.0);
-        // In a fenced block, it is text.
-        assert_eq!(weight("```\nhttps://a.b\n```\n"), 3.0 + 40.0);
+        assert_eq!(weight("example.com"), 2.0 + 100.0);
+        // In a fenced block, it is text: the fences, `://`, `.`.
+        assert_eq!(weight("```\nhttps://a.b\n```\n"), 3.0 + 10.0 + 300.0);
     }
 
     #[test]
@@ -420,7 +569,10 @@ mod tests {
     fn a_file_s_weight_with_no_entries() {
         let docs = Docs {
             word: 1.0,
+            function_word: 1.0,
+            punctuation: 1.0,
             symbol: 1.0,
+            function_words: vec!["some".to_string()],
         };
         assert_eq!(
             weigh("# Title\n\nSome text.\n", &docs),

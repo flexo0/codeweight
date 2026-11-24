@@ -7,7 +7,7 @@
 | `source` | an input as `(path, kind, text)` items, a kind a language's code or Markdown: from disk (`ignore`, the excludes) or git blobs at a revision |
 | `lang` | a module per language (Java, TS and TSX, JavaScript, Python, Rust, Go): grammar, extensions, node kind → category, nesting kinds, function names |
 | `engine` | one tree walked: each node's weight, summed by function, class and file |
-| `markdown` | a Markdown text's docs weight: its words and symbol runs, line by line, no tree-sitter |
+| `markdown` | a Markdown text's docs weight: its words, punctuation and symbol runs, line by line, no tree-sitter |
 | `git` | the files a commit, a range or the uncommitted changes changed (`git diff-tree -r -M`; the uncommitted ones as a tree, `git add -A` into a copy of the index, `git write-tree`), their text before and after (`git cat-file --batch`) |
 | `report` | the three numbers (a line each, `--short`'s one line, their JSON), and one number's report, the text table and the JSON; for `show` and `diff`, the deltas |
 

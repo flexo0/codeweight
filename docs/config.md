@@ -40,9 +40,12 @@ Built (`config`, `config::find`):
   tests do. Each weighs a node as an existing category, so it adds no weight of
   its own; a cast or pattern kind it makes an `operator` is the language's table's, under the user's `node_kinds`
   (a kind mapped there wins). What each one weighs is [weight.md](weight.md)'s.
-- `[docs]` is the weights of a Markdown file's docs weight ([weight.md](weight.md)): `word` for each word and
-  `symbol` for each symbol run, 1 and 1 by default, each 0 or above. Its two keys are all it holds (an unknown one
-  is an error); a file on its own must hold it, as the engine's tests' does (`word` 1, `symbol` 10).
+- `[docs]` is the weights of a Markdown file's docs weight ([weight.md](weight.md)): `word` for each word,
+  `function_word` for each function word in prose, `punctuation` for each punctuation run and `symbol` for each
+  symbol run, 0.64, 0.32, 0.32 and 0.62 by default, each 0 or above; and `function_words`, the function words, each
+  one word (letters and digits only, else an error), a list of one's own replacing the defaults' whole. Its five
+  keys are all it holds (an unknown one is an error); a file on its own must hold them, as the engine's tests'
+  does (`word` 1, `symbol` 10, `punctuation` 100, `function_word` 1000, `function_words` `the` and `of`).
 - `[files]` is for what is weighed ([architecture.md](architecture.md), `source`). `docs_globs` are the Markdown
   files, weighed for their docs weight alone, the docs' number of `scan`, `show` and `diff` ([cli.md](cli.md)):
   a file they match is docs and no test though a test glob matches it too (a `README.md` under `tests/`), and
@@ -103,9 +106,18 @@ lambda = 3
 [languages.typescript.node_kinds]   # a tree-sitter node kind mapped to a category (or to "none")
 satisfies_expression = "statement"
 
-[docs]                  # a Markdown file's docs weight: words * word + symbol runs * symbol
-word = 1                # a run of letters and digits; a URL is one word
-symbol = 1              # a run of anything else that isn't a space, once however long: `**`, `);`, `##` are one each
+[docs]                  # a Markdown file's docs weight: words * word + function words * function_word + punctuation
+                        # runs * punctuation + symbol runs * symbol, on the code's scale: a description weighs what
+                        # the code it describes does
+word = 0.64             # a run of letters and digits; a URL is one word
+function_word = 0.32    # a word of function_words in prose (not in inline code or a fenced block): glue
+punctuation = 0.32      # a run of prose's punctuation, once however long: `,`, `),`, `."`, a backtick, a lone - or _
+symbol = 0.62           # a run of anything else that isn't a space, once however long: `->`, `**`, `##`, `](`, `|`
+function_words = [      # whatever their case; a list of one's own replaces this one (add another language's to it)
+    "a", "an", "the", "of", "to", "in", "on", "at", "by", "for", "with", "from", "into", "as",
+    "is", "are", "was", "were", "be", "been", "being", "it", "its", "this", "that", "these", "those",
+    "there", "which", "s",
+]
 
 [files]
 # an exclude ending in / is a folder: build/ at any depth, src/gen/ or /build/ from the root; --exclude adds more

@@ -222,14 +222,21 @@ pub struct Conditions {
     pub assignments: bool,
 }
 
-/// The `[docs]` table: the weights of a Markdown file's docs weight, `words × word + symbol runs × symbol`.
+/// The `[docs]` table: the weights of a Markdown file's docs weight, `words × word + function words ×
+/// function_word + punctuation runs × punctuation + symbol runs × symbol`, and its function words.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Docs {
     /// Each word: a run of letters and digits (a URL is one too).
     pub word: f64,
-    /// Each run of other characters that aren't spaces, however long.
+    /// Each function word in prose: a word of `function_words`, glue between the words that say something.
+    pub function_word: f64,
+    /// Each run of prose's punctuation, however long: `,`, `),`, a backtick, a lone `-` or `_`.
+    pub punctuation: f64,
+    /// Each run of other characters that aren't spaces, however long: an operator, markup, a path's `/`.
     pub symbol: f64,
+    /// The function words (`a`, `the`, `of`), whatever their case; a word each.
+    pub function_words: Vec<String>,
 }
 
 /// The `[files]` table: which files a folder walk weighs, which are tests, and which are docs.
@@ -313,6 +320,13 @@ impl Config {
         check_non_negative("[accesses] step", raw.accesses.step)?;
         check_non_negative("[accesses] max", raw.accesses.max)?;
         check_non_negative("[docs] word", raw.docs.word)?;
+        check_non_negative("[docs] function_word", raw.docs.function_word)?;
+        for word in &raw.docs.function_words {
+            if word.is_empty() || !word.chars().all(char::is_alphanumeric) {
+                bail!("[docs] function_words `{word}` isn't a word: letters and digits only");
+            }
+        }
+        check_non_negative("[docs] punctuation", raw.docs.punctuation)?;
         check_non_negative("[docs] symbol", raw.docs.symbol)?;
         for glob in &raw.files.exclude {
             source::exclude(glob).with_context(|| format!("[files] exclude `{glob}`"))?;
@@ -672,32 +686,35 @@ mod tests {
     #[test]
     fn docs_weights_merge_over_the_defaults() {
         let defaults = Config::defaults().unwrap();
-        assert_eq!(
-            defaults.docs,
-            Docs {
-                word: 1.0,
-                symbol: 1.0
-            }
-        );
-        let mine = Config::from_str_over_defaults("[docs]\nsymbol = 0.5\n").unwrap();
+        let mine = Config::from_str_over_defaults("[docs]\nsymbol = 12.5\n").unwrap();
         assert_eq!(
             mine.docs,
             Docs {
-                word: 1.0,
-                symbol: 0.5
+                symbol: 12.5,
+                ..defaults.docs.clone()
             }
         );
         assert_eq!(mine.nesting, defaults.nesting);
         assert!(error_of("[docs]\nwords = 1\n").contains("words"));
         assert!(error_of("[docs]\nword = -1\n").contains("[docs] word is -1"));
         assert!(error_of("[docs]\nsymbol = -0.5\n").contains("[docs] symbol is -0.5"));
+        assert!(error_of("[docs]\npunctuation = -2\n").contains("[docs] punctuation is -2"));
+        assert!(error_of("[docs]\nfunction_word = -1\n").contains("[docs] function_word is -1"));
+        let error = error_of("[docs]\nfunction_words = [\"the\", \"isn't\"]\n");
+        assert!(
+            error.contains("[docs] function_words `isn't` isn't a word"),
+            "{error}"
+        );
+        // A list of one's own is the whole list, not added to the defaults'.
+        let mine = Config::from_str_over_defaults("[docs]\nfunction_words = [\"der\"]\n").unwrap();
+        assert_eq!(mine.docs.function_words, ["der"]);
     }
 
     #[test]
     fn a_file_on_its_own_must_set_every_category() {
         let error = Config::from_str_alone(
             "[nesting]\nmodel = \"linear\"\nfactor = 1\nmax_depth = 3\nflat = []\n[parameters]\nstep = 0\nmax = 1\n[weights]\nstatement = 1\n\
-             [docs]\nword = 1\nsymbol = 1\n[files]\nexclude = []\ntest_globs = []\ndocs_globs = []\n",
+             [docs]\nword = 1\nfunction_word = 1\npunctuation = 1\nsymbol = 1\nfunction_words = []\n[files]\nexclude = []\ntest_globs = []\ndocs_globs = []\n",
         )
         .unwrap_err();
         assert!(format!("{error:#}").contains("no weight for `call`"));

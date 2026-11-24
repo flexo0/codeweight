@@ -22,6 +22,9 @@ fn stderr(output: &Output) -> String {
 }
 
 const JAVA: &str = "class A {\n  void f() {\n    g();\n  }\n}\n";
+/// A weights file of the docs' weights alone, each run 1: a scan under the defaults' code weights whose docs stay
+/// as worked out by hand, whatever the defaults' tuning.
+const DOCS_ONES: &str = "[docs]\nword = 1\nfunction_word = 1\npunctuation = 1\nsymbol = 1\n";
 
 #[test]
 fn init_writes_the_defaults_and_never_overwrites() {
@@ -288,7 +291,9 @@ fn scan_docs_weighs_the_markdown_files_alone_and_scan_and_scan_tests_never_see_t
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     for (file, text) in [
-        // Under the defaults (word 1, symbol 1): `Title`, `Some`, `words`, `here` and `#`, `.` are 6.
+        // The docs' weights of their own, whatever the defaults' tuning; the code's are the defaults.
+        ("codeweight.toml", DOCS_ONES),
+        // Each run 1: `Title`, `Some`, `words`, `here` and `#`, `.` are 6.
         ("README.md", "# Title\n\nSome words here.\n"),
         // `Hello`, `world`, `,` and `.`: 4.
         ("docs/guide.markdown", "Hello, world.\n"),
@@ -337,7 +342,7 @@ fn scan_docs_weighs_the_markdown_files_alone_and_scan_and_scan_tests_never_see_t
     // Docs globs of one's own: only the docs folder's.
     fs::write(
         root.join("own.toml"),
-        "[files]\ndocs_globs = [\"docs/**\"]\n",
+        format!("{DOCS_ONES}[files]\ndocs_globs = [\"docs/**\"]\n"),
     )
     .unwrap();
     let own = codeweight(root, &["scan", "--docs", ".", "--config", "own.toml"]);
@@ -646,7 +651,7 @@ fn show_and_diff_leave_out_what_exclude_matches() {
 #[test]
 fn show_docs_weighs_a_doc_added_edited_renamed_and_deleted() {
     let repo = Repo::new();
-    // Under tests/weights.toml (word 1, symbol 10): `#` and 21 words are 31.
+    // Under tests/weights.toml (word 1, symbol 10, punctuation 100): `#` and 21 words are 31.
     let doc = format!("# A\n{}", "word\n".repeat(20));
     repo.commit(&[("doc.md", Some(&doc)), ("a.py", Some(F))]);
     assert_eq!(
@@ -659,12 +664,12 @@ fn show_docs_weighs_a_doc_added_edited_renamed_and_deleted() {
         "total +103\n+103  added    a.py  f\n"
     );
 
-    // Two words and a `,`: 12.
+    // Two words and a `,`: 102.
     let edited = format!("{doc}more, words\n");
     repo.commit(&[("doc.md", Some(&edited))]);
     assert_eq!(
         repo.run(&["show", "--docs"], &["HEAD"]),
-        "total +12\n+12  heavier  doc.md  (file)\n"
+        "total +102\n+102  heavier  doc.md  (file)\n"
     );
 
     // Renamed with a word more: git sees one file, its delta the word's.
@@ -680,7 +685,7 @@ fn show_docs_weighs_a_doc_added_edited_renamed_and_deleted() {
     repo.commit(&[("guide.md", None)]);
     assert_eq!(
         repo.run(&["show", "--docs"], &["HEAD"]),
-        "total -44\n-44  removed  guide.md  (file)\n"
+        "total -134\n-134  removed  guide.md  (file)\n"
     );
     // A range: the first commit's doc against none.
     assert_eq!(
@@ -900,7 +905,8 @@ fn three_parts(root: &Path) {
     for (file, text) in [
         // f is function 1.55, statement 1, call 0.49.
         ("src/a.py", "def f():\n    g()\n"),
-        // `Title`, `Some`, `words`, `here` and `#`, `.`.
+        // The docs' weights of their own: `Title`, `Some`, `words`, `here` and `#`, `.` are 6.
+        ("codeweight.toml", DOCS_ONES),
         ("README.md", "# Title\n\nSome words here.\n"),
         // c is 3.04 of the code, its tests' class 5 and u 3.04 of the tests.
         (

@@ -41,7 +41,9 @@ there: `c+15 d+17 t-5`, a zero part `d0`. The code's is the weight of the code, 
 the weight of the tests alone: the test files (`test_globs`), and in a Rust file the items marked `#[cfg(test)]`,
 `#[test]` or a runner's `#[tokio::test]` (any `#[...::test]`), all in them (a `mod tests` and its functions), and a
 whole file marked `#![cfg(test)]`. The docs' is the weight of the Markdown files (`docs_globs`), each by its words
-and symbol runs (`[docs]`, see [weights-file.md](weights-file.md); a word 1 and a symbol run 1 by default, so `## Setup` is 2 and `foo(a, b);` 6).
+and its runs of other characters, punctuation or symbols (`[docs]`, see [weights-file.md](weights-file.md); a word 0.64,
+a function word in prose (`a`, `the`, `of`) and a punctuation run 0.32 and a symbol run 0.62 by default, so
+`Hello, world.` is 1.92, `## Setup` 1.26 and `the end of it` 1.6).
 The code, the tests and the docs are always three numbers, never one sum, each at its full weight: a change to all
 three has its code in one, its tests in another and its docs in the third. The input is read once and each file
 weighed once, a Rust file with tests counting toward the code and the tests both.
