@@ -13,6 +13,11 @@ coding agent check its own changes.
 It reads Java, TypeScript (TSX too), JavaScript, Python, Rust and Go, parsed by tree-sitter. Markdown files get a docs
 weight of their own.
 
+The default weights aren't guessed: they are tuned on ~1,500 pairs of a bad snippet beside its simpler good
+counterpart, with the same behaviour, from linters' rule examples, fixers' tests and real refactoring commits
+([code-snippet-pairs](https://github.com/flexo0/code-snippet-pairs)). The docs weight is calibrated on snippets of code
+beside their descriptions, so a doc weighs what the code it describes does.
+
 ## Example
 
 codeweight run on its own sources, and on what a commit added or took away: its code, its docs and its tests, three
