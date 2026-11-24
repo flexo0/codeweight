@@ -18,6 +18,12 @@ Built: every module. The dependencies: `tree-sitter`, `tree-sitter-java`, `tree-
 `[files]` globs; `ignore` is built on it, so it costs no build), `rayon`, and `tempfile` for the tests. `git` is run
 as a command, no `git2` / `gix`.
 
+The crate on crates.io (`cargo package --list`) has the sources (`src/default.toml` among them, embedded), the tests
+and their weights file, the README and the license; `exclude` in `Cargo.toml` leaves out `docs/`, `skills/`,
+`.github/`, `AGENTS.md` and `CLAUDE.md`, which are for the repo. So the README's links to `docs/` are absolute GitHub
+URLs, which work from crates.io too. The grammars are C, built by their crates' `cc`: building, `cargo install` from
+crates.io as well, needs a C compiler.
+
 - `source` (built): a file given is weighed as is, though an exclude matches it; a folder is walked by `ignore`, its
   `.gitignore`s (and `.ignore`s, the global gitignore) honoured, hidden files and folders left out, each folder's
   entries in the order of their names, so the walk is the same on every run. A file the excludes match (the

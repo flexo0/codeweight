@@ -8,9 +8,11 @@ license = "MIT"
 readme = "README.md"
 authors = ["Dmitriy Churilov"]
 repository = "https://github.com/flexo0/codeweight"
-homepage = "https://github.com/flexo0/codeweight"
 keywords = ["code-metrics", "complexity", "static-analysis", "tree-sitter", "cli"]
 categories = ["command-line-utilities", "development-tools"]
+# The design docs, the agents' skill, CI and the agents' notes are for the repo, not the crate; the README links to
+# docs/ on GitHub.
+exclude = ["/docs/", "/skills/", "/.github/", "/AGENTS.md", "/CLAUDE.md"]
 
 [dependencies]
 anyhow = "1"

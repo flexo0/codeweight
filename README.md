@@ -1,5 +1,8 @@
 # codeweight
 
+[![crates.io](https://img.shields.io/crates/v/codeweight.svg)](https://crates.io/crates/codeweight)
+[![CI](https://github.com/flexo0/codeweight/actions/workflows/ci.yml/badge.svg)](https://github.com/flexo0/codeweight/actions/workflows/ci.yml)
+
 A CLI that weighs code. Every element of a file (a statement, a call, a branch, a loop, a function, ...) has a
 weight, and an element nested in branches, loops and lambdas weighs more. A file's or a function's weight is the sum
 of its elements' weights; a commit's is its net delta, after minus before.
@@ -30,11 +33,13 @@ total +112.46
 
 ## Install
 
-With Rust 1.100 or later:
+With Rust 1.100 or later and a C compiler (the tree-sitter grammars are C, built from source with the crate):
 
 ```
-cargo install --git https://github.com/flexo0/codeweight
+cargo install codeweight
 ```
+
+or the latest from GitHub, `cargo install --git https://github.com/flexo0/codeweight`.
 
 For a coding agent that reads `SKILL.md` skills (Claude Code and others), link or copy `skills/codeweight/` into the
 agent's skills, e.g. from a clone `ln -s "$PWD/skills/codeweight" ~/.claude/skills/codeweight`.
@@ -53,18 +58,18 @@ number alone, and with `-v` the functions behind it, heaviest first; `--json` th
 
 ## More
 
-- [docs/usage.md](docs/usage.md): every command and option, the text report, which files are weighed, how `show`
-  and `diff` compare
-- [docs/json.md](docs/json.md): the JSON report's fields
-- [docs/weights-file.md](docs/weights-file.md): the weights file, the weight formula, and what each category is in
-  each language
-- [docs/README.md](docs/README.md): the design, for contributors
+- [docs/usage.md](https://github.com/flexo0/codeweight/blob/master/docs/usage.md): every command and option, the text
+  report, which files are weighed, how `show` and `diff` compare
+- [docs/json.md](https://github.com/flexo0/codeweight/blob/master/docs/json.md): the JSON report's fields
+- [docs/weights-file.md](https://github.com/flexo0/codeweight/blob/master/docs/weights-file.md): the weights file, the
+  weight formula, and what each category is in each language
+- [docs/README.md](https://github.com/flexo0/codeweight/blob/master/docs/README.md): the design, for contributors
 
 ## Building
 
-Rust 1.100 (pinned in `rust-toolchain.toml`, so rustup picks it): `cargo build --release`; checks: `cargo fmt --check`,
-`cargo clippy --all-targets -- -D warnings`, `cargo test`.
+Rust 1.100 (pinned in `rust-toolchain.toml`, so rustup picks it) and a C compiler for the grammars:
+`cargo build --release`; checks: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`.
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+MIT, see [LICENSE](https://github.com/flexo0/codeweight/blob/master/LICENSE).
