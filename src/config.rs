@@ -222,8 +222,8 @@ pub struct Conditions {
     pub assignments: bool,
 }
 
-/// The `[docs]` table: the weights of a Markdown file's docs weight, `words × word + function words ×
-/// function_word + punctuation runs × punctuation + symbol runs × symbol`, and its function words.
+/// The `[docs]` table: the weights of a Markdown file's docs weight and of a code comment's, `words × word +
+/// function words × function_word + punctuation runs × punctuation + symbol runs × symbol`, and its function words.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Docs {

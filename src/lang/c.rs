@@ -31,6 +31,10 @@ pub static C: Lang = Lang {
     default_case: |node, _| node.child_by_field_name("value").is_none(),
     carried_return: |_| false,
     loop_body,
+    comments: &["comment"],
+    attributes: &[],
+    docstring: |_, _| None,
+    inner_doc: |_| false,
 };
 
 const KINDS: &[(&str, Category)] = &[
@@ -769,5 +773,21 @@ mod tests {
         let weighed = testing::weigh_under(&C, WEIGHTS, "int f(void) { g( }");
         assert!(!weighed.clean);
         assert!(weighed.total > 0.0);
+    }
+
+    #[test]
+    fn comments_weigh_in_their_entry_or_the_declaration_s_they_are_before() {
+        let text = "/* Copyright words */
+
+#include <a.h>
+
+/* Doc f */
+static int f(void) {
+    // inside
+    return 0;
+}
+";
+        let comments = testing::comments(&C, text);
+        assert_eq!((comments.file, function(&comments, "f")), (0.0, 2.0 + 1.0));
     }
 }

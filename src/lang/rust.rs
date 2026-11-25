@@ -35,6 +35,12 @@ pub static RUST: Lang = Lang {
     },
     carried_return: |_| false,
     loop_body: |_| None,
+    comments: &["line_comment", "block_comment"],
+    attributes: &["attribute_item"],
+    docstring: |_, _| None,
+    inner_doc: |node| {
+        super::first_child(node).is_some_and(|m| m.kind() == "inner_doc_comment_marker")
+    },
 };
 
 /// The number literals.
@@ -674,5 +680,40 @@ mod tests {
              }",
         );
         assert_eq!(added, 7.0 + 14.0 + 9.0);
+    }
+
+    #[test]
+    fn comments_weigh_in_their_entry_or_the_declaration_s_they_are_before_test_code_s_nothing() {
+        let text = "// Copyright words
+// SPDX words
+
+//! Module doc
+
+/// Doc f
+#[inline]
+fn f() {
+    // inside
+    /* block words */
+}
+
+/** Doc s
+ * more */
+struct S;
+
+#[cfg(test)]
+mod tests {
+    // ignored
+}
+
+// ignored too
+#[test]
+fn t() {}
+";
+        let comments = testing::comments(&RUST, text);
+        // The header dropped, the module's docs (`//!`) not.
+        assert_eq!(comments.file, 2.0);
+        assert_eq!(function(&comments, "f"), 2.0 + 1.0 + 2.0);
+        assert_eq!(class(&comments, "S"), 3.0);
+        assert_eq!(comments.total, 2.0 + 5.0 + 3.0);
     }
 }

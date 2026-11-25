@@ -885,7 +885,7 @@ fn show_and_diff_work_from_outside_with_c_or_repo_and_their_first_names_are_gone
     for repo in ["-C", "--repo"] {
         assert_eq!(
             run(&["diff", "--staged", "--short", repo, path]),
-            "c+3 d0 t0\n"
+            "c+3 m0 d0 t0\n"
         );
     }
     let json: serde_json::Value =
@@ -930,20 +930,24 @@ fn scan_s_json_lists_the_rows_of_its_text() {
     );
 }
 
-/// A folder of code, tests and docs: under the defaults, the code 3.04, the docs 6 and the tests 3.04 + 5 + 3.04.
-fn three_parts(root: &Path) {
+/// A folder of code, tests and docs: under the defaults, the code 3.04, the docs 6 and the tests 3.04 + 5 + 3.04;
+/// the comments 3 + 4, under the docs' weights of `codeweight.toml`.
+fn four_parts(root: &Path) {
     for (file, text) in [
-        // f is function 1.55, statement 1, call 0.49.
-        ("src/a.py", "def f():\n    g()\n"),
+        // f is function 1.55, statement 1, call 0.49; its comment `Calls`, `g`, `.` 3.
+        ("src/a.py", "def f():\n    # Calls g.\n    g()\n"),
         // The docs' weights of their own: `Title`, `Some`, `words`, `here` and `#`, `.` are 6.
         ("codeweight.toml", DOCS_ONES),
         ("README.md", "# Title\n\nSome words here.\n"),
-        // c is 3.04 of the code, its tests' class 5 and u 3.04 of the tests.
+        // c is 3.04 of the code, its tests' class 5 and u 3.04 of the tests; c's doc comment 4 (`C`, `calls`, `g`,
+        // `.`), the tests' comment nothing.
         (
             "src/c.rs",
-            "fn c() { g(); }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn u() { c(); }\n}\n",
+            "/// C calls g.\nfn c() { g(); }\n#[cfg(test)]\nmod tests {\n    // Not weighed.\n    #[test]\n    \
+             fn u() { c(); }\n}\n",
         ),
-        ("tests/test_a.py", "def t():\n    g()\n"),
+        // A test file's comment weighs nothing.
+        ("tests/test_a.py", "def t():\n    # Not weighed.\n    g()\n"),
         // Syntax errors: weighed, with a warning.
         ("src/B.java", "class B { void f( }"),
     ] {
@@ -954,10 +958,10 @@ fn three_parts(root: &Path) {
 }
 
 #[test]
-fn scan_prints_the_code_the_docs_and_the_tests_each_as_its_flag_does() {
+fn scan_prints_the_code_the_docs_the_tests_and_the_comments_each_as_its_flag_does() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    three_parts(root);
+    four_parts(root);
     let ok = |args: &[&str]| {
         let output = codeweight(root, args);
         assert!(output.status.success(), "{}", stderr(&output));
@@ -966,11 +970,17 @@ fn scan_prints_the_code_the_docs_and_the_tests_each_as_its_flag_does() {
     let only = |flag: &str| stdout(&ok(&["scan", ".", flag])).trim().to_string();
     let (code, docs, tests) = (only("--code"), only("--docs"), only("--tests"));
     assert_eq!((docs.as_str(), tests.as_str()), ("6", "11.08"));
+    assert_eq!(only("--comments"), "7");
+    assert_eq!(
+        stdout(&ok(&["scan", ".", "--comments", "-v"])),
+        "total 7\n4  src/c.rs  c\n3  src/a.py  f\n\
+         warning: src/B.java has syntax errors, weighed as tree-sitter recovered it\n"
+    );
 
     let three = ok(&["scan", "."]);
     assert_eq!(
         stdout(&three),
-        format!("code +{code}\ndocs +{docs}\ntests +{tests}\n")
+        format!("code +{code}\ncomments +7\ndocs +{docs}\ntests +{tests}\n")
     );
     assert_eq!(stderr(&three), "");
     // `-v`: the warnings to stderr, the numbers the same.
@@ -983,7 +993,7 @@ fn scan_prints_the_code_the_docs_and_the_tests_each_as_its_flag_does() {
 
     let short = ok(&["scan", ".", "--short"]);
     let code: f64 = code.parse().unwrap();
-    assert_eq!(stdout(&short), format!("c+{} d+6 t+11\n", code.round()));
+    assert_eq!(stdout(&short), format!("c+{} m+7 d+6 t+11\n", code.round()));
     assert_eq!(stderr(&short), "");
     let short = ok(&["scan", ".", "--short", "-v"]);
     assert!(stderr(&short).starts_with("warning: src/B.java has syntax errors"));
@@ -996,6 +1006,7 @@ fn scan_prints_the_code_the_docs_and_the_tests_each_as_its_flag_does() {
             "code": code,
             "docs": 6.0,
             "tests": 11.08,
+            "comments": 7.0,
             "warnings": [{"path": "src/B.java", "kind": "syntax_errors", "side": null}]
         })
     );
@@ -1003,16 +1014,16 @@ fn scan_prints_the_code_the_docs_and_the_tests_each_as_its_flag_does() {
     // Nothing of a kind: a zero has no sign.
     assert_eq!(
         stdout(&ok(&["scan", "README.md"])),
-        "code 0\ndocs +6\ntests 0\n"
+        "code 0\ncomments 0\ndocs +6\ntests 0\n"
     );
     assert_eq!(
         stdout(&ok(&["scan", "README.md", "--short"])),
-        "c0 d+6 t0\n"
+        "c0 m0 d+6 t0\n"
     );
 }
 
 #[test]
-fn show_and_diff_print_the_three_deltas() {
+fn show_and_diff_print_the_four_deltas() {
     let repo = Repo::new();
     // The test weights, `tests/` the test files.
     let weights_text =
@@ -1036,28 +1047,56 @@ fn show_and_diff_print_the_three_deltas() {
         ("tests/test_a.py", Some(FG)),
         ("doc.md", Some("# A word\n")),
     ]);
-    assert_eq!(run(&["show", "HEAD"]), "code +103\ndocs +12\ntests +106\n");
+    assert_eq!(
+        run(&["show", "HEAD"]),
+        "code +103\ncomments 0\ndocs +12\ntests +106\n"
+    );
     // A test made lighter, a doc deleted, the code untouched.
     let second = repo.commit(&[("tests/test_a.py", Some(F)), ("doc.md", None)]);
-    assert_eq!(run(&["show", "HEAD"]), "code 0\ndocs -12\ntests -3\n");
-    assert_eq!(run(&["show", "HEAD", "--short"]), "c0 d-12 t-3\n");
+    assert_eq!(
+        run(&["show", "HEAD"]),
+        "code 0\ncomments 0\ndocs -12\ntests -3\n"
+    );
+    assert_eq!(run(&["show", "HEAD", "--short"]), "c0 m0 d-12 t-3\n");
     let json: serde_json::Value =
         serde_json::from_str(&run(&["show", "HEAD~1..HEAD", "--json"])).unwrap();
     assert_eq!(
         json,
         serde_json::json!({
-            "from": first, "to": second, "code": 0.0, "docs": -12.0, "tests": -3.0, "warnings": []
+            "from": first, "to": second, "code": 0.0, "docs": -12.0, "tests": -3.0, "comments": 0.0,
+            "warnings": []
         })
+    );
+    // A commit that only adds comments: `Calls g` 2 to the code's, the test's nothing.
+    let third = repo.commit(&[
+        ("a.py", Some("def f():\n    # Calls g\n    g()\n")),
+        (
+            "tests/test_a.py",
+            Some("def f():\n    # Not weighed\n    g()\n"),
+        ),
+    ]);
+    assert_eq!(
+        run(&["show", "HEAD"]),
+        "code 0\ncomments +2\ndocs 0\ntests 0\n"
+    );
+    assert_eq!(run(&["show", "HEAD", "--short"]), "c0 m+2 d0 t0\n");
+    assert_eq!(
+        run(&["show", "HEAD", "--comments", "-v"]),
+        "total +2\n+2  heavier  a.py  f\n"
     );
 
     // The uncommitted changes: the code heavier, a doc untracked, the staged one alone.
     fs::write(repo.path().join("a.py"), FG).unwrap();
     fs::write(repo.path().join("new.md"), "x\n").unwrap();
-    assert_eq!(run(&["diff", "--short"]), "c+3 d+1 t0\n");
+    assert_eq!(run(&["diff", "--short"]), "c+3 m-2 d+1 t0\n");
     repo.git(&["add", "a.py"]);
-    assert_eq!(run(&["diff", "--staged"]), "code +3\ndocs 0\ntests 0\n");
+    assert_eq!(
+        run(&["diff", "--staged"]),
+        "code +3\ncomments -2\ndocs 0\ntests 0\n"
+    );
     let json: serde_json::Value = serde_json::from_str(&run(&["diff", "--json"])).unwrap();
-    assert_eq!(json["from"], serde_json::json!(second));
+    assert_eq!(json["from"], serde_json::json!(third));
+    assert_eq!(json["comments"], serde_json::json!(-2.0));
     assert_eq!(json["to"], serde_json::Value::Null);
     assert_eq!(json["code"], serde_json::json!(3.0));
 }
@@ -1071,6 +1110,8 @@ fn the_report_s_options_need_one_number_and_short_none() {
         &["scan", "A.java", "--by", "file"],
         &["scan", "A.java", "--code", "--tests"],
         &["scan", "A.java", "--docs", "--short"],
+        &["scan", "A.java", "--comments", "--short"],
+        &["scan", "A.java", "--comments", "--docs"],
         &["scan", "A.java", "--short", "--json"],
         &["diff", "--by", "function"],
         &["diff", "--tests", "--short"],
@@ -1107,6 +1148,7 @@ fn every_command_s_help_lists_the_options_in_the_same_order_config_last() {
         "--code",
         "--tests",
         "--docs",
+        "--comments",
         "--json",
         "--short",
         "--verbose",

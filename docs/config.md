@@ -40,7 +40,8 @@ Built (`config`, `config::find`):
   tests do. Each weighs a node as an existing category, so it adds no weight of
   its own; a cast or pattern kind it makes an `operator` is the language's table's, under the user's `node_kinds`
   (a kind mapped there wins). What each one weighs is [weight.md](weight.md)'s.
-- `[docs]` is the weights of a Markdown file's docs weight ([weight.md](weight.md)): `word` for each word,
+- `[docs]` is the weights of a Markdown file's docs weight and of a code comment's, the comments' number
+  ([weight.md](weight.md)): `word` for each word,
   `function_word` for each function word in prose, `punctuation` for each punctuation run and `symbol` for each
   symbol run, 0.64, 0.32, 0.32 and 0.62 by default, each 0 or above; and `function_words`, the function words, each
   one word (letters and digits only, else an error), a list of one's own replacing the defaults' whole. Its five
@@ -106,9 +107,9 @@ lambda = 3
 [languages.typescript.node_kinds]   # a tree-sitter node kind mapped to a category (or to "none")
 satisfies_expression = "statement"
 
-[docs]                  # a Markdown file's docs weight: words * word + function words * function_word + punctuation
-                        # runs * punctuation + symbol runs * symbol, on the code's scale: a description weighs what
-                        # the code it describes does
+[docs]                  # a Markdown file's docs weight, and a code comment's: words * word + function words *
+                        # function_word + punctuation runs * punctuation + symbol runs * symbol, on the code's scale:
+                        # a description weighs what the code it describes does
 word = 0.64             # a run of letters and digits; a URL is one word
 function_word = 0.32    # a word of function_words in prose (not in inline code or a fenced block): glue
 punctuation = 0.32      # a run of prose's punctuation, once however long: `,`, `),`, `."`, a backtick, a lone - or _

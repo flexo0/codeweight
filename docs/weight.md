@@ -93,7 +93,8 @@ total        = Σ weight(node) over the nodes that have a category
   class, or else to its file. A declaration's own weight (`function`, `class`) is its own entry's; a lambda is not a
   function, its code belongs to the function around it.
 - A docstring or a bare `...` (Python), a directive like `"use strict";` (TS) is no statement: an expression
-  statement that is only a string (or Python's `...`) weighs nothing (the language's `exempt` hook).
+  statement that is only a string (or Python's `...`) weighs nothing (the language's `exempt` hook). A Python
+  docstring weighs in the comments instead ([The comments weight](#the-comments-weight)); a directive weighs nowhere.
 - Names: a function or class is named by the classes and functions around it, `Outer.Inner.method`,
   `Outer.method.Local.run`. A Java constructor is `Class.Class`, an anonymous class `new Type` (its type arguments
   dropped: `Outer.method.new Runnable.run`), an enum constant's body the constant's name. Same-named entries of one
@@ -192,3 +193,44 @@ docs weight = words × word + function words × function_word
   symbol. A third of prose's words are function words, so a word that says something weighs more than one factor
   would make it. The descriptions miss by 10% on the mean, 33% at worst (the terse `Retry.apply`); `## Setup` is
   1.26, `the end of it` 1.6, `a -> b` 1.58.
+
+## The comments weight
+
+A code file's comments and Python's docstrings weigh in a number of their own, the comments' (`--comments`), never
+summed with the code's, the docs' or the tests', so those stay what they were and a commit that only adds comments
+is `code 0`, `docs 0`, `tests 0` with a comments delta. A comment costs reading and keeping in step with the code it
+sits in, but it is text, not code: it weighs as a Markdown file's text does.
+
+- What weighs: every comment, line or block, doc comment or not, in every language (each one's comment kinds in
+  [languages.md](languages.md)), and every Python string statement (a module's, a class's or a function's docstring,
+  or a string standing as a comment). Whether a comment is a line or a block is syntax, not meaning: Rust's `///`,
+  Go's doc comments and Python's are line comments, and a block is as often a license or commented-out code.
+- How: the comment's text without its markers (`//`, `///`, `//!`, `#`, `/*`, `/**`, `/*!`, `*/`, a block's `*`
+  that begins each line after its first, a docstring's quotes and prefix) weighed by the docs weight's counter and
+  its `[docs]` weights, no factor of its own: the `[docs]` defaults are fitted so that a description weighs what
+  the code it describes does ([The docs weight](#the-docs-weight)), which is what a comment is, and there is nothing
+  to fit other weights on. The same line scanner, so a doc
+  comment's fenced example is a fenced block and a URL one word; but a comment is no Markdown file: no front matter,
+  and a `<!--` is text. Commented-out code and `@param` tags weigh as any text (`foo(a, b);` is 3 words and 3
+  punctuation runs), with no special case.
+- Pragmas weigh as text too (`# noqa`, `// @ts-ignore`, `// eslint-disable-next-line`, `//go:generate`): a reader
+  reads them, they often carry their reason in the same comment, and a list of them per language is upkeep that is
+  never complete, for a few words each. A file-level one before a blank line at the top (`//go:build`, `/*
+  eslint-disable */`) is in the file's header, which weighs nothing.
+- Flat, as Markdown: no nesting factor. A comment in a deep loop costs what one at the top costs.
+- Where: a comment is its function's, class's or file's entry, as the code is, so the comments' report (`--comments`)
+  has a row per function, class and file. A comment right before a declaration is the declaration's: nothing but
+  comments, attributes or decorators between them, no blank line (Javadoc, JSDoc, `///`, a Go doc comment, a `#`
+  block over a `def`), the declaration the first function or class the next code declares, not inside a nesting
+  construct (`export function f`, a decorated `def`, `const f = () => ...`). A comment after code on its own line
+  (`x = 1  # why`) is that line's. A docstring is its scope's, never the next declaration's.
+- What weighs nothing:
+  - A file's header: the comments at its top, before its first code, up to the last blank line between them and it
+    (a license, a copyright, an SPDX line, a generated-file banner); all of them in a file of no code. One per
+    file, it swells a scan and says nothing of the code; in a diff it shows only when a file is added. A doc comment
+    touching the first declaration still weighs, and so do Rust's `//!` and `/*!` (the module's docs, as Python's
+    module docstring is code and weighs too).
+  - A shebang (`#!/usr/bin/env python3`), a comment in Python's grammar.
+  - Test code's comments: a test file's, a Rust `#[cfg(test)]` or `#[test]` item's, and one right before such an
+    item. The tests' number is the test code's; its comments are in no number.
+  - A Markdown file's: it has no comments number (0), its `<!-- -->` staying nothing.

@@ -36,6 +36,10 @@ pub static JAVA: Lang = Lang {
                 .is_some_and(|value| value.kind() == "switch_expression")
     },
     loop_body: |_| None,
+    comments: &["line_comment", "block_comment"],
+    attributes: &[],
+    docstring: |_, _| None,
+    inner_doc: |_| false,
 };
 
 const KINDS: &[(&str, Category)] = &[
@@ -837,5 +841,40 @@ mod tests {
              }",
         );
         assert_eq!(added, 7.0 + 9.0);
+    }
+
+    #[test]
+    fn comments_weigh_in_their_entry_or_the_declaration_s_they_are_before() {
+        let text = "/* Header words */
+
+package a;
+/** Class doc */
+class A {
+    /** Method doc */
+    @Override
+    void f() {
+        // inside f
+        g(); // trailing
+    }
+
+    // between methods
+
+    /**
+     * Two words
+     */
+    void h() {}
+}
+";
+        let comments = testing::comments(&JAVA, text);
+        // The header dropped; A's doc and the comment between its methods; f's doc, inside and trailing; h's doc.
+        assert_eq!(comments.file, 0.0);
+        assert_eq!(class(&comments, "A"), 2.0 + 2.0);
+        assert_eq!(function(&comments, "A.f"), 2.0 + 2.0 + 1.0);
+        assert_eq!(function(&comments, "A.h"), 2.0);
+        // A doc comment at the top, touching its declaration, is no header.
+        let comments = testing::comments(&JAVA, "/** Class doc */\nclass A {}\n");
+        assert_eq!(class(&comments, "A"), 2.0);
+        let header = testing::comments(&JAVA, "// Header words\n\nclass A {}\n");
+        assert_eq!(header.total, 0.0);
     }
 }

@@ -197,4 +197,11 @@ mod tests {
         );
         assert_eq!(added, (7.0 - 5.0) + 9.0);
     }
+
+    #[test]
+    fn comments_weigh_in_their_entry_or_the_declaration_s_they_are_before() {
+        let text = "/* one two */\nfunction f() {\n  /** three\n   * four */\n}\n";
+        let comments = testing::comments(&JAVASCRIPT, text);
+        assert_eq!((comments.file, function(&comments, "f")), (0.0, 2.0 + 2.0));
+    }
 }

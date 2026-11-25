@@ -35,21 +35,22 @@ struct Cli {
 enum Command {
     /// Weigh files and folders
     ///
-    /// Prints three weights: the code's (its tests left out), the docs' and the tests'; with `--code`, `--docs` or
-    /// `--tests`, that one alone.
+    /// Prints four weights: the code's (its tests left out), its comments', the docs' and the tests'; with
+    /// `--code`, `--docs`, `--tests` or `--comments`, that one alone.
     Scan(ScanArgs),
     /// Weigh the net delta of a commit or a range
     ///
     /// A commit against its first parent, or a range A..B its two trees against each other (one net delta, not a
-    /// delta per commit): prints the net delta, after minus before, of three weights: the code's (its tests left
-    /// out), the docs' and the tests'; with `--code`, `--docs` or `--tests`, that one alone.
+    /// delta per commit): prints the net delta, after minus before, of four weights: the code's (its tests left
+    /// out), its comments', the docs' and the tests'; with `--code`, `--docs`, `--tests` or `--comments`, that one
+    /// alone.
     Show(ShowArgs),
     /// Weigh the net delta of the uncommitted changes
     ///
     /// HEAD against the working tree, the untracked files too (unlike `git diff`, which compares the index with
     /// the working tree), or against the index alone (`--staged`, as `git diff --staged`): prints the net delta,
-    /// after minus before, of three weights: the code's (its tests left out), the docs' and the tests'; with
-    /// `--code`, `--docs` or `--tests`, that one alone.
+    /// after minus before, of four weights: the code's (its tests left out), its comments', the docs' and the
+    /// tests'; with `--code`, `--docs`, `--tests` or `--comments`, that one alone.
     Diff(DiffArgs),
     /// Write the default weights file
     ///
@@ -132,7 +133,7 @@ fn exclude(pattern: &str) -> Result<String, String> {
         .map_err(|error| format!("{error:#}"))
 }
 
-/// The one number a specific command prints; none for the three of the general one.
+/// The one number a specific command prints; none for the four of the general one.
 #[derive(Args)]
 #[group(id = "only", multiple = false)]
 struct Only {
@@ -145,6 +146,9 @@ struct Only {
     /// Only the docs' weight (the Markdown files); with `-v`, its report
     #[arg(long)]
     docs: bool,
+    /// Only the comments' weight (the code's comments and docstrings, test code's left out); with `-v`, its report
+    #[arg(long)]
+    comments: bool,
 }
 
 /// What a command prints, the same for the three.
@@ -152,14 +156,15 @@ struct Only {
 struct Output {
     #[command(flatten)]
     only: Only,
-    /// JSON instead of text: the three numbers and the warnings; with `--code`, `--tests` or `--docs`, the whole report
+    /// JSON instead of text: the four numbers and the warnings; with `--code`, `--tests`, `--docs` or
+    /// `--comments`, the whole report
     #[arg(long)]
     json: bool,
-    /// The three numbers on one line, each rounded to a whole number: `c+15 d+17 t-5`
+    /// The four numbers on one line, each rounded to a whole number, the comments' `m`: `c+15 m+3 d+17 t-5`
     #[arg(long, conflicts_with_all = ["json", "only"])]
     short: bool,
-    /// The warnings too (syntax errors, unreadable folders), to stderr; with `--code`, `--tests` or `--docs`,
-    /// the whole report: the total, a line per function (or file), the warnings
+    /// The warnings too (syntax errors, unreadable folders), to stderr; with `--code`, `--tests`, `--docs` or
+    /// `--comments`, the whole report: the total, a line per function (or file), the warnings
     #[arg(short, long)]
     verbose: bool,
     /// Only the report's N heaviest lines (a delta's: the N largest changes); implies `-v`
@@ -171,13 +176,14 @@ struct Output {
 }
 
 impl Output {
-    /// The one number asked for, `None` for all three.
+    /// The one number asked for, `None` for all four.
     fn mode(&self) -> Option<Mode> {
         let only = &self.only;
         [
             (only.code, Mode::Code),
             (only.tests, Mode::Tests),
             (only.docs, Mode::Docs),
+            (only.comments, Mode::Comments),
         ]
         .into_iter()
         .find_map(|(asked, mode)| asked.then_some(mode))
@@ -193,8 +199,8 @@ impl Output {
         self.verbose || self.top.is_some() || self.by.is_some()
     }
 
-    /// The general command's three numbers as asked: `--json` (`json`, with the warnings), `--short` or three
-    /// lines, those two with the warnings (`warnings`) to stderr when `--verbose`.
+    /// The general command's numbers as asked: `--json` (`json`, the four with the warnings), `--short` (the four on
+    /// one line) or four lines, those two with the warnings (`warnings`) to stderr when `--verbose`.
     fn parts(
         &self,
         parts: Parts,
@@ -246,8 +252,8 @@ pub fn run() -> Result<()> {
     }
 }
 
-/// Weighs the code at the paths, its docs and its tests, each at its full weight: the three numbers, or the one
-/// asked for (`--code`, `--docs`, `--tests`) with its report.
+/// Weighs the code at the paths, its docs, its tests and its comments, each at its full weight: the four numbers,
+/// or the one asked for (`--code`, `--docs`, `--tests`, `--comments`) with its report.
 fn scan(cli: &Cli, args: &ScanArgs) -> Result<()> {
     let output = &args.output;
     let mode = output.mode();
@@ -302,9 +308,9 @@ enum Changes<'a> {
     Uncommitted { staged: bool },
 }
 
-/// Weighs the net delta of a commit, a range or the uncommitted changes: of the code, its docs and its tests,
-/// each at its full weight: the three numbers, or the one asked for (`--code`, `--docs`, `--tests`) with its
-/// report.
+/// Weighs the net delta of a commit, a range or the uncommitted changes: of the code, its docs, its tests and its
+/// comments, each at its full weight: the four numbers, or the one asked for (`--code`, `--docs`, `--tests`,
+/// `--comments`) with its report.
 fn delta(
     cli: &Cli,
     changes: Changes,
@@ -432,9 +438,9 @@ impl<'c> Weighers<'c> {
         }
     }
 
-    /// A text of `kind` weighed, and its three parts: Markdown its docs weight; code its tests and its code
-    /// without them, a test file's (`test`) all test code. For one number (`mode`) the weight is of that part
-    /// alone, else of the whole text.
+    /// A text of `kind` weighed, and its four parts: Markdown its docs weight; code its tests, its code without
+    /// them, a test file's (`test`) all test code, and its comments, a test file's none. For one number (`mode`)
+    /// the weight is of that part alone, else of the whole text's code.
     fn weigh(
         &self,
         kind: Kind,
@@ -459,17 +465,27 @@ impl<'c> Weighers<'c> {
             .iter()
             .find(|w| std::ptr::eq(w.lang(), lang))
             .context("a file of a language with no weigher")?;
-        let weighed = weigher
-            .weigh(text)
-            .with_context(|| format!("weighing {}", path.display()))?;
+        // Test code's comments weigh nothing, so a test file's aren't looked for.
+        let with_comments = !test && matches!(mode, None | Some(Mode::Comments));
+        let (weighed, comments) = if with_comments {
+            weigher.weigh_with_comments(text)
+        } else {
+            weigher.weigh(text).map(|w| {
+                let none = Weighed::none(w.clean);
+                (w, none)
+            })
+        }
+        .with_context(|| format!("weighing {}", path.display()))?;
         let weighed = if test { weighed.all_tests() } else { weighed };
         let (code, tests) = weighed.split();
         let parts = Parts {
             code,
             docs: 0.0,
             tests,
+            comments: comments.total,
         };
         let weighed = match mode {
+            Some(Mode::Comments) => comments,
             Some(mode) => weighed.only(mode == Mode::Tests),
             None => weighed,
         };

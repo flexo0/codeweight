@@ -1,5 +1,6 @@
 //! The docs weight of a Markdown text: its words, function words, punctuation runs and symbol runs, each weighed
-//! by `[docs]`. Pure: text in, weight out; it knows nothing of files, folders or git.
+//! by `[docs]`; and of a code comment's text, by the same counter. Pure: text in, weight out; it knows nothing of
+//! files, folders or git.
 
 use std::collections::HashSet;
 
@@ -9,22 +10,56 @@ use crate::engine::Weighed;
 /// A Markdown text's docs weight, `words × word + function words × function_word + punctuation runs ×
 /// punctuation + symbol runs × symbol`, as a file's weight: no entries, always clean (any text is Markdown).
 pub fn weigh(text: &str, docs: &Docs) -> Weighed {
-    let function_words: HashSet<String> = docs
-        .function_words
-        .iter()
-        .map(|w| w.to_lowercase())
-        .collect();
-    let counts = count(text, &function_words);
-    let weight = counts.words as f64 * docs.word
-        + counts.function_words as f64 * docs.function_word
-        + counts.punctuation as f64 * docs.punctuation
-        + counts.symbols as f64 * docs.symbol;
-    Weighed {
-        total: weight,
-        file: weight,
-        file_tests: 0.0,
-        entries: Vec::new(),
-        clean: true,
+    Counter::new(docs).weigh(text)
+}
+
+/// The docs weights with their function words' set built once, to weigh many texts by.
+pub struct Counter {
+    word: f64,
+    function_word: f64,
+    punctuation: f64,
+    symbol: f64,
+    function_words: HashSet<String>,
+}
+
+impl Counter {
+    pub fn new(docs: &Docs) -> Counter {
+        Counter {
+            word: docs.word,
+            function_word: docs.function_word,
+            punctuation: docs.punctuation,
+            symbol: docs.symbol,
+            function_words: docs
+                .function_words
+                .iter()
+                .map(|w| w.to_lowercase())
+                .collect(),
+        }
+    }
+
+    /// A Markdown text's docs weight, as a file's weight.
+    pub fn weigh(&self, text: &str) -> Weighed {
+        let weight = self.of(count(text, &self.function_words, true));
+        Weighed {
+            total: weight,
+            file: weight,
+            file_tests: 0.0,
+            entries: Vec::new(),
+            clean: true,
+        }
+    }
+
+    /// A comment's text (its markers stripped) weighed as a Markdown text's lines are, but with no front matter and
+    /// no `<!-- comments -->`: a comment is no Markdown file.
+    pub fn comment(&self, text: &str) -> f64 {
+        self.of(count(text, &self.function_words, false))
+    }
+
+    fn of(&self, counts: Counts) -> f64 {
+        counts.words as f64 * self.word
+            + counts.function_words as f64 * self.function_word
+            + counts.punctuation as f64 * self.punctuation
+            + counts.symbols as f64 * self.symbol
     }
 }
 
@@ -40,15 +75,16 @@ struct Counts {
 /// The text's words, function words (of `function_words`, lowercase), punctuation runs and symbol runs, line by
 /// line. A fenced block's lines (its fences too) are
 /// counted as they are; outside them, YAML front matter at the top, a table's separator line and `<!-- comments
-/// -->` count nothing, and a URL and a link's destination (`[a](b/c.md)`'s `b/c.md`) are one word each.
-fn count(text: &str, function_words: &HashSet<String>) -> Counts {
+/// -->` count nothing, and a URL and a link's destination (`[a](b/c.md)`'s `b/c.md`) are one word each. Not
+/// `markdown` (a code comment's text): no front matter, and a `<!--` is text.
+fn count(text: &str, function_words: &HashSet<String>, markdown: bool) -> Counts {
     let text = text.strip_prefix('\u{feff}').unwrap_or(text);
     let mut runs = Runs::new(function_words);
     // A comment opened here closes when a `-->` comes after its `<!--`; with none, its `<!--` is text.
-    let last_close = text.rfind("-->");
+    let last_close = if markdown { text.rfind("-->") } else { None };
     let mut fence: Option<Fence> = None;
     let mut in_comment = false;
-    let mut offset = front_matter(text);
+    let mut offset = if markdown { front_matter(text) } else { 0 };
     for line in text[offset..].split_inclusive('\n') {
         let start = offset;
         offset += line.len();
@@ -557,6 +593,19 @@ mod tests {
         assert_eq!(weight("example.com"), 2.0 + 100.0);
         // In a fenced block, it is text: the fences, `://`, `.`.
         assert_eq!(weight("```\nhttps://a.b\n```\n"), 3.0 + 10.0 + 300.0);
+    }
+
+    #[test]
+    fn a_comment_s_text_has_no_front_matter_nor_comments_but_fenced_blocks() {
+        let config = Config::from_str_alone(crate::lang::testing::WEIGHTS).unwrap();
+        let counter = Counter::new(&config.docs);
+        // `---` symbol runs, `a`, `b`; `<!--`, `x`, `-->`.
+        assert_eq!(counter.comment("---\na\n---\nb\n"), 2.0 + 20.0);
+        assert_eq!(counter.comment("<!-- x -->"), 1.0 + 20.0);
+        // A fence's lines are code: `the` a word, the fences punctuation.
+        assert_eq!(counter.comment(" ```\n the\n ```\n"), 1.0 + 200.0);
+        assert_eq!(counter.comment(" see https://a.b/c"), 2.0);
+        assert_eq!(counter.weigh("x").total, 1.0);
     }
 
     #[test]

@@ -32,6 +32,10 @@ pub static PYTHON: Lang = Lang {
     default_case,
     carried_return: |_| false,
     loop_body: |_| None,
+    comments: &["comment"],
+    attributes: &[],
+    docstring,
+    inner_doc: |_| false,
 };
 
 /// The number literals.
@@ -158,6 +162,38 @@ fn operator(node: Node) -> Option<Operator> {
         "comparison_operator" => Some(Operator::Other),
         "unary_operator" => Operator::unary(node.child_by_field_name("argument")?, NUMBERS),
         "not_operator" => Some(Operator::Other),
+        _ => None,
+    }
+}
+
+/// A docstring's text, its quotes and prefix stripped: a string statement's (a module's, a class's, a function's
+/// docstring, or a string standing as a comment elsewhere), a concatenated one's parts each.
+fn docstring(node: Node, source: &[u8]) -> Option<String> {
+    if node.kind() != "expression_statement" {
+        return None;
+    }
+    let string = only_child(node)?;
+    let unquoted = |string: Node| {
+        let text = text(string, source);
+        let body = text.trim_start_matches(|c: char| c.is_ascii_alphabetic());
+        let quote = ["\"\"\"", "'''", "\"", "'"]
+            .into_iter()
+            .find(|q| body.starts_with(q))
+            .unwrap_or("");
+        let body = body.strip_prefix(quote).unwrap_or(body);
+        body.strip_suffix(quote).unwrap_or(body).to_string()
+    };
+    match string.kind() {
+        "string" => Some(unquoted(string)),
+        "concatenated_string" => {
+            let mut cursor = string.walk();
+            let parts: Vec<String> = string
+                .named_children(&mut cursor)
+                .filter(|c| c.kind() == "string")
+                .map(unquoted)
+                .collect();
+            Some(parts.join("\n"))
+        }
         _ => None,
     }
 }
@@ -491,5 +527,40 @@ e = x[0] + 1       # 0 and 1 not
 ",
         );
         assert_eq!(added, 9.0);
+    }
+
+    #[test]
+    fn comments_and_docstrings_weigh_in_their_entry_or_the_declaration_s_they_are_before() {
+        let text = "#!/usr/bin/env python3
+# Header words
+
+\"\"\"Module doc.\"\"\"
+import x
+
+
+# F doc
+@dec
+def f():
+    r\"\"\"F docstring\"\"\"
+    x = 1  # trailing
+    # inside
+
+
+class A:
+    '''Class words'''
+    # between
+
+    def g(self):
+        pass
+";
+        let comments = testing::comments(&PYTHON, text);
+        // The shebang and the header dropped; the module's docstring (`Module`, `doc`, `.`).
+        assert_eq!(comments.file, 2.0 + 100.0);
+        assert_eq!(function(&comments, "f"), 2.0 + 2.0 + 1.0 + 1.0);
+        assert_eq!(class(&comments, "A"), 2.0 + 1.0);
+        assert_eq!(function(&comments, "A.g"), 0.0);
+        // A docstring is its scope's, never the next declaration's.
+        let comments = testing::comments(&PYTHON, "\"\"\"Module doc\"\"\"\ndef f():\n    pass\n");
+        assert_eq!((comments.file, function(&comments, "f")), (2.0, 0.0));
     }
 }

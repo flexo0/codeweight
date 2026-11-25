@@ -1,6 +1,6 @@
-//! The reports of a scan (the weights) and of a commit (the deltas), as text or JSON: the code's, the docs' and the
-//! tests' numbers; or one of them, its total, then the files or the functions and classes, then the warnings, or
-//! the total alone.
+//! The reports of a scan (the weights) and of a commit (the deltas), as text or JSON: the code's, the comments',
+//! the docs' and the tests' numbers; or one of them, its total, then the files or the functions and classes, then
+//! the warnings, or the total alone.
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -46,12 +46,14 @@ pub struct Revisions<'a> {
     pub to: Option<&'a str>,
 }
 
-/// The three numbers of a file, a scan or a delta: the code's (its tests aside), the docs' and the tests'.
+/// The four numbers of a file, a scan or a delta: the code's (its tests aside), the docs', the tests' and the
+/// comments' (the code's comments and docstrings, test code's aside).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Parts {
     pub code: f64,
     pub docs: f64,
     pub tests: f64,
+    pub comments: f64,
 }
 
 impl Add for Parts {
@@ -62,6 +64,7 @@ impl Add for Parts {
             code: self.code + other.code,
             docs: self.docs + other.docs,
             tests: self.tests + other.tests,
+            comments: self.comments + other.comments,
         }
     }
 }
@@ -74,6 +77,7 @@ impl Sub for Parts {
             code: self.code - other.code,
             docs: self.docs - other.docs,
             tests: self.tests - other.tests,
+            comments: self.comments - other.comments,
         }
     }
 }
@@ -84,17 +88,20 @@ impl Sum for Parts {
     }
 }
 
-/// The three numbers as text, a line each in the order code, docs, tests, each signed (`code +15.5`, `docs 0`).
+/// The four numbers as text, a line each in the order code, comments, docs, tests (the code's comments next to
+/// it), each signed (`code +15.5`, `docs 0`).
 pub fn parts_text(parts: Parts) -> String {
     format!(
-        "code {}\ndocs {}\ntests {}\n",
+        "code {}\ncomments {}\ndocs {}\ntests {}\n",
         signed(parts.code),
+        signed(parts.comments),
         signed(parts.docs),
         signed(parts.tests)
     )
 }
 
-/// The three numbers on one line, each rounded to a whole number and signed: `c+15 d0 t-5`.
+/// The four numbers on one line in the same order, each rounded to a whole number and signed, the comments' `m`
+/// (messages): `c+15 m+3 d0 t-5`.
 pub fn parts_short(parts: Parts) -> String {
     // Rounded from the two decimals the text shows, so the two agree (`0.5` is `+1`).
     let whole = |part: f64| match rounded(part).round() {
@@ -103,31 +110,34 @@ pub fn parts_short(parts: Parts) -> String {
         n => format!("{n}"),
     };
     format!(
-        "c{} d{} t{}\n",
+        "c{} m{} d{} t{}\n",
         whole(parts.code),
+        whole(parts.comments),
         whole(parts.docs),
         whole(parts.tests)
     )
 }
 
-/// A scan's three numbers as JSON, with its warnings (the fields are described in `docs/json.md`).
+/// A scan's four numbers as JSON, with its warnings (the fields are described in `docs/json.md`).
 pub fn scan_parts_json(parts: Parts, files: &[Weighted], unreadable: &[Unreadable]) -> String {
     json(&PartsReport {
         from: None,
         to: None,
         code: rounded(parts.code),
+        comments: rounded(parts.comments),
         docs: rounded(parts.docs),
         tests: rounded(parts.tests),
         warnings: scan_json_warnings(files, unreadable),
     })
 }
 
-/// A commit's three deltas as JSON, with its revisions and warnings (the fields are described in `docs/json.md`).
+/// A commit's four deltas as JSON, with its revisions and warnings (the fields are described in `docs/json.md`).
 pub fn commit_parts_json(parts: Parts, changes: &[Changed], revisions: &Revisions) -> String {
     json(&PartsReport {
         from: Some(revisions.from),
         to: Some(revisions.to),
         code: rounded(parts.code),
+        comments: rounded(parts.comments),
         docs: rounded(parts.docs),
         tests: rounded(parts.tests),
         warnings: commit_json_warnings(changes),
@@ -553,7 +563,7 @@ struct Report<'a> {
     warnings: Vec<Warning>,
 }
 
-/// The JSON of the three numbers: a scan's has no `from` and `to`.
+/// The JSON of the four numbers: a scan's has no `from` and `to`.
 #[derive(Serialize)]
 struct PartsReport<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -561,6 +571,7 @@ struct PartsReport<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     to: Option<Option<&'a str>>,
     code: f64,
+    comments: f64,
     docs: f64,
     tests: f64,
     warnings: Vec<Warning>,
@@ -682,21 +693,26 @@ mod tests {
     }
 
     #[test]
-    fn the_three_numbers_are_signed_the_short_ones_whole() {
+    fn the_four_numbers_are_signed_the_short_ones_whole() {
         let parts = Parts {
             code: 15.5,
             docs: 0.001,
             tests: -5.0,
+            comments: 3.25,
         };
-        assert_eq!(parts_text(parts), "code +15.5\ndocs 0\ntests -5\n");
-        assert_eq!(parts_short(parts), "c+16 d0 t-5\n");
+        assert_eq!(
+            parts_text(parts),
+            "code +15.5\ncomments +3.25\ndocs 0\ntests -5\n"
+        );
+        assert_eq!(parts_short(parts), "c+16 m+3 d0 t-5\n");
         // Whole from the two decimals the text shows: 0.499 shows as 0.5, so +1; -0.4 is 0, no sign.
         let small = Parts {
             code: 0.499,
             docs: -0.4,
             tests: -2.5,
+            comments: 7.0,
         };
-        assert_eq!(parts_short(small), "c+1 d0 t-3\n");
+        assert_eq!(parts_short(small), "c+1 m+7 d0 t-3\n");
     }
 
     #[test]

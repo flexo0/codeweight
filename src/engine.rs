@@ -7,7 +7,8 @@ use anyhow::{Context, Result};
 use tree_sitter::{Node, Parser};
 
 use crate::config::{self, Category, Config, LangConfig};
-use crate::lang::{self, Lang, Nesting, Operator, ScopeKind};
+use crate::lang::{self, Lang, Nesting, Operator, Scope, ScopeKind};
+use crate::markdown::Counter;
 
 /// A text's weight.
 #[derive(Clone, Debug, PartialEq)]
@@ -38,6 +39,17 @@ pub struct Entry {
 }
 
 impl Weighed {
+    /// A weight of nothing: no code, no entries.
+    pub fn none(clean: bool) -> Weighed {
+        Weighed {
+            total: 0.0,
+            file: 0.0,
+            file_tests: 0.0,
+            entries: Vec::new(),
+            clean,
+        }
+    }
+
     /// Its code outside any class or function, test code or not.
     pub fn outside(&self) -> f64 {
         self.file + self.file_tests
@@ -105,6 +117,11 @@ pub struct Weigher<'c> {
     chains: Vec<bool>,
     /// By node kind id: a number literal, which may be a magic one (`[conditions] magic_numbers`).
     numbers: Vec<bool>,
+    /// By node kind id: a comment, and an attribute or decorator that may stand between one and its declaration.
+    comments: Vec<bool>,
+    attributes: Vec<bool>,
+    /// Weighs a comment's text, by the `[docs]` weights.
+    counter: Counter,
 }
 
 impl<'c> Weigher<'c> {
@@ -156,6 +173,8 @@ impl<'c> Weigher<'c> {
         let lambdas = flags(lang.lambdas);
         let chains = flags(lang.chains);
         let numbers = flags(lang.numbers);
+        let comments = flags(lang.comments);
+        let attributes = flags(lang.attributes);
 
         Weigher {
             lang,
@@ -173,6 +192,9 @@ impl<'c> Weigher<'c> {
             lambdas,
             chains,
             numbers,
+            comments,
+            attributes,
+            counter: Counter::new(&config.docs),
         }
     }
 
@@ -180,7 +202,21 @@ impl<'c> Weigher<'c> {
         self.lang
     }
 
+    /// A text's code weight.
     pub fn weigh(&self, text: &str) -> Result<Weighed> {
+        Ok(self.walk(text, false)?.0)
+    }
+
+    /// A text's code weight and its comments' weight, the entries of both the same functions, classes and file.
+    pub fn weigh_with_comments(&self, text: &str) -> Result<(Weighed, Weighed)> {
+        self.walk(text, true)
+    }
+
+    /// The code weight, and with `comments` the comments' (else an empty one): each comment and docstring, its
+    /// markers stripped, weighed flat by the `[docs]` weights into its function's, class's or file's entry, or
+    /// into the declaration's it is right before; a file's header, a shebang and test code's comments weigh
+    /// nothing.
+    fn walk(&self, text: &str, comments: bool) -> Result<(Weighed, Weighed)> {
         let mut parser = Parser::new();
         parser
             .set_language(&self.grammar)
@@ -194,7 +230,7 @@ impl<'c> Weigher<'c> {
         let mut file = 0.0;
         let mut file_tests = 0.0;
         let mut entries: Vec<Entry> = Vec::new();
-        let mut index: HashMap<(ScopeKind, String, bool), usize> = HashMap::new();
+        let mut index: HashMap<EntryKey, usize> = HashMap::new();
         let mut stack = vec![Frame {
             node: root,
             depth: 0,
@@ -205,6 +241,18 @@ impl<'c> Weigher<'c> {
         let mut children = Vec::new();
         // A loop's body its kind doesn't nest (C's loop macro's block), by its node id: its depth.
         let mut bodies: HashMap<usize, u32> = HashMap::new();
+        // The comments' weights: outside any entry, by entry, and of the declarations they are right before (by
+        // their entry's key once it is there, else the entry they are in).
+        let header = if comments {
+            self.header_end(root, source)
+        } else {
+            0
+        };
+        let mut comments_file = 0.0;
+        let mut comment_weights: Vec<f64> = Vec::new();
+        let mut before: Vec<(EntryKey, Option<usize>, f64)> = Vec::new();
+        // The code a run of comments is before, by its node id, and what it declares: searched once for the run.
+        let mut declares_last: Option<(usize, Option<(Scope, bool)>)> = None;
 
         while let Some(frame) = stack.pop() {
             let node = frame.node;
@@ -326,6 +374,37 @@ impl<'c> Weigher<'c> {
                 }
             }
 
+            if comments
+                && !test
+                && let Some(text) = self.comment_text(node, source, header)
+            {
+                let weight = self.counter.comment(&text);
+                // A docstring is its scope's, never the next declaration's.
+                let code = (weight > 0.0 && flag(&self.comments, id))
+                    .then(|| self.code_after(node, source))
+                    .flatten();
+                let declared = code.and_then(|code| match &declares_last {
+                    Some((id, declared)) if *id == code.id() => declared.clone(),
+                    _ => {
+                        let declared = self.declared_by(code, source);
+                        declares_last = Some((code.id(), declared.clone()));
+                        declared
+                    }
+                });
+                match declared {
+                    // Test code's comment, though before it.
+                    Some((_, true)) => {}
+                    Some((scope, false)) => {
+                        let name = match entry {
+                            Some(parent) => format!("{}.{}", entries[parent].name, scope.name),
+                            None => scope.name,
+                        };
+                        before.push(((scope.kind, name, false), entry, weight));
+                    }
+                    None => add_to(&mut comment_weights, &mut comments_file, entry, weight),
+                }
+            }
+
             // A node that declares a function or class (a named lambda) nests as one, not as its construct.
             let construct = match declares {
                 Some(_) => None,
@@ -374,14 +453,131 @@ impl<'c> Weigher<'c> {
             }
         }
 
+        let clean = !root.has_error();
+        let comments = if comments {
+            for (key, inside, weight) in before {
+                let at = index.get(&key).copied().or(inside);
+                add_to(&mut comment_weights, &mut comments_file, at, weight);
+            }
+            comment_weights.resize(entries.len(), 0.0);
+            let entries: Vec<Entry> = entries
+                .iter()
+                .zip(comment_weights)
+                .map(|(entry, weight)| Entry {
+                    weight,
+                    ..entry.clone()
+                })
+                .collect();
+            Weighed {
+                total: comments_file + entries.iter().map(|e| e.weight).sum::<f64>(),
+                file: comments_file,
+                file_tests: 0.0,
+                entries,
+                clean,
+            }
+        } else {
+            Weighed::none(clean)
+        };
         let total = file + file_tests + entries.iter().map(|e| e.weight).sum::<f64>();
-        Ok(Weighed {
+        let code = Weighed {
             total,
             file,
             file_tests,
             entries,
-            clean: !root.has_error(),
-        })
+            clean,
+        };
+        Ok((code, comments))
+    }
+
+    /// The text of a comment or a docstring, its markers stripped; `None` for any other node, for a comment of the
+    /// file's header (that ends by `header`) and a shebang.
+    fn comment_text(&self, node: Node, source: &[u8], header: usize) -> Option<String> {
+        if !flag(&self.comments, node.kind_id() as usize) {
+            return (self.lang.docstring)(node, source);
+        }
+        if node.start_byte() < header && !(self.lang.inner_doc)(node) {
+            return None;
+        }
+        Some(lang::comment_text(&lang::text(node, source)))
+    }
+
+    /// Where the file's header ends, by byte: the comments at its top (`root`'s first children) up to the last
+    /// blank line before its first code, or all of them in a file of no code; a shebang (`#!` on the first line)
+    /// too. 0 for no header.
+    fn header_end(&self, root: Node, source: &[u8]) -> usize {
+        let mut cursor = root.walk();
+        let mut end = 0;
+        let mut last: Option<Node> = None;
+        for child in root.named_children(&mut cursor) {
+            let comment = flag(&self.comments, child.kind_id() as usize);
+            if let Some(last) = last
+                && blank_between(last, child, source)
+            {
+                end = last.end_byte();
+            }
+            if !comment {
+                return end;
+            }
+            if child.start_byte() == 0 && source.starts_with(b"#!") {
+                end = child.end_byte();
+            }
+            last = Some(child);
+        }
+        last.map_or(end, |last| last.end_byte())
+    }
+
+    /// The code a comment is right before, if it is: the next node after it, attributes, decorators and comments
+    /// between, no blank line. None for a comment after code on its own line (`x = 1  # why`), which is that
+    /// line's.
+    fn code_after<'t>(&self, comment: Node<'t>, source: &[u8]) -> Option<Node<'t>> {
+        let is = |flags: &[bool], node: Node| flag(flags, node.kind_id() as usize);
+        if let Some(before) = comment.prev_sibling()
+            && !is(&self.comments, before)
+            && before.end_position().row == comment.start_position().row
+        {
+            return None;
+        }
+        let mut last = comment;
+        let mut next = comment.next_named_sibling();
+        while let Some(code) = next {
+            if blank_between(last, code, source) {
+                return None;
+            }
+            if !is(&self.comments, code) && !is(&self.attributes, code) {
+                return Some(code);
+            }
+            last = code;
+            next = code.next_named_sibling();
+        }
+        None
+    }
+
+    /// The first function or class `code` declares (`export function`, a decorated `def`, `const f = () => ...`),
+    /// not inside a nesting construct, with whether it is test code.
+    fn declared_by(&self, code: Node, source: &[u8]) -> Option<(Scope, bool)> {
+        let tests = |node: Node| self.lang.tests.is_some_and(|tests| tests(node, source));
+        let mut stack = vec![code];
+        while let Some(node) = stack.pop() {
+            if let Some(scope) = (self.lang.scope)(node, source) {
+                return Some((scope, tests(code) || tests(node)));
+            }
+            if self
+                .constructs
+                .get(node.kind_id() as usize)
+                .copied()
+                .flatten()
+                .is_some()
+            {
+                continue;
+            }
+            let mut cursor = node.walk();
+            let children: Vec<Node> = node
+                .named_children(&mut cursor)
+                .filter(|c| !c.is_extra())
+                .collect();
+            stack.extend(children.into_iter().rev());
+        }
+        None
     }
 
     /// An access's place in its row: how many accesses its object is in a row of (`a.b.c`'s `.c` is at 1, its `.b`
@@ -499,10 +695,33 @@ fn is_magic(literal: &str) -> bool {
     value.is_none_or(|v| v != 0.0 && v != 1.0)
 }
 
+/// Whether a blank line stands between two nodes, `a` before `b` (a line comment may end with its newline).
+fn blank_between(a: Node, b: Node, source: &[u8]) -> bool {
+    let newlines = |bytes: &[u8]| bytes.iter().filter(|&&c| c == b'\n').count();
+    let gap = source.get(a.end_byte()..b.start_byte()).unwrap_or_default();
+    newlines(gap) + usize::from(source[..a.end_byte()].ends_with(b"\n")) >= 2
+}
+
+/// A comment's weight added to its entry's, or to the file's outside any.
+fn add_to(weights: &mut Vec<f64>, file: &mut f64, entry: Option<usize>, weight: f64) {
+    match entry {
+        Some(at) => {
+            if weights.len() <= at {
+                weights.resize(at + 1, 0.0);
+            }
+            weights[at] += weight;
+        }
+        None => *file += weight,
+    }
+}
+
 /// A kind's flag; `false` for a kind past the grammar's own (tree-sitter's error node).
 fn flag(flags: &[bool], id: usize) -> bool {
     flags.get(id).copied().unwrap_or(false)
 }
+
+/// An entry's kind, qualified name and whether it is test code: what tells it from the others.
+type EntryKey = (ScopeKind, String, bool);
 
 /// A node to visit, with what it inherits from around it.
 struct Frame<'t> {

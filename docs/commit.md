@@ -30,12 +30,13 @@ Built (`git`, `source::from_commit`, `report`):
 5. Per function and class, and the file's code outside them, matched by kind and qualified name (`Class.method`,
    `module.func`) within the file, a renamed file's old and new: added, removed, heavier, lighter. A function moved
    to another file is removed from one and added to the other.
-6. The report: the three deltas, the code's, the docs' and the tests'; or one of them (`--code`, `--tests`,
-   `--docs`), its total delta (`+42.5`, `-17`), then its files' or functions' deltas ([cli.md](cli.md)).
+6. The report: the four deltas, the code's, the docs', the tests' and the comments'; or one of them (`--code`,
+   `--tests`, `--docs`, `--comments`), its total delta (`+42.5`, `-17`), then its files' or functions' deltas ([cli.md](cli.md)).
 
-The code, the docs and the tests are three deltas, never one: a change's code, its test files and a Rust file's
-tests left out; its docs; its tests alone; each side kept and weighed once as `scan` would, its parts split
-(`Weighed::split`), or with `--code`, `--tests` or `--docs` kept and weighed for that one alone
+The code, the docs, the tests and the comments are four deltas, never one: a change's code, its test files and a
+Rust file's tests left out; its docs; its tests alone; its code's comments; each side kept and weighed once as
+`scan` would, its parts split (`Weighed::split`, the comments' `Weighed` beside), or with `--code`, `--tests`,
+`--docs` or `--comments` kept and weighed for that one alone
 (`source::from_commit`'s `mode`, `Weighed::only`). A sum of the two, or a factor that weighs
 the tests less in it, would let a change to one hide in the other's number.
 

@@ -10,8 +10,9 @@ functions weighs more. The weight of a file, a folder or a function is the sum o
 a git commit (or a range, or the uncommitted changes) is its net delta, after minus before, positive or negative. It
 reads Java, TypeScript (TS, TSX), JavaScript, Python, Rust, Go and C, parsed by tree-sitter. It weighs docs too: a
 Markdown file's docs weight is its words, punctuation and symbol runs, a number of its own, never summed with the code's or the
-tests': `scan`, `show` and `diff` print the three (`--code`, `--tests` or `--docs` one alone, with its
-report).
+tests'; and a code file's comments and docstrings, weighed as the docs are, are a fourth, the comments' (test code's
+left out): `scan`, `show` and `diff` print the four (`--code`, `--tests`, `--docs` or `--comments` one alone, with
+its report; `--short` the four on one line).
 
 The user docs past the README are `docs/usage.md`, `docs/json.md` and `docs/weights-file.md`. The design is the rest
 of `docs/`, a file per subject (its index `docs/README.md`). Keep those docs in step with what is built (a decision

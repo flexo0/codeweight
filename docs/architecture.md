@@ -6,10 +6,10 @@
 | `config` | loads the weights file, merges it over the defaults, validates it |
 | `source` | an input as `(path, kind, text)` items, a kind a language's code or Markdown: from disk (`ignore`, the excludes) or git blobs at a revision |
 | `lang` | a module per language (Java, TS and TSX, JavaScript, Python, Rust, Go, C): grammar, extensions, node kind → category, nesting kinds, function names |
-| `engine` | one tree walked: each node's weight, summed by function, class and file |
-| `markdown` | a Markdown text's docs weight: its words, punctuation and symbol runs, line by line, no tree-sitter |
+| `engine` | one tree walked: each node's weight, summed by function, class and file; with the comments asked for, each comment's and docstring's too, by `markdown`'s counter, into a second `Weighed` of the same entries |
+| `markdown` | a Markdown text's docs weight, and a comment's text's: its words, punctuation and symbol runs, line by line, no tree-sitter |
 | `git` | the files a commit, a range or the uncommitted changes changed (`git diff-tree -r -M`; the uncommitted ones as a tree, `git add -A` into a copy of the index, `git write-tree`), their text before and after (`git cat-file --batch`) |
-| `report` | the three numbers (a line each, `--short`'s one line, their JSON), and one number's report, the text table and the JSON; for `show` and `diff`, the deltas |
+| `report` | the four numbers (a line each, `--short`'s one line of four, their JSON), and one number's report, the text table and the JSON; for `show` and `diff`, the deltas |
 
 Files are weighed in parallel (`rayon`).
 
@@ -41,14 +41,15 @@ crates.io as well, needs a C compiler.
   file the test globs match is a test file: the code's number leaves it out, the tests' keeps it and the files of a
   language with tests inside its source files (Rust's), each weighed for its tests alone. A file the docs globs match is
   Markdown (`source::Kind`), docs alone and never a test file, though a test glob matches it too: the docs' number has
-  only such files, the code's and the tests' none (`source::Mode`: the code, the tests or the docs). The general
-  command weighs every file once and splits it into the three (`Weighed::split`); `--code`, `--tests` or `--docs`
-  keeps only that one's files (`Input::keep`). A path is shown as given,
+  only such files, the code's and the tests' none (`source::Mode`: the code, the tests, the docs or the comments,
+  whose files are the code's: a test file has no comments that weigh). The general command weighs every file once
+  and splits it into the four (`Weighed::split` for the code and the tests, the comments' `Weighed` beside them);
+  `--code`, `--tests`, `--docs` or `--comments` keeps only that one's files (`Input::keep`). A path is shown as given,
   or the folder given joined with the path in it, without a leading `./`; a path given twice, or under two folders
   given, is weighed once.
 - `source` for `show` and `diff` (`from_commit`): a changed file's each side is kept as a walk of the repo's root would keep
   it: its path (from the root, as `git diff-tree` gives it) not hidden (no part starting with `.`), not excluded, in
-  a language codeweight reads or Markdown, and, with `--code`, `--tests` or `--docs`, kept for that one as a scan keeps a file (never two in
+  a language codeweight reads or Markdown, and, with `--code`, `--tests`, `--docs` or `--comments`, kept for that one as a scan keeps a file (never two in
   one number; without them every side is kept, its parts split as a scan's); a side that isn't a regular file (a symlink, a
   submodule) is none. A side's language is its own path's, so a rename `a.js -> a.ts` is an added file. A change with
   no side kept is left out, unlisted. Then
@@ -73,12 +74,20 @@ crates.io as well, needs a C compiler.
   that are their own operator), `loop_body` (a node that is a loop its kind doesn't tell, and its body, nested
   one level deeper: C's loop macro, its block the node after it, no child, or a definition's body), `scope` (the function or class a node declares, and its own name) and `tests` (a
   node that is test code inside a source file, it and all in it: Rust's `#[cfg(test)]` items; none for a language whose tests are files of their own). A lambda `scope` names a function weighs and nests as a function (TS's named
-  arrows). A test checks that
+  arrows). For the comments: the comment kinds (their markers stripped by one `lang::comment_text` for all, `//`,
+  `#`, `/* */`), the attribute kinds that may stand between a doc comment and its declaration (Rust's `#[...]`, a
+  TS class member's decorator), `docstring` (a node that is one, and its text without its quotes: Python's string
+  statement) and `inner_doc` (a comment that documents its module from inside, so no header: Rust's `//!`). A test checks that
   every kind and field the tables name is in the grammar, so a typo can't silently weigh nothing.
 - A call's arguments are counted alike in every language (`lang::arguments`: its `arguments` field's list items, or
   one lone argument), no hook.
 - `engine::Weigher` turns a language's tables and its weights into arrays by node kind id once, then walks each
   tree with an explicit stack (a long `a + b + c + ...` chain is a deep tree, too deep for recursion); a node's
-  weight is added to its entry's sum, so a file's sums are in source order and deterministic.
+  weight is added to its entry's sum, so a file's sums are in source order and deterministic. The comments are
+  weighed in the same walk, only when asked for (`weigh_with_comments`; `--code` and `--tests` don't ask): a
+  comment's text by a `markdown::Counter` built once per weigher (its function words' set not rebuilt per comment),
+  so the engine stays pure, text in, weights out; a comment right before a declaration is kept aside by the entry's
+  key and added once the walk has made the entry. The comments come out as a second `Weighed`, its entries the
+  code's (the same names and lines, their own weights), so `split`, `only` and `all_tests` never see them.
 - The engine's tests are snippets weighed under `tests/weights.toml` (round numbers, complete on its own, the
   defaults never under it), each sum worked out by hand in the test. The CLI's tests run the binary in temp folders.

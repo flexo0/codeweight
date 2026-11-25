@@ -4,7 +4,10 @@ What each language's elements are, where it adds to or differs from the general 
 which are Java's as they stand. Every constructor is a `constructor`: Java's `new Foo()`, an array's `new int[3]` /
 `new Integer[] {1, 2}` (a bare `{1, 2}` initializer is none) and `this(...)` / `super(...)`, TS's and JS's `new`,
 Rust's struct literal, Go's composite literal, C's compound literal; Python's `Foo()` stays a `call`, no syntax telling it from a
-function's.
+function's. Each language's comment kinds weigh in the comments ([weight.md](weight.md)), the same way in all, their
+markers stripped by one rule (`//`, `///`, `//!`, `#`, `/*`, `/**`, `/*!`, `*/`, a block's leading `*`). Java's are
+`line_comment` and `block_comment`, a Javadoc a block; an annotation is in its declaration's modifiers, so a Javadoc
+before `@Override` is the method's.
 
 ## TypeScript, TSX and JavaScript
 
@@ -39,6 +42,8 @@ function's.
   field all the same: `onClick = () => ...` is the function `A.onClick`. `using x = ...` (`using_declaration`, which
   TypeScript's grammar doesn't parse yet) is a statement, as `let`. The grammar reads JSX in any file, so a JSX
   element is a call in a `.js` file as in a `.jsx` one. Its weights-file table is its own ([config.md](config.md)).
+- Comments: `comment`, a line or a block, a JSX `{/* */}` too (`html_comment`, the legacy `<!--`, is none). A
+  class member's decorator is beside the member, so a comment before it is the member's.
 
 ## Python
 
@@ -60,6 +65,10 @@ function's.
   `Dict[str, int]`), which is a type; a parameter's default is no annotation.
 - A decorator weighs nothing of its own; a call in it (`@app.route("/")`) is a call of the class or file around the
   decorated definition (the grammar puts the decorators beside the definition, not in it).
+- Comments: `comment`, and every string statement (a module's, a class's or a function's docstring, or a string
+  standing as a comment elsewhere), its prefix (`r`, `f`, ...) and quotes stripped, a concatenated one's parts each;
+  a docstring is its scope's. A shebang is a comment in the grammar, and weighs nothing. A `#` block over a
+  decorated `def` is the function's (the decorators are in the definition).
 
 ## Rust
 
@@ -108,6 +117,10 @@ function's.
   inside a class or function (`#[cfg(test)] const` in an `impl`) weighs in its class's or function's code; a
   `mod tests;` whose file is `tests.rs` marks that file only in its parent, so `tests.rs` is code unless a test
   glob or its own `#![cfg(test)]` says otherwise.
+- Comments: `line_comment` and `block_comment`, doc comments (`///`, `/** */`, `//!`, `/*! */`) too; an attribute
+  (`#[...]`) between a doc comment and its item keeps it the item's. `//!` and `/*!` document the module from inside,
+  so at the file's top they are no header and weigh. A test item's comments weigh nothing, and so does a comment
+  right before one (`// ...` over `#[cfg(test)] mod tests`).
 
 ## Go
 
@@ -152,6 +165,8 @@ function's.
   conversion (`[]byte(s)`; `int(x)` parses as a call) and a type assertion (`x.(T)`) weigh nothing of their own,
   as Rust's struct expression.
 - Tests are files of their own, `*_test.go` (a test glob), so the language has no `tests` hook.
+- Comments: `comment`, a doc comment (`// Package a ...` right before `package`, `// F ...` before `func F`) as any;
+  `//go:build` and `//go:generate` weigh as text, the first, before a blank line at the top, in the header.
 
 ## C
 
@@ -223,3 +238,4 @@ function's.
   struct. A definition or a prototype named by `if`, `while`, `return`, `sizeof` or another keyword (`KEYWORDS` in
   `src/lang/c.rs`) weighs no `function`, no parameters and no nesting: its code weighs in its enclosing entry (the
   function, or the file), and the struct is a class of its own there.
+- Comments: `comment`, line or block; `#pragma` and the other directives are preprocessor nodes, no comments.

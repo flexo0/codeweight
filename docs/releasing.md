@@ -6,7 +6,7 @@ Semver, `MAJOR.MINOR.PATCH`: Cargo.toml's `version`, which `codeweight --version
 What it versions is what a script, a hook or another tool relies on:
 
 - the CLI: what [cli.md](cli.md)'s compatibility lists, a command's and an option's name and meaning, the defaults,
-  the exit codes, the text of the numbers alone (`code +15.5`, `--short`'s `c+15 d+17 t-5`);
+  the exit codes, the text of the numbers alone (`code +15.5`, `--short`'s `c+15 m+3 d+17 t-5`);
 - the JSON's fields ([json.md](json.md));
 - the weights file's keys, categories and languages ([weights-file.md](weights-file.md)): an unknown one is an
   error, so a removed or renamed one breaks a user's file;
@@ -28,7 +28,7 @@ the numbers moving is reason enough for it: a tool that compares them across ver
 At the repo's root, in the crate too: a section per version, newest first, `## 0.2.0 - 2026-12-01`, its lines
 grouped as `Changed` (the breaks first, each marked a break), `Weights` (the numbers' changes), `Added` and `Fixed`.
 A section is written at its release, from the commit subjects since the last tag (`git log --oneline vX.Y.Z..`),
-their weights (`[c+15 d+17 t-5]`) dropped; the `docs`, `tests` and `ci` commits and refactors that change nothing
+their weights (`[c+15 m+3 d+17 t-5]`) dropped; the `docs`, `tests` and `ci` commits and refactors that change nothing
 visible are left out. 0.1.0's section, written before its tag, is the first release's summary, dated when tagged.
 
 No `Unreleased` section that each commit adds a line to: a commit's subject already says what changed and how it

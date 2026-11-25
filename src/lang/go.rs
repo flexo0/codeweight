@@ -29,6 +29,10 @@ pub static GO: Lang = Lang {
     default_case: |node, _| node.kind() == "default_case",
     carried_return: |_| false,
     loop_body: |_| None,
+    comments: &["comment"],
+    attributes: &[],
+    docstring: |_, _| None,
+    inner_doc: |_| false,
 };
 
 const KINDS: &[(&str, Category)] = &[
@@ -629,5 +633,27 @@ mod tests {
              }",
         );
         assert_eq!(added, 7.0 + 9.0);
+    }
+
+    #[test]
+    fn comments_weigh_in_their_entry_or_the_declaration_s_they_are_before() {
+        let text = "// Copyright words
+
+// Package a doc
+package a
+
+// F doc
+func F() {
+	// inside
+}
+
+// between
+
+func G() {}
+";
+        let comments = testing::comments(&GO, text);
+        assert_eq!(comments.file, 3.0 + 1.0);
+        assert_eq!(function(&comments, "F"), 2.0 + 1.0);
+        assert_eq!(function(&comments, "G"), 0.0);
     }
 }

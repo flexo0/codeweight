@@ -24,16 +24,17 @@ its code, so that a doc weighs precisely what the code it describes does.
 
 ## Example
 
-codeweight run on its own repo, and on what a commit added or took away, as three numbers: code, docs and
-tests:
+codeweight run on its own repo, and on what a commit added or took away, as four numbers: code, comments, docs
+and tests:
 
 ```
 $ codeweight scan .
-code +10805.82
-docs +16196.34
-tests +4982.29
+code +11765.16
+comments +6531.52
+docs +17383.9
+tests +5198.5
 $ codeweight show f4de918 --short
-c+112 d+33 t+65
+c+112 m+43 d+33 t+65
 $ codeweight show f4de918 --code --top 2
 total +112.46
 +30.06  added    src/cli.rs  write_all
@@ -67,8 +68,8 @@ codeweight diff                 weigh the net delta of the uncommitted changes (
 codeweight init                 write the default weights file to ./codeweight.toml, for you to tune
 ```
 
-Each prints three numbers: code, docs and tests (`--short`: on one line). `--code`, `--tests` or `--docs` prints that
-number alone, and with `-v` the functions behind it, heaviest first; `--json` the same as JSON.
+Each prints four numbers: code, comments, docs and tests (`--short`: the four on one line). `--code`,
+`--tests`, `--docs` or `--comments` prints that number alone, and with `-v` the functions behind it, heaviest first; `--json` the same as JSON.
 
 ## More
 

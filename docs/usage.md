@@ -16,45 +16,51 @@ codeweight diff [-C <path>] [--staged] [--exclude <pattern>]... [<one>|--short] 
 codeweight init [<file>|-]     write the default weights file (default ./codeweight.toml), never over an existing
                                one; `-` prints it to stdout
 
-<one>: --code|--tests|--docs [--top <N>] [--by file|function]
+<one>: --code|--tests|--docs|--comments [--top <N>] [--by file|function]
 ```
 
 `scan`, `show` and `diff` take `--config <file>`: the weights file ([weights-file.md](weights-file.md) says where it is looked up
 without one); `init` doesn't, it reads none. They take too:
 
 - `--exclude <pattern>` (repeatable): the paths to leave out besides the weights file's excludes (below);
-- `--code`, `--tests` or `--docs` (at most one): that number alone, and its report;
-- `--verbose` (`-v`): the warnings too, on stderr; with `--code`, `--tests` or `--docs`, the whole report instead of
-  the total alone;
+- `--code`, `--tests`, `--docs` or `--comments` (at most one): that number alone, and its report;
+- `--verbose` (`-v`): the warnings too, on stderr; with `--code`, `--tests`, `--docs` or `--comments`, the whole
+  report instead of the total alone;
 - `--top <N>`: only the report's first N lines (the heaviest; for a delta, the largest changes);
 - `--by file|function`: what the report lists, the functions by default;
-- `--short`: the three numbers on one line;
+- `--short`: the four numbers on one line;
 - `--json`: JSON instead of text (described in [json.md](json.md)).
 
-`--top` and `--by` need one of `--code`, `--tests` and `--docs`, `--short` none of them, and `--short` and
+`--top` and `--by` need one of `--code`, `--tests`, `--docs` and `--comments`, `--short` none of them, and `--short` and
 `--json` don't go together: each is a usage error (exit 2) otherwise.
 
-Without `--code`, `--tests` or `--docs`, a command prints three numbers, each on its line, in the order code, docs,
-tests: `code +15.5`, `docs +17`, `tests -5`. Each is signed (`scan`'s too), with at most two decimals, a zero
-without a sign (`docs 0`). `--short` prints them on one line, each rounded to a whole number, all three always
-there: `c+15 d+17 t-5`, a zero part `d0`. The code's is the weight of the code, its tests left out. The tests' is
+Without `--code`, `--tests`, `--docs` or `--comments`, a command prints four numbers, each on its line, in the order
+code, comments, docs, tests: `code +15.5`, `comments +3`, `docs +17`, `tests -5`. Each is signed (`scan`'s too), with
+at most two decimals, a zero without a sign (`docs 0`). `--short` prints the four on one line in the same order, each
+rounded to a whole number, all four always there, the comments' `m` (messages): `c+15 m+3 d+17 t-5`, a zero part `d0`. The code's is the weight of the code, its tests left out. The tests' is
 the weight of the tests alone: the test files (`test_globs`), and in a Rust file the items marked `#[cfg(test)]`,
 `#[test]` or a runner's `#[tokio::test]` (any `#[...::test]`), all in them (a `mod tests` and its functions), and a
 whole file marked `#![cfg(test)]`. The docs' is the weight of the Markdown files (`docs_globs`), each by its words
 and its runs of other characters, punctuation or symbols (`[docs]`, see [weights-file.md](weights-file.md); a word 0.64,
 a function word in prose (`a`, `the`, `of`) and a punctuation run 0.32 and a symbol run 0.62 by default, so
-`Hello, world.` is 1.92, `## Setup` 1.26 and `the end of it` 1.6).
-The code, the tests and the docs are always three numbers, never one sum, each at its full weight: a change to all
-three has its code in one, its tests in another and its docs in the third. The input is read once and each file
-weighed once, a Rust file with tests counting toward the code and the tests both.
+`Hello, world.` is 1.92, `## Setup` 1.26 and `the end of it` 1.6). The comments' is the weight of the code's
+comments and Python's docstrings, each one's text without its markers (`//`, `#`, `/* */`, the quotes) weighed as
+the docs are, by the same `[docs]` weights, flat (a comment in a loop weighs what one at the top does): a comment is
+its function's, class's or file's, one right before a declaration (a Javadoc, a `///`, a `#` block over a `def`)
+the declaration's. A file's header (the comments at its top, apart from its first code by a blank line: a license)
+weighs nothing, nor does a shebang, nor test code's comments (a test file's, a Rust `#[cfg(test)]` item's).
+The code, the tests, the docs and the comments are always four numbers, never one sum, each at its full weight: a
+change to all four has its code in one, its tests in another, its docs in the third and its comments in the fourth.
+The input is read once and each file weighed once, a Rust file with tests counting toward the code and the tests
+both, a code file toward the code and the comments.
 
-With `--code`, `--tests` or `--docs`, a command prints that number alone: `scan` its total (`4698.25`), `show` and
+With `--code`, `--tests`, `--docs` or `--comments`, a command prints that number alone: `scan` its total (`4698.25`), `show` and
 `diff` their net delta, signed (`+42.5`, `-17`, `0`). `--verbose` (`-v`) prints its whole report instead, as
 `--top` and `--by` do. A file's syntax errors and a folder that can't be read are a warning: in the report, in the
-JSON, and with `-v` on stderr after the three numbers (or `--short`'s line); the numbers alone, without `-v`, print
+JSON, and with `-v` on stderr after the four numbers (or `--short`'s line); the numbers alone, without `-v`, print
 none.
 
-The text report (`--code -v`, or `--tests`, `--docs`) starts with the total. After it come the functions and classes, heaviest first, then by path and
+The text report (`--code -v`, or `--tests`, `--docs`, `--comments`) starts with the total. After it come the functions and classes, heaviest first, then by path and
 name, each as `<weight>  <path>  <name>`; with `--by file`, the files. A class's line (`Name (class)`) has its code
 outside its functions; `(file)` is a file's code outside any class. A function is named by its enclosing classes and
 functions, `Outer.Inner.method`. Same-named functions of one class are one line, their weights summed: overloads, or
@@ -109,9 +115,10 @@ A file's delta is its weight after minus before: an added file's is all positive
 functions and classes are matched by their qualified name within the file (a renamed file's old and new), each one
 `added`, `removed`, `heavier` or `lighter`. The changed files are weighed as a walk of the repo's root weighs them:
 the `[files]` excludes, `--exclude`'s and hidden paths are left out, and so is a file codeweight doesn't read.
-Their code, docs and tests are weighed as `scan` weighs them, with `--code`, `--tests` or `--docs` as `scan` does with it.
+Their code, docs, tests and comments are weighed as `scan` weighs them, with `--code`, `--tests`, `--docs` or
+`--comments` as `scan` does with it.
 
-With `--code -v` (or `--tests`, `--docs`), the text report starts with the total delta (`total +42.5`, `total -17`). After it comes one line per function and
+With `--code -v` (or `--tests`, `--docs`, `--comments`), the text report starts with the total delta (`total +42.5`, `total -17`). After it comes one line per function and
 class (or per file with `--by file`), `<delta>  <status>  <path>  <name>`, a renamed file's path as `old -> new`; the
 largest changes first, either way (a gain before a loss of the same size), then by path and name. A line whose delta
 is 0 (an untouched function, a pure rename) is left out; `--top` keeps the first N lines.

@@ -93,6 +93,18 @@ pub struct Lang {
     /// argument as a definition, its body (`FOR_EACH(x) { ... }`). The node weighs a `loop`, not its kind's
     /// category; its body, a child or not, is one level deeper than it.
     pub loop_body: for<'t> fn(Node<'t>) -> Option<Node<'t>>,
+    /// The kinds of a comment, line or block, doc comment or not: its text, its markers stripped (`comment_text`),
+    /// weighs in the comments number.
+    pub comments: &'static [&'static str],
+    /// The kinds of an attribute or a decorator that is its declaration's sibling (Rust's `#[...]`, a class
+    /// member's decorator in TypeScript): a comment before it is still right before the declaration.
+    pub attributes: &'static [&'static str],
+    /// A docstring's text, its quotes stripped, if the node is one (Python's string statement): it weighs in the
+    /// comments number, as a comment does.
+    pub docstring: fn(Node, &[u8]) -> Option<String>,
+    /// Whether a comment documents its file or module from inside it (Rust's `//!`, `/*!`): at the file's top it
+    /// is no header, as a Python module's docstring is none.
+    pub inner_doc: fn(Node) -> bool,
 }
 
 /// A nesting construct: which of its children are one level deeper than it.
@@ -234,6 +246,7 @@ pub enum ScopeKind {
 }
 
 /// A function or class a node declares.
+#[derive(Clone)]
 pub struct Scope {
     pub kind: ScopeKind,
     pub name: String,
@@ -329,6 +342,33 @@ pub fn arguments(call: Node) -> usize {
         Some(_) => 1,
         None => 0,
     }
+}
+
+/// A comment's text without its markers: a line comment's `//` (`///`, `//!`) or `#`; a block comment's `/*`
+/// (`/**`, `/*!`), its `*/` and the `*` that begins each of its lines after the first.
+pub fn comment_text(comment: &str) -> String {
+    if let Some(line) = comment.strip_prefix("//") {
+        let line = line.strip_prefix(['/', '!']).unwrap_or(line);
+        return line.to_string();
+    }
+    if let Some(line) = comment.strip_prefix('#') {
+        return line.trim_start_matches('#').to_string();
+    }
+    let Some(block) = comment.strip_prefix("/*") else {
+        return comment.to_string();
+    };
+    let block = block.strip_suffix("*/").unwrap_or(block);
+    let block = block.strip_prefix('!').unwrap_or(block);
+    let block = block.trim_start_matches('*').trim_end_matches('*');
+    let mut text = String::with_capacity(block.len());
+    for (at, line) in block.split_inclusive('\n').enumerate() {
+        let line = match line.trim_start().strip_prefix('*') {
+            Some(rest) if at > 0 => rest.trim_start_matches('*'),
+            _ => line,
+        };
+        text.push_str(line);
+    }
+    text
 }
 
 /// The text of a node, lossy where it isn't UTF-8.
@@ -515,6 +555,19 @@ pub mod testing {
         weighed
     }
 
+    /// A snippet's comments, weighed under the test weights' `[docs]` (a word 1, a symbol run 10, a punctuation run
+    /// 100, `the` or `of` 1000); its code weighs what it weighs without them.
+    pub fn comments(lang: &'static Lang, text: &str) -> Weighed {
+        let config = Config::from_str_alone(WEIGHTS).unwrap();
+        let (code, comments) = Weigher::new(lang, &config)
+            .weigh_with_comments(text)
+            .unwrap();
+        assert_eq!(code, weigh(lang, text));
+        let sum = comments.file + comments.entries.iter().map(|e| e.weight).sum::<f64>();
+        assert_eq!((comments.total, comments.file_tests), (sum, 0.0));
+        comments
+    }
+
     pub fn weight(weighed: &Weighed, kind: ScopeKind, name: &str) -> f64 {
         let found: Vec<_> = weighed
             .entries
@@ -571,6 +624,20 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn a_comment_s_markers_are_stripped() {
+        assert_eq!(comment_text("// a b"), " a b");
+        assert_eq!(comment_text("/// a"), " a");
+        assert_eq!(comment_text("//! a\n"), " a\n");
+        assert_eq!(comment_text("//go:build x"), "go:build x");
+        assert_eq!(comment_text("## a"), " a");
+        assert_eq!(comment_text("/* a */"), " a ");
+        assert_eq!(comment_text("/*! a */"), " a ");
+        assert_eq!(comment_text("/**\n * a\n ** b\n */"), "\n a\n b\n ");
+        // Only a line's leading `*` is a marker.
+        assert_eq!(comment_text("/* a * b\n c */"), " a * b\n c ");
     }
 
     #[test]

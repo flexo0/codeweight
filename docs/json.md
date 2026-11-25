@@ -2,10 +2,11 @@
 
 The machine contract: other tools read it, so its fields change only with this file.
 
-Without `--code`, `--tests` or `--docs`, `--json` prints one object, the three numbers and the warnings:
+Without `--code`, `--tests`, `--docs` or `--comments`, `--json` prints one object, the four numbers and the
+warnings:
 
-- `code`, `docs`, `tests`: the three numbers (for `show` and `diff`, the deltas), each rounded to two
-  decimals;
+- `code`, `comments`, `docs`, `tests`: the four numbers (for `show` and `diff`, the deltas), each rounded to two
+  decimals; `comments` is the code's comments and docstrings ([weight.md](weight.md));
 - `warnings`: as a report's, below;
 - for `show` and `diff`, also `from` and `to`, as a report's, below.
 
@@ -14,13 +15,14 @@ Without `--code`, `--tests` or `--docs`, `--json` prints one object, the three n
   "from": "60baba96b16d35eb98e1c87993574780995f624c",
   "to": "b48be68e77d42c8c9a8a28f2060d0bbe261779d4",
   "code": 6.0,
+  "comments": 3.0,
   "docs": 17.0,
   "tests": -5.0,
   "warnings": []
 }
 ```
 
-With `--code`, `--tests` or `--docs`, `--json` prints that number's report, one JSON object with the same lines as
+With `--code`, `--tests`, `--docs` or `--comments`, `--json` prints that number's report, one JSON object with the same lines as
 the text, in the same order, `--top` and `--by` acting alike; the whole report, `--verbose` or not. Every field
 below is always there, `null` where it has no value. A weight or a delta is a number rounded to two decimals, as the
 text shows it.

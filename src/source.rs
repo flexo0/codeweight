@@ -14,12 +14,14 @@ use crate::config::{self, Files};
 use crate::git::{self, Range};
 use crate::lang::{self, Lang};
 
-/// What is weighed: the code (its tests aside), the tests, or the docs; each its own number, never summed.
+/// What is weighed: the code (its tests aside), the tests, the docs, or the code's comments; each its own number,
+/// never summed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
     Code,
     Tests,
     Docs,
+    Comments,
 }
 
 /// What a file is weighed as: a language's code, or Markdown for its docs weight.
@@ -269,7 +271,8 @@ pub fn from_paths(paths: &[PathBuf], files: &Files) -> Result<Input> {
 
 impl Input {
     /// Only the items a scan of `mode` weighs: of the code, those the test globs don't match; of the tests, those
-    /// they match and those of a language with tests in its source files (Rust's); of the docs, the Markdown files.
+    /// they match and those of a language with tests in its source files (Rust's); of the docs, the Markdown files;
+    /// of the comments, the code files the test globs don't match.
     pub fn keep(&mut self, mode: Mode) {
         self.items
             .retain(|item| weighed_for(item.test, item.kind, mode));
@@ -289,13 +292,14 @@ impl Input {
 
 /// Whether a file (`test`: the test globs match it) is weighed for `mode`: a Markdown file is the docs' alone; of
 /// the code, a test file is the tests' alone, a file of a language with tests in its source files (Rust's) both's,
-/// each its part.
+/// each its part; a code file's comments are the comments', a test file's none (test code's comments weigh
+/// nothing).
 fn weighed_for(test: bool, kind: Kind, mode: Mode) -> bool {
     match (kind, mode) {
         (Kind::Markdown, mode) => mode == Mode::Docs,
         (Kind::Code(_), Mode::Docs) => false,
         (Kind::Code(lang), Mode::Tests) => test || lang.tests.is_some(),
-        (Kind::Code(_), Mode::Code) => !test,
+        (Kind::Code(_), Mode::Code | Mode::Comments) => !test,
     }
 }
 

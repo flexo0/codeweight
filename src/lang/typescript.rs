@@ -68,6 +68,10 @@ pub(super) const BASE: Lang = Lang {
     default_case: |node, _| node.kind() == "switch_default",
     carried_return: |_| false,
     loop_body: |_| None,
+    comments: &["comment"],
+    attributes: &["decorator"],
+    docstring: |_, _| None,
+    inner_doc: |_| false,
 };
 
 /// The number literal.
@@ -646,5 +650,30 @@ mod tests {
              const g = h ?? i ?? 2;   // each ??, an operator 7, no bool_op 5; 2 magic: access 9",
         );
         assert_eq!(added, 28.0 + 2.0 * (7.0 - 5.0) + 9.0);
+    }
+
+    #[test]
+    fn comments_weigh_in_their_entry_or_the_declaration_s_they_are_before() {
+        let text = "// License words
+
+/** Exported doc */
+export const f = (x: number) => {
+  // inside f
+  return x;
+};
+class A {
+  // member doc
+  @Dec()
+  m() {}
+}
+";
+        let comments = testing::comments(&TYPESCRIPT, text);
+        assert_eq!(comments.file, 0.0);
+        assert_eq!(function(&comments, "f"), 2.0 + 2.0);
+        assert_eq!(function(&comments, "A.m"), 2.0);
+        assert_eq!(class(&comments, "A"), 0.0);
+        // A JSX comment.
+        let comments = testing::comments(&TSX, "const a = <div>{/* in jsx */}</div>;\n");
+        assert_eq!(comments.file, 2.0);
     }
 }
