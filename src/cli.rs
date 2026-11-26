@@ -143,7 +143,7 @@ struct Only {
     /// Only the tests' weight (the test files, a Rust file's `#[cfg(test)]` code); with `-v`, its report
     #[arg(long)]
     tests: bool,
-    /// Only the docs' weight (the Markdown and reST files); with `-v`, its report
+    /// Only the docs' weight (the Markdown, reST and AsciiDoc files); with `-v`, its report
     #[arg(long)]
     docs: bool,
     /// Only the comments' weight (the code's comments and docstrings, test code's left out); with `-v`, its report

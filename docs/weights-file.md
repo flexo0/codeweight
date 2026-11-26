@@ -85,9 +85,12 @@ test_globs = [
     "**/integration-tests/**", "**/integration_tests/**", "**/selftests/**", "**/testsuite/**", "**/test-suite*/**",
     "**/tck/**", "**/tcks/**", "**/*-tck/**",
 ]
-# docs alone, weighed by [docs], a .rst, .rest or .txt as reStructuredText, the rest as Markdown; one a test glob
-# matches too is none
-docs_globs = ["**/*.md", "**/*.markdown", "**/*.rst", "**/docs/**/*.txt", "**/Documentation/**/*.txt"]
+# docs alone, weighed by [docs], a .rst, .rest or .txt as reStructuredText, an .adoc or .asciidoc as AsciiDoc, the
+# rest as Markdown; one a test glob matches too is none
+docs_globs = [
+    "**/*.md", "**/*.markdown", "**/*.rst", "**/docs/**/*.txt", "**/Documentation/**/*.txt", "**/*.adoc",
+    "**/*.asciidoc",
+]
 ```
 
 The defaults were first tuned on real Java, TypeScript and Python code (and re-checked on Rust) so that the heaviest

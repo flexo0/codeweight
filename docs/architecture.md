@@ -4,11 +4,12 @@
 |---|---|
 | `cli` | the arguments (`clap`), the commands |
 | `config` | loads the weights file, merges it over the defaults, validates it |
-| `source` | an input as `(path, kind, text)` items, a kind a language's code or docs (Markdown, reST): from disk (`ignore`, the excludes) or git blobs at a revision |
+| `source` | an input as `(path, kind, text)` items, a kind a language's code or docs (Markdown, reST, AsciiDoc): from disk (`ignore`, the excludes) or git blobs at a revision |
 | `lang` | a module per language (Java, TS and TSX, JavaScript, Python, Rust, Go, C): grammar, extensions, node kind → category, nesting kinds, function names |
 | `engine` | one tree walked: each node's weight, summed by function, class and file; with the comments asked for, each comment's and docstring's too, by `markdown`'s counter, into a second `Weighed` of the same entries |
-| `markdown` | a docs text's weight, Markdown's or reST's, and a comment's text's: its words, punctuation and symbol runs, line by line, no tree-sitter |
+| `markdown` | a docs text's weight, Markdown's, reST's or AsciiDoc's, and a comment's text's: its words, punctuation and symbol runs, line by line, no tree-sitter |
 | `rst` | a reStructuredText text's runs, for `markdown`: its lines told apart by reST's rules (comments, literal blocks, directives, roles) |
+| `asciidoc` | an AsciiDoc text's runs, for `markdown`: its lines told apart by AsciiDoc's rules (comments, listing and literal blocks, literal paragraphs, description lists, macros) |
 | `git` | the files a commit, a range or the uncommitted changes changed (`git diff-tree -r -M`; the uncommitted ones as a tree, `git add -A` into a copy of the index, `git write-tree`), their text before and after (`git cat-file --batch`) |
 | `report` | the four numbers (a line each, `--short`'s one line of four, their JSON), and one number's report, the text table and the JSON; for `show` and `diff`, the deltas |
 
@@ -41,7 +42,7 @@ crates.io as well, needs a C compiler.
   under a `build` or `tests` folder is neither excluded nor taken for tests whatever the path's spelling. A
   file the test globs match is a test file: the code's number leaves it out, the tests' keeps it and the files of a
   language with tests inside its source files (Rust's), each weighed for its tests alone. A file the docs globs match is
-  docs (`source::Kind`), Markdown or reST by its extension (`markdown::Format`), docs alone and never a test file; one a test glob matches too is of no kind, in no
+  docs (`source::Kind`), Markdown, reST or AsciiDoc by its extension (`markdown::Format`), docs alone and never a test file; one a test glob matches too is of no kind, in no
   number (test prose: snapshots, golden files, as test code's comments are in none). The docs' number has
   only the docs files, the code's and the tests' none (`source::Mode`: the code, the tests, the docs or the comments,
   whose files are the code's: a test file has no comments that weigh). The general command weighs every file once

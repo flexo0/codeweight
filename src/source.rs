@@ -1,4 +1,4 @@
-//! The inputs as `(path, kind, text)` items, a kind a language's code or docs (Markdown, reST): the files and
+//! The inputs as `(path, kind, text)` items, a kind a language's code or docs (Markdown, reST, AsciiDoc): the files and
 //! folders named on the command line, a folder walked with its `.gitignore` and the excludes (the weights file's,
 //! `--exclude`'s); or a commit's changed files, both their sides' texts.
 
@@ -450,6 +450,7 @@ mod tests {
                     match i.kind {
                         Kind::Docs(Format::Markdown) => " (docs)",
                         Kind::Docs(Format::Rst) => " (rst docs)",
+                        Kind::Docs(Format::AsciiDoc) => " (adoc docs)",
                         Kind::Code(_) => "",
                     }
                 )
@@ -604,8 +605,8 @@ mod tests {
         assert!(given.items.is_empty());
 
         // Overridden: a Markdown file they don't match is read by no kind; one they match is docs, whatever its
-        // extension, Markdown but a `.rst`'s, a `.rest`'s or a `.txt`'s.
-        write(root, &["docs/index.rst", "docs/a.txt"]);
+        // extension, Markdown but a `.rst`'s, a `.rest`'s or a `.txt`'s, and an `.adoc`'s or an `.asciidoc`'s.
+        write(root, &["docs/index.rst", "docs/a.txt", "docs/b.adoc"]);
         globs.docs_globs = strings(&["docs/**", "a.py"]);
         assert!(scan(&globs, Mode::Code).is_empty());
         assert_eq!(
@@ -617,6 +618,7 @@ mod tests {
             vec![
                 "a.py (docs)".to_string(),
                 "docs/a.txt (rst docs)".to_string(),
+                "docs/b.adoc (adoc docs)".to_string(),
                 "docs/guide.markdown (docs)".to_string(),
                 "docs/index.rst (rst docs)".to_string(),
             ]
@@ -624,7 +626,8 @@ mod tests {
     }
 
     #[test]
-    fn the_default_docs_globs_take_markdown_rest_and_a_docs_folder_s_text_files_by_their_format() {
+    fn the_default_docs_globs_take_markdown_rest_asciidoc_and_a_docs_folder_s_text_files_by_their_format()
+     {
         let matchers = Matchers::new(&config::Config::defaults().unwrap().files).unwrap();
         let format = |path: &str| match matchers.kind(Path::new(path), Path::new(path)) {
             Some((Kind::Docs(format), false)) => Some(format),
@@ -641,6 +644,12 @@ mod tests {
             "Documentation/devicetree/bindings/a.txt",
         ] {
             assert_eq!(format(path), Some(Format::Rst), "{path}");
+        }
+        for path in [
+            "Documentation/git-add.adoc",
+            "docs/src/main/asciidoc/a.asciidoc",
+        ] {
+            assert_eq!(format(path), Some(Format::AsciiDoc), "{path}");
         }
         // A text file elsewhere is no docs; one under a test glob is none either.
         for path in ["requirements.txt", "src/CMakeLists.txt", "tests/docs/a.txt"] {

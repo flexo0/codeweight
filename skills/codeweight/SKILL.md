@@ -6,7 +6,7 @@ description: Measure how heavy code is with the `codeweight` CLI.
 # codeweight
 
 Every element of code (statement, call, branch, loop, lambda, function, class, ...) has a weight; nesting makes it
-heavier. A function's, file's or folder's weight is the sum. A Markdown or reST file has a docs weight instead: its words,
+heavier. A function's, file's or folder's weight is the sum. A Markdown, reST or AsciiDoc file has a docs weight instead: its words,
 punctuation and symbol runs, on the code's scale (`## Setup` is 1.26, a function word like `the` half a word); a code
 file's comments and docstrings weigh the same way, in a number of their own. The numbers are relative: compare code under the same weights file, never against
 a fixed threshold.
@@ -24,8 +24,8 @@ a fixed threshold.
 | `codeweight scan [<path>...] --code -v` | `total N`, then `<weight>  <path>  <name>` per function/class, heaviest first |
 | `codeweight show [<rev>] --code -v` (or `diff`, `--tests`, `--docs`, `--comments`) | `total +N`, then `<delta>  <status>  <path>  <name>` per changed function (`added`, `removed`, `heavier`, `lighter`); a docs file is one line, `(file)` |
 
-The tests are the test files and Rust `#[cfg(test)]` items; the docs the Markdown and reST files (`*.md`, `*.markdown`, `*.rst`,
-and `*.txt` under `docs/` or `Documentation/`; one under the test globs, a snapshot or a `tests/README.md`, in no number); the comments the code's comments and Python docstrings (a file's top license header, a shebang and
+The tests are the test files and Rust `#[cfg(test)]` items; the docs the Markdown, reST and AsciiDoc files (`*.md`, `*.markdown`, `*.rst`,
+`*.txt` under `docs/` or `Documentation/`, `*.adoc`, `*.asciidoc`; one under the test globs, a snapshot or a `tests/README.md`, in no number); the comments the code's comments and Python docstrings (a file's top license header, a shebang and
 test code's comments left out), each in its function, or the declaration's it is right before. The code, the tests,
 the docs and the comments are always four numbers, never summed: report them apart.
 

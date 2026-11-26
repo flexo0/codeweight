@@ -80,7 +80,7 @@ the same order, `--config` last before `--help`.
   comments and docstrings ([weight.md](weight.md)), its test code's left out, so a test file is never in
   `--comments`' report; their report has a row per function, class and file, as the code's.
   The tests are the test files (by path) and the test code inside a source file (Rust's, see [languages.md](languages.md)). The docs
-  are the Markdown and reStructuredText files, those the docs globs match (by path, `[files] docs_globs`, see
+  are the Markdown, reStructuredText and AsciiDoc files, those the docs globs match (by path, `[files] docs_globs`, see
   [config.md](config.md)),
   each weighed by its words, punctuation and symbol runs ([weight.md](weight.md)); a file they match is docs alone, and `--code`
   and `--tests` never see it; one the test globs match too (under `tests/`: a snapshot, a golden file, a README) is

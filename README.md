@@ -13,8 +13,8 @@ Designed for autonomous agentic pipelines, for automatic decision-making.
 Use it to see how much module/feature/service/project/you-name-it weights; what delta a commit or uncommitted changes yield;
 to validate amount of docs matches amount of code; to check that refactor reduced weight; etc.
 
-It reads Java, TypeScript (TSX too), JavaScript, Python, Rust, Go and C, each parsed by tree-sitter. Markdown and
-reStructuredText files, not to be left out, receive a docs weight of their own.
+It reads Java, TypeScript (TSX too), JavaScript, Python, Rust, Go and C, each parsed by tree-sitter. Markdown,
+reStructuredText and AsciiDoc files, not to be left out, receive a docs weight of their own.
 
 The default coefficients are calibrated on 1,400+ pairs, each a bad snippet beside its simpler good
 counterpart with the same behaviour, from linters' rule examples, fixers' tests and real refactoring commits

@@ -52,12 +52,12 @@ Built (`config`, `config::find`):
   does (`word` 1, `symbol` 10, `punctuation` 100, `function_word` 1000, `function_words` `the` and `of`).
 - `[files]` is for what is weighed ([architecture.md](architecture.md), `source`). `docs_globs` are the docs
   files, weighed for their docs weight alone, the docs' number of `scan`, `show` and `diff` ([cli.md](cli.md)):
-  a file they match is docs and no test, reStructuredText when its name ends in `.rst`, `.rest` or `.txt`, else
-  Markdown whatever its extension; one a test glob matches too is of
+  a file they match is docs and no test, reStructuredText when its name ends in `.rst`, `.rest` or `.txt`, AsciiDoc
+  in `.adoc` or `.asciidoc`, else Markdown whatever its extension; one a test glob matches too is of
   no kind codeweight reads, in no number (a test's snapshot or golden file, a `README.md` under `tests/` too: test
   prose, as test code's comments are in none); one they don't match is of no kind either, as a `.txt` outside a docs folder. The excludes
   and hidden paths apply to docs as to code. A file on its own must hold the key, as it must `test_globs`; the
-  engine's tests' is `["**/*.md"]`. The defaults' are Markdown's and reST's extensions, and the `.txt` under a
+  engine's tests' is `["**/*.md"]`. The defaults' are Markdown's, reST's and AsciiDoc's extensions, and the `.txt` under a
   `docs` or `Documentation` folder (Django's reST docs, Linux's plain-text ones; a `docs/requirements.txt` comes
   along, a few words), not every `.txt` ([weight.md](weight.md)).
 - The default `test_globs` are the test layouts whose name is tests in every repo: a test file's suffix or prefix,
@@ -149,9 +149,12 @@ test_globs = [
     "**/integration-tests/**", "**/integration_tests/**", "**/selftests/**", "**/testsuite/**", "**/test-suite*/**",
     "**/tck/**", "**/tcks/**", "**/*-tck/**",
 ]
-# docs alone, weighed by [docs], a .rst, .rest or .txt as reStructuredText, the rest as Markdown; one a test glob
-# matches too is none
-docs_globs = ["**/*.md", "**/*.markdown", "**/*.rst", "**/docs/**/*.txt", "**/Documentation/**/*.txt"]
+# docs alone, weighed by [docs], a .rst, .rest or .txt as reStructuredText, an .adoc or .asciidoc as AsciiDoc, the
+# rest as Markdown; one a test glob matches too is none
+docs_globs = [
+    "**/*.md", "**/*.markdown", "**/*.rst", "**/docs/**/*.txt", "**/Documentation/**/*.txt", "**/*.adoc",
+    "**/*.asciidoc",
+]
 ```
 
 Folder walks honour `.gitignore` too (the `ignore` crate).

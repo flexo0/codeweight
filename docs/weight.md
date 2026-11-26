@@ -140,7 +140,7 @@ all but `nullish_operator`, which there only ties 11 pairs more; `nested_ternari
 
 ## The docs weight
 
-A docs file's weight, a Markdown or a reStructuredText file's, is its docs weight, a number of its own, never summed
+A docs file's weight, a Markdown, a reStructuredText or an AsciiDoc file's, is its docs weight, a number of its own, never summed
 with code's but on its scale (`markdown`, pure as the engine is: text in, weight out); the docs' number of `scan`,
 `show` and `diff` weighs it, a file the `[files] docs_globs` match ([cli.md](cli.md)) and no test glob does: a docs
 file under the test
@@ -207,8 +207,29 @@ docs weight = words × word + function words × function_word
   weighs as text; read as Markdown, a `~~~~` line (an underline, a diagram's) opens a fenced block that may run to
   the file's end. With them (2026-11-26) Django's docs number went from 369 to 682k, Flask's from 286 to 56k,
   Linux's from 2.7k to 3.6M; reST's rules move a file's weight by a percent or two from what Markdown's give.
+- An AsciiDoc file (`.adoc`, `.asciidoc`: git's manual pages, Spring's, Quarkus' and Hibernate's guides) is
+  counted by the same runs, its lines told apart by AsciiDoc's rules (`asciidoc`), as a reST file's are by reST's:
+  - a comment (a line starting `//`, a `////` block up to the same line) weighs nothing;
+  - a listing, literal, passthrough or fenced block (`----`, `....`, `++++`, as many as it opened with, or
+    ```` ``` ````), a literal paragraph (indented at a block's start, up to a blank line; not a list item nor a
+    description list's text under its term, git's tab-indented option texts) and a paragraph of a code style
+    (`[source,java]`, `[listing]`, `[literal]`) are code, as a fenced block is;
+  - markup is a symbol run each, though made of prose's punctuation: a block's delimiter (`----`, `....`,
+    `====`), a section title's underline (`-`, `=`, `~`, `^` or `+` repeated under a title as long, give or take
+    one: a `----` under one is no listing), a description list's `::`, `:::`, `::::` or `;;`, an attribute
+    entry's colons (`:toc: left`), a block title's `.` (`.Example`), a list continuation's `+` and a macro's
+    colons (`linkgit:`, `include::`, `xref:`);
+  - a table's border (`|===`) weighs nothing;
+  - a URL is one word, and so are a macro's target (`linkgit:git-add[1]` is `linkgit`, `:`, the target, `[`, `1`,
+    `]`) and a cross reference's id (`<<id,text>>`); backticks are inline code, as Markdown's.
+
+  git moved its docs from `.txt` to `.adoc` (2025-02-14), so the reST rules no longer read them: its docs number
+  had fallen from about 570k to 8k. With AsciiDoc in the globs (2026-11-26) git's went from 9.4k to 632k, Spring
+  Framework's from 5k to 320k, Quarkus' from 28k to 752k, Hibernate ORM's from 7k to 252k, Micronaut's from 11k
+  to 133k; AsciiDoc's rules give a file a percent or two less than Markdown's would (git's 958 files 623k against
+  630k), a cross reference's or a macro's target being a word, not a path's words.
 - A docs file is one row, its weight its file's (no functions nor classes), and always clean: any text is
-  Markdown, or reST.
+  Markdown, reST or AsciiDoc.
 - The defaults put the docs on the code's scale, a weight being what a text costs to read and keep: a
   description that says all a snippet does, no more, weighs what the snippet does. They are fitted on such pairs,
   code-snippet-pairs' `calib/`: seven snippets of Rust, Python and Java (50 to 170), each described in prose, six
@@ -260,4 +281,4 @@ sits in, but it is text, not code: it weighs as a Markdown file's text does.
   - A shebang (`#!/usr/bin/env python3`), a comment in Python's grammar.
   - Test code's comments: a test file's, a Rust `#[cfg(test)]` or `#[test]` item's, and one right before such an
     item. The tests' number is the test code's; its comments are in no number.
-  - A docs file's: it has no comments number (0), its comments (`<!-- -->`, reST's `..`) staying nothing.
+  - A docs file's: it has no comments number (0), its comments (`<!-- -->`, reST's `..`, AsciiDoc's `//`) staying nothing.

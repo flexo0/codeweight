@@ -1,9 +1,10 @@
 //! The docs weight of a Markdown text: its words, function words, punctuation runs and symbol runs, each weighed
-//! by `[docs]`; of a reStructuredText one by the same runs (`rst` scans its lines); and of a code comment's text,
-//! by the same counter. Pure: text in, weight out; it knows nothing of files, folders or git.
+//! by `[docs]`; of a reStructuredText or an AsciiDoc one by the same runs (`rst`, `asciidoc` scan its lines); and
+//! of a code comment's text, by the same counter. Pure: text in, weight out; it knows nothing of files, folders or git.
 
 use std::collections::HashSet;
 
+use crate::asciidoc;
 use crate::config::Docs;
 use crate::engine::Weighed;
 use crate::rst;
@@ -13,18 +14,19 @@ use crate::rst;
 pub enum Format {
     Markdown,
     Rst,
+    AsciiDoc,
 }
 
 impl Format {
     /// The format of a docs file named `name`: reStructuredText for `.rst`, `.rest` and `.txt` (Sphinx's docs,
-    /// Django's; plain text is reST with no markup), else Markdown.
+    /// Django's; plain text is reST with no markup), AsciiDoc for `.adoc` and `.asciidoc`, else Markdown.
     pub fn of(name: &str) -> Format {
         let extension = name.rsplit_once('.').map_or("", |(_, e)| e);
-        if ["rst", "rest", "txt"]
-            .iter()
-            .any(|e| extension.eq_ignore_ascii_case(e))
-        {
+        let is = |extensions: &[&str]| extensions.iter().any(|e| extension.eq_ignore_ascii_case(e));
+        if is(&["rst", "rest", "txt"]) {
             Format::Rst
+        } else if is(&["adoc", "asciidoc"]) {
+            Format::AsciiDoc
         } else {
             Format::Markdown
         }
@@ -32,7 +34,7 @@ impl Format {
 }
 
 /// A docs text's weight, `words × word + function words × function_word + punctuation runs × punctuation + symbol
-/// runs × symbol`, as a file's weight: no entries, always clean (any text is Markdown, or reST).
+/// runs × symbol`, as a file's weight: no entries, always clean (any text is Markdown, reST or AsciiDoc).
 pub fn weigh(text: &str, format: Format, docs: &Docs) -> Weighed {
     Counter::new(docs).weigh(text, format)
 }
@@ -66,6 +68,7 @@ impl Counter {
         let counts = match format {
             Format::Markdown => count(text, &self.function_words, true),
             Format::Rst => rst::count(text, &self.function_words),
+            Format::AsciiDoc => asciidoc::count(text, &self.function_words),
         };
         let weight = self.of(counts);
         Weighed {
@@ -226,7 +229,7 @@ struct SymbolRun {
 }
 
 impl SymbolRun {
-    /// One more character, `markup` when it is one whatever it is (reST's `..`, a role's `:`).
+    /// One more character, `markup` when it is one whatever it is (reST's `..`, a role's `:`, AsciiDoc's `::`).
     fn push(&mut self, c: char, markup: bool) {
         self.prose = (self.length == 0 || self.prose) && !markup && is_prose_punctuation(c);
         if self.length == 0 {
@@ -300,7 +303,8 @@ impl<'a> Runs<'a> {
         self.push_as(c, false);
     }
 
-    /// More characters that are markup, a symbol run's whatever they are: reST's `..` and `::`, a role's `:`.
+    /// More characters that are markup, a symbol run's whatever they are: reST's `..` and `::`, a role's `:`,
+    /// AsciiDoc's delimiters and a description list's `::`.
     pub(crate) fn markup(&mut self, text: &str) {
         text.chars().for_each(|c| self.push_as(c, true));
     }

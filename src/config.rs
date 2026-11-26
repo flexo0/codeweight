@@ -245,8 +245,8 @@ pub struct Docs {
 pub struct Files {
     pub exclude: Vec<String>,
     pub test_globs: Vec<String>,
-    /// The docs files (Markdown, reST), weighed for their docs weight alone; one the test globs match too is in no
-    /// number.
+    /// The docs files (Markdown, reST, AsciiDoc), weighed for their docs weight alone; one the test globs match
+    /// too is in no number.
     pub docs_globs: Vec<String>,
 }
 

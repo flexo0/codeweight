@@ -1,5 +1,6 @@
 //! codeweight: weighs code, every element by its weight and heavier when nested.
 
+mod asciidoc;
 mod cli;
 mod config;
 mod engine;
