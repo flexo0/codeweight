@@ -58,7 +58,7 @@ lambda = 3
 [languages.java.node_kinds]         # yours only: a tree-sitter node kind mapped to a category, or to "none"
 synchronized_statement = "try"
 
-[docs]                  # a Markdown file's docs weight, and a code comment's: words * word + function words *
+[docs]                  # a docs file's docs weight, and a code comment's: words * word + function words *
                         # function_word + punctuation runs * punctuation + symbol runs * symbol, on the code's scale:
                         # a description weighs what the code it describes does
 word = 0.64             # a run of letters and digits; a URL is one word
@@ -85,7 +85,9 @@ test_globs = [
     "**/integration-tests/**", "**/integration_tests/**", "**/selftests/**", "**/testsuite/**", "**/test-suite*/**",
     "**/tck/**", "**/tcks/**", "**/*-tck/**",
 ]
-docs_globs = ["**/*.md", "**/*.markdown"]   # docs alone, weighed by [docs]; one a test glob matches too is none
+# docs alone, weighed by [docs], a .rst, .rest or .txt as reStructuredText, the rest as Markdown; one a test glob
+# matches too is none
+docs_globs = ["**/*.md", "**/*.markdown", "**/*.rst", "**/docs/**/*.txt", "**/Documentation/**/*.txt"]
 ```
 
 The defaults were first tuned on real Java, TypeScript and Python code (and re-checked on Rust) so that the heaviest

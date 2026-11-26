@@ -245,7 +245,8 @@ pub struct Docs {
 pub struct Files {
     pub exclude: Vec<String>,
     pub test_globs: Vec<String>,
-    /// The Markdown files, weighed for their docs weight alone, though the test globs match them too.
+    /// The docs files (Markdown, reST), weighed for their docs weight alone; one the test globs match too is in no
+    /// number.
     pub docs_globs: Vec<String>,
 }
 
@@ -522,10 +523,7 @@ mod tests {
         );
         assert_eq!(config.files.exclude, vec!["a/**".to_string()]);
         assert_eq!(config.files.test_globs, defaults.files.test_globs);
-        assert_eq!(
-            config.files.docs_globs,
-            vec!["**/*.md".to_string(), "**/*.markdown".to_string()]
-        );
+        assert_eq!(config.files.docs_globs, defaults.files.docs_globs);
         assert_eq!(config.nesting, defaults.nesting);
     }
 

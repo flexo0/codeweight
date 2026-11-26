@@ -143,7 +143,7 @@ struct Only {
     /// Only the tests' weight (the test files, a Rust file's `#[cfg(test)]` code); with `-v`, its report
     #[arg(long)]
     tests: bool,
-    /// Only the docs' weight (the Markdown files); with `-v`, its report
+    /// Only the docs' weight (the Markdown and reST files); with `-v`, its report
     #[arg(long)]
     docs: bool,
     /// Only the comments' weight (the code's comments and docstrings, test code's left out); with `-v`, its report
@@ -424,7 +424,7 @@ fn load_config(cli: &Cli, inside: Option<&Path>) -> Result<Config> {
     Config::load(found.as_deref())
 }
 
-/// A weigher per language, and the docs weights for Markdown.
+/// A weigher per language, and the docs weights for the docs files.
 struct Weighers<'c> {
     weighers: Vec<Weigher<'c>>,
     docs: &'c Docs,
@@ -438,7 +438,7 @@ impl<'c> Weighers<'c> {
         }
     }
 
-    /// A text of `kind` weighed, and its four parts: Markdown its docs weight; code its tests, its code without
+    /// A text of `kind` weighed, and its four parts: docs their docs weight; code its tests, its code without
     /// them, a test file's (`test`) all test code, and its comments, a test file's none. For one number (`mode`)
     /// the weight is of that part alone, else of the whole text's code.
     fn weigh(
@@ -450,8 +450,8 @@ impl<'c> Weighers<'c> {
         mode: Option<Mode>,
     ) -> Result<(Weighed, Parts)> {
         let lang = match kind {
-            Kind::Markdown => {
-                let weighed = markdown::weigh(text, self.docs);
+            Kind::Docs(format) => {
+                let weighed = markdown::weigh(text, format, self.docs);
                 let parts = Parts {
                     docs: weighed.total,
                     ..Parts::default()

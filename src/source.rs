@@ -1,6 +1,6 @@
-//! The inputs as `(path, kind, text)` items, a kind a language's code or Markdown: the files and folders named on
-//! the command line, a folder walked with its `.gitignore` and the excludes (the weights file's, `--exclude`'s);
-//! or a commit's changed files, both their sides' texts.
+//! The inputs as `(path, kind, text)` items, a kind a language's code or docs (Markdown, reST): the files and
+//! folders named on the command line, a folder walked with its `.gitignore` and the excludes (the weights file's,
+//! `--exclude`'s); or a commit's changed files, both their sides' texts.
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -13,6 +13,7 @@ use ignore::WalkBuilder;
 use crate::config::{self, Files};
 use crate::git::{self, Range};
 use crate::lang::{self, Lang};
+use crate::markdown::Format;
 
 /// What is weighed: the code (its tests aside), the tests, the docs, or the code's comments; each its own number,
 /// never summed.
@@ -24,11 +25,11 @@ pub enum Mode {
     Comments,
 }
 
-/// What a file is weighed as: a language's code, or Markdown for its docs weight.
+/// What a file is weighed as: a language's code, or docs in their format for their docs weight.
 #[derive(Clone, Copy)]
 pub enum Kind {
     Code(&'static Lang),
-    Markdown,
+    Docs(Format),
 }
 
 /// A file to weigh, its text read when it is weighed.
@@ -36,7 +37,7 @@ pub struct Item {
     /// As given, or the folder given joined with the file's path in it; without a leading `./`.
     pub path: PathBuf,
     pub kind: Kind,
-    /// Whether the test globs match it (never a Markdown file).
+    /// Whether the test globs match it (never a docs file).
     pub test: bool,
 }
 
@@ -98,7 +99,7 @@ pub struct Blob {
     /// From the repo's root.
     pub path: PathBuf,
     pub kind: Kind,
-    /// Whether the test globs match it (never a Markdown file).
+    /// Whether the test globs match it (never a docs file).
     pub test: bool,
     pub text: String,
 }
@@ -271,7 +272,7 @@ pub fn from_paths(paths: &[PathBuf], files: &Files) -> Result<Input> {
 
 impl Input {
     /// Only the items a scan of `mode` weighs: of the code, those the test globs don't match; of the tests, those
-    /// they match and those of a language with tests in its source files (Rust's); of the docs, the Markdown files;
+    /// they match and those of a language with tests in its source files (Rust's); of the docs, the docs files;
     /// of the comments, the code files the test globs don't match.
     pub fn keep(&mut self, mode: Mode) {
         self.items
@@ -290,13 +291,13 @@ impl Input {
     }
 }
 
-/// Whether a file (`test`: the test globs match it) is weighed for `mode`: a Markdown file is the docs' alone; of
+/// Whether a file (`test`: the test globs match it) is weighed for `mode`: a docs file is the docs' alone; of
 /// the code, a test file is the tests' alone, a file of a language with tests in its source files (Rust's) both's,
 /// each its part; a code file's comments are the comments', a test file's none (test code's comments weigh
 /// nothing).
 fn weighed_for(test: bool, kind: Kind, mode: Mode) -> bool {
     match (kind, mode) {
-        (Kind::Markdown, mode) => mode == Mode::Docs,
+        (Kind::Docs(_), mode) => mode == Mode::Docs,
         (Kind::Code(_), Mode::Docs) => false,
         (Kind::Code(lang), Mode::Tests) => test || lang.tests.is_some(),
         (Kind::Code(_), Mode::Code | Mode::Comments) => !test,
@@ -335,13 +336,14 @@ impl Matchers {
     }
 
     /// The kind of the file at `path` (its globs' path `key`), and whether it is a test file: a file the docs globs
-    /// match is Markdown and no test; one the test globs match too is of no kind (a test's snapshot or golden
+    /// match is docs, in the format its name's extension says, and no test; one the test globs match too is of no kind (a test's snapshot or golden
     /// file, a README in `tests/`: test prose, in no number as test code's comments); else its language's, by
     /// `path`; `None` for a file of no kind codeweight reads.
     fn kind(&self, path: &Path, key: &Path) -> Option<(Kind, bool)> {
         let test = self.tests.is_match(key);
         if self.docs.is_match(key) {
-            return (!test).then_some((Kind::Markdown, false));
+            let format = Format::of(&path.to_string_lossy());
+            return (!test).then_some((Kind::Docs(format), false));
         }
         let lang = lang::for_path(path)?;
         Some((Kind::Code(lang), test))
@@ -445,10 +447,10 @@ mod tests {
                     "{}{}{}",
                     i.path.strip_prefix(root).unwrap().display(),
                     if i.test { " (test)" } else { "" },
-                    if matches!(i.kind, Kind::Markdown) {
-                        " (docs)"
-                    } else {
-                        ""
+                    match i.kind {
+                        Kind::Docs(Format::Markdown) => " (docs)",
+                        Kind::Docs(Format::Rst) => " (rst docs)",
+                        Kind::Code(_) => "",
                     }
                 )
             })
@@ -602,7 +604,8 @@ mod tests {
         assert!(given.items.is_empty());
 
         // Overridden: a Markdown file they don't match is read by no kind; one they match is docs, whatever its
-        // extension.
+        // extension, Markdown but a `.rst`'s, a `.rest`'s or a `.txt`'s.
+        write(root, &["docs/index.rst", "docs/a.txt"]);
         globs.docs_globs = strings(&["docs/**", "a.py"]);
         assert!(scan(&globs, Mode::Code).is_empty());
         assert_eq!(
@@ -613,9 +616,36 @@ mod tests {
             scan(&globs, Mode::Docs),
             vec![
                 "a.py (docs)".to_string(),
+                "docs/a.txt (rst docs)".to_string(),
                 "docs/guide.markdown (docs)".to_string(),
+                "docs/index.rst (rst docs)".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn the_default_docs_globs_take_markdown_rest_and_a_docs_folder_s_text_files_by_their_format() {
+        let matchers = Matchers::new(&config::Config::defaults().unwrap().files).unwrap();
+        let format = |path: &str| match matchers.kind(Path::new(path), Path::new(path)) {
+            Some((Kind::Docs(format), false)) => Some(format),
+            _ => None,
+        };
+        for path in ["README.md", "docs/a/guide.markdown"] {
+            assert_eq!(format(path), Some(Format::Markdown), "{path}");
+        }
+        for path in [
+            "README.rst",
+            "docs/index.rst",
+            "docs/topics/urls.txt",
+            "a/docs/b.txt",
+            "Documentation/devicetree/bindings/a.txt",
+        ] {
+            assert_eq!(format(path), Some(Format::Rst), "{path}");
+        }
+        // A text file elsewhere is no docs; one under a test glob is none either.
+        for path in ["requirements.txt", "src/CMakeLists.txt", "tests/docs/a.txt"] {
+            assert_eq!(format(path), None, "{path}");
+        }
     }
 
     #[test]

@@ -140,9 +140,10 @@ all but `nullish_operator`, which there only ties 11 pairs more; `nested_ternari
 
 ## The docs weight
 
-A Markdown file's weight is its docs weight, a number of its own, never summed with code's but on its scale
-(`markdown`, pure as the engine is: text in, weight out); the docs' number of `scan`, `show` and `diff` weighs it,
-a file the `[files] docs_globs` match ([cli.md](cli.md)) and no test glob does: a Markdown file under the test
+A docs file's weight, a Markdown or a reStructuredText file's, is its docs weight, a number of its own, never summed
+with code's but on its scale (`markdown`, pure as the engine is: text in, weight out); the docs' number of `scan`,
+`show` and `diff` weighs it, a file the `[files] docs_globs` match ([cli.md](cli.md)) and no test glob does: a docs
+file under the test
 globs (a test's snapshot or golden file, a README in `tests/`) is test prose, in no number, as test code's comments
 are (below). Such files can outweigh a project's own docs: React's compiler snapshots (`__tests__/**/*.expect.md`)
 were 318k of its 557k docs, Angular's test Markdown (`test/golden/*.md`, ...) about 317k of 851k.
@@ -183,8 +184,31 @@ docs weight = words × word + function words × function_word
     `[weight.md](weight.md)` is 3 words (`weight`, `md`, the destination), 2 symbol runs (`[`, `](`) and 2
     punctuation runs (`.`, `)`), `see https://a.org/b.` 2 words and 1 punctuation run. A link's title is text;
     a reference definition (`[id]: url`) is text but its absolute URL; inline code's `](` is code, no link.
-- A Markdown file is one row, its weight its file's (no functions nor classes), and always clean: any text is
-  Markdown.
+- A reStructuredText file (`.rst`, `.rest`, and `.txt`: Sphinx's sources, Django's docs) is counted by the same
+  runs, its lines told apart by reST's rules where Markdown's are (`rst`): no front matter, `<!-- -->`, fence nor
+  `](`, but
+  - a comment (`..` and text that is no directive, hyperlink target, footnote, citation nor substitution, with the
+    lines indented under it: an SPDX line, a note to the editors) weighs nothing, as a `<!-- -->` does;
+  - a literal block (the lines indented under a paragraph that ends in `::`, or under a `::` alone), a code
+    directive's content (`code-block`, `code`, `sourcecode`, `parsed-literal`, `doctest`, `testcode`, ...; its
+    options are text) and a doctest block (from `>>>` up to a blank line) are code, as a fenced block is;
+  - markup is a symbol run each, as Markdown's is, though made of prose's punctuation: a directive's `..` and `::`
+    (`.. note::` is 2 symbol runs and a word), a role's colons (`` :ref:`x` `` is `:`, `ref`, ``:` ``, `x` and a
+    backtick's punctuation), a field's (`:param x:`, a directive's option `:maxdepth:`), and a section's adornment
+    line, three or more of one punctuation character at a line's start (`=====`, `~~~~`, `"""""`);
+  - a table's borders weigh nothing, as a Markdown table's separator line does: a grid table's (`+---+===+`) and a
+    simple table's (`===  ===`, two columns or more; one column's is an adornment line);
+  - a URL is one word, and so is a link's embedded URI whatever its form (`` `a <b.html>`_ ``); only double
+    backticks are inline code (``` ``x`` ```), a single pair being interpreted text, prose.
+
+  `.txt` is reST because Sphinx's sources often are: Django's docs are 682 `.txt` files under `docs/`, and Linux
+  has 743 plain-text ones under `Documentation/` beside its 4,121 `.rst`. The default globs take a `.txt` there
+  only, as one elsewhere is seldom docs (`requirements.txt`, `CMakeLists.txt`, test data). A plain text read as reST
+  weighs as text; read as Markdown, a `~~~~` line (an underline, a diagram's) opens a fenced block that may run to
+  the file's end. With them (2026-11-26) Django's docs number went from 369 to 682k, Flask's from 286 to 56k,
+  Linux's from 2.7k to 3.6M; reST's rules move a file's weight by a percent or two from what Markdown's give.
+- A docs file is one row, its weight its file's (no functions nor classes), and always clean: any text is
+  Markdown, or reST.
 - The defaults put the docs on the code's scale, a weight being what a text costs to read and keep: a
   description that says all a snippet does, no more, weighs what the snippet does. They are fitted on such pairs,
   code-snippet-pairs' `calib/`: seven snippets of Rust, Python and Java (50 to 170), each described in prose, six
@@ -236,4 +260,4 @@ sits in, but it is text, not code: it weighs as a Markdown file's text does.
   - A shebang (`#!/usr/bin/env python3`), a comment in Python's grammar.
   - Test code's comments: a test file's, a Rust `#[cfg(test)]` or `#[test]` item's, and one right before such an
     item. The tests' number is the test code's; its comments are in no number.
-  - A Markdown file's: it has no comments number (0), its `<!-- -->` staying nothing.
+  - A docs file's: it has no comments number (0), its comments (`<!-- -->`, reST's `..`) staying nothing.

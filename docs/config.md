@@ -43,20 +43,23 @@ Built (`config`, `config::find`):
   tests do. Each weighs a node as an existing category, so it adds no weight of
   its own; a cast or pattern kind it makes an `operator` is the language's table's, under the user's `node_kinds`
   (a kind mapped there wins). What each one weighs is [weight.md](weight.md)'s.
-- `[docs]` is the weights of a Markdown file's docs weight and of a code comment's, the comments' number
+- `[docs]` is the weights of a docs file's docs weight and of a code comment's, the comments' number
   ([weight.md](weight.md)): `word` for each word,
   `function_word` for each function word in prose, `punctuation` for each punctuation run and `symbol` for each
   symbol run, 0.64, 0.32, 0.32 and 0.62 by default, each 0 or above; and `function_words`, the function words, each
   one word (letters and digits only, else an error), a list of one's own replacing the defaults' whole. Its five
   keys are all it holds (an unknown one is an error); a file on its own must hold them, as the engine's tests'
   does (`word` 1, `symbol` 10, `punctuation` 100, `function_word` 1000, `function_words` `the` and `of`).
-- `[files]` is for what is weighed ([architecture.md](architecture.md), `source`). `docs_globs` are the Markdown
+- `[files]` is for what is weighed ([architecture.md](architecture.md), `source`). `docs_globs` are the docs
   files, weighed for their docs weight alone, the docs' number of `scan`, `show` and `diff` ([cli.md](cli.md)):
-  a file they match is docs and no test, and Markdown whatever its extension; one a test glob matches too is of
+  a file they match is docs and no test, reStructuredText when its name ends in `.rst`, `.rest` or `.txt`, else
+  Markdown whatever its extension; one a test glob matches too is of
   no kind codeweight reads, in no number (a test's snapshot or golden file, a `README.md` under `tests/` too: test
-  prose, as test code's comments are in none); one they don't match is of no kind either, as a `.txt`. The excludes
+  prose, as test code's comments are in none); one they don't match is of no kind either, as a `.txt` outside a docs folder. The excludes
   and hidden paths apply to docs as to code. A file on its own must hold the key, as it must `test_globs`; the
-  engine's tests' is `["**/*.md"]`.
+  engine's tests' is `["**/*.md"]`. The defaults' are Markdown's and reST's extensions, and the `.txt` under a
+  `docs` or `Documentation` folder (Django's reST docs, Linux's plain-text ones; a `docs/requirements.txt` comes
+  along, a few words), not every `.txt` ([weight.md](weight.md)).
 - The default `test_globs` are the test layouts whose name is tests in every repo: a test file's suffix or prefix,
   a `test` / `tests` / `__tests__` folder, and the suites' folders, `integration-tests` (Quarkus, Spring),
   `selftests` (Linux's `tools/testing/selftests`, i915's), `testsuite`, `test-suite*` (Micronaut's
@@ -119,7 +122,7 @@ lambda = 3
 [languages.typescript.node_kinds]   # a tree-sitter node kind mapped to a category (or to "none")
 satisfies_expression = "statement"
 
-[docs]                  # a Markdown file's docs weight, and a code comment's: words * word + function words *
+[docs]                  # a docs file's docs weight, and a code comment's: words * word + function words *
                         # function_word + punctuation runs * punctuation + symbol runs * symbol, on the code's scale:
                         # a description weighs what the code it describes does
 word = 0.64             # a run of letters and digits; a URL is one word
@@ -146,7 +149,9 @@ test_globs = [
     "**/integration-tests/**", "**/integration_tests/**", "**/selftests/**", "**/testsuite/**", "**/test-suite*/**",
     "**/tck/**", "**/tcks/**", "**/*-tck/**",
 ]
-docs_globs = ["**/*.md", "**/*.markdown"]   # docs alone, weighed by [docs]; one a test glob matches too is none
+# docs alone, weighed by [docs], a .rst, .rest or .txt as reStructuredText, the rest as Markdown; one a test glob
+# matches too is none
+docs_globs = ["**/*.md", "**/*.markdown", "**/*.rst", "**/docs/**/*.txt", "**/Documentation/**/*.txt"]
 ```
 
 Folder walks honour `.gitignore` too (the `ignore` crate).

@@ -7,6 +7,7 @@ mod git;
 mod lang;
 mod markdown;
 mod report;
+mod rst;
 mod source;
 
 use std::io::Write;

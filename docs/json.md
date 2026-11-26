@@ -34,7 +34,7 @@ text shows it.
   `name` and `line` `null`), `name` qualified (`Outer.Inner.method`), `line` the first line, from 1 (for `show` and `diff`, the after
 side's, a removed one's the before side's).
 - `warnings`: the files with syntax errors, `{path, kind: "syntax_errors", side}`, `side` `null` for a scan (a
-  Markdown file never has one); then, for a scan, the paths under a folder given that couldn't be read and were left out,
+  docs file never has one); then, for a scan, the paths under a folder given that couldn't be read and were left out,
   `{path, kind: "unreadable", side: null}`.
 
 For `show` and `diff`, also `from` (the full hash compared from, `null` for the root commit's empty tree) and `to` (the full

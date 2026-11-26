@@ -1,16 +1,40 @@
 //! The docs weight of a Markdown text: its words, function words, punctuation runs and symbol runs, each weighed
-//! by `[docs]`; and of a code comment's text, by the same counter. Pure: text in, weight out; it knows nothing of
-//! files, folders or git.
+//! by `[docs]`; of a reStructuredText one by the same runs (`rst` scans its lines); and of a code comment's text,
+//! by the same counter. Pure: text in, weight out; it knows nothing of files, folders or git.
 
 use std::collections::HashSet;
 
 use crate::config::Docs;
 use crate::engine::Weighed;
+use crate::rst;
 
-/// A Markdown text's docs weight, `words × word + function words × function_word + punctuation runs ×
-/// punctuation + symbol runs × symbol`, as a file's weight: no entries, always clean (any text is Markdown).
-pub fn weigh(text: &str, docs: &Docs) -> Weighed {
-    Counter::new(docs).weigh(text)
+/// The markup a docs file is written in, and so scanned by.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Format {
+    Markdown,
+    Rst,
+}
+
+impl Format {
+    /// The format of a docs file named `name`: reStructuredText for `.rst`, `.rest` and `.txt` (Sphinx's docs,
+    /// Django's; plain text is reST with no markup), else Markdown.
+    pub fn of(name: &str) -> Format {
+        let extension = name.rsplit_once('.').map_or("", |(_, e)| e);
+        if ["rst", "rest", "txt"]
+            .iter()
+            .any(|e| extension.eq_ignore_ascii_case(e))
+        {
+            Format::Rst
+        } else {
+            Format::Markdown
+        }
+    }
+}
+
+/// A docs text's weight, `words × word + function words × function_word + punctuation runs × punctuation + symbol
+/// runs × symbol`, as a file's weight: no entries, always clean (any text is Markdown, or reST).
+pub fn weigh(text: &str, format: Format, docs: &Docs) -> Weighed {
+    Counter::new(docs).weigh(text, format)
 }
 
 /// The docs weights with their function words' set built once, to weigh many texts by.
@@ -37,9 +61,13 @@ impl Counter {
         }
     }
 
-    /// A Markdown text's docs weight, as a file's weight.
-    pub fn weigh(&self, text: &str) -> Weighed {
-        let weight = self.of(count(text, &self.function_words, true));
+    /// A docs text's weight, as a file's weight.
+    pub fn weigh(&self, text: &str, format: Format) -> Weighed {
+        let counts = match format {
+            Format::Markdown => count(text, &self.function_words, true),
+            Format::Rst => rst::count(text, &self.function_words),
+        };
+        let weight = self.of(counts);
         Weighed {
             total: weight,
             file: weight,
@@ -65,7 +93,7 @@ impl Counter {
 
 /// How many words, function words, punctuation runs and symbol runs a text has.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-struct Counts {
+pub(crate) struct Counts {
     words: usize,
     function_words: usize,
     punctuation: usize,
@@ -193,13 +221,14 @@ enum Run {
 struct SymbolRun {
     length: usize,
     first: char,
-    /// Whether every character so far is prose's punctuation.
+    /// Whether every character so far is prose's punctuation, none of them markup.
     prose: bool,
 }
 
 impl SymbolRun {
-    fn push(&mut self, c: char) {
-        self.prose = (self.length == 0 || self.prose) && is_prose_punctuation(c);
+    /// One more character, `markup` when it is one whatever it is (reST's `..`, a role's `:`).
+    fn push(&mut self, c: char, markup: bool) {
+        self.prose = (self.length == 0 || self.prose) && !markup && is_prose_punctuation(c);
         if self.length == 0 {
             self.first = c;
         }
@@ -241,20 +270,20 @@ fn is_prose_punctuation(c: char) -> bool {
 }
 
 /// The runs counted so far, and the one the last character is in.
-struct Runs<'a> {
-    counts: Counts,
+pub(crate) struct Runs<'a> {
+    pub(crate) counts: Counts,
     current: Option<Run>,
     symbol: SymbolRun,
     /// The word going on, and whether it began in code (inline or fenced), where a function word is a word.
     word: String,
     word_in_code: bool,
     /// Whether the next character is in code.
-    code: bool,
+    pub(crate) code: bool,
     function_words: &'a HashSet<String>,
 }
 
 impl<'a> Runs<'a> {
-    fn new(function_words: &'a HashSet<String>) -> Runs<'a> {
+    pub(crate) fn new(function_words: &'a HashSet<String>) -> Runs<'a> {
         Runs {
             counts: Counts::default(),
             current: None,
@@ -267,7 +296,16 @@ impl<'a> Runs<'a> {
     }
 
     /// One more character.
-    fn push(&mut self, c: char) {
+    pub(crate) fn push(&mut self, c: char) {
+        self.push_as(c, false);
+    }
+
+    /// One more character that is markup, a symbol run's whatever it is: reST's `..` and `::`, a role's `:`.
+    pub(crate) fn markup(&mut self, c: char) {
+        self.push_as(c, true);
+    }
+
+    fn push_as(&mut self, c: char, markup: bool) {
         let run = if c.is_whitespace() {
             None
         } else if c.is_alphanumeric() {
@@ -283,7 +321,7 @@ impl<'a> Runs<'a> {
         }
         match run {
             Some(Run::Word) => self.word.push(c),
-            Some(Run::Symbol) => self.symbol.push(c),
+            Some(Run::Symbol) => self.symbol.push(c, markup),
             None => {}
         }
         self.current = run;
@@ -291,7 +329,7 @@ impl<'a> Runs<'a> {
 
     /// The end of the run going on, counted now: a word as a function word or a word, a symbol run as punctuation
     /// or a symbol.
-    fn end(&mut self) {
+    pub(crate) fn end(&mut self) {
         if self.current == Some(Run::Word) {
             if !self.word_in_code && self.function_words.contains(&self.word.to_lowercase()) {
                 self.counts.function_words += 1;
@@ -311,14 +349,19 @@ impl<'a> Runs<'a> {
         self.current = None;
     }
 
+    /// Whether the last character is a word's.
+    pub(crate) fn in_word(&self) -> bool {
+        self.current == Some(Run::Word)
+    }
+
     /// A URL: one word on its own.
-    fn url(&mut self) {
+    pub(crate) fn url(&mut self) {
         self.end();
         self.counts.words += 1;
     }
 
     /// A line of a fenced block, its fences too: code, every character by the rule.
-    fn plain(&mut self, line: &str) {
+    pub(crate) fn plain(&mut self, line: &str) {
         self.code = true;
         line.chars().for_each(|c| self.push(c));
     }
@@ -383,7 +426,7 @@ impl<'a> Runs<'a> {
 
 /// Where in `rest` the backticks closing inline code opened by `ticks` of them start: the next run of exactly as
 /// many.
-fn closing_ticks(rest: &str, ticks: usize) -> Option<usize> {
+pub(crate) fn closing_ticks(rest: &str, ticks: usize) -> Option<usize> {
     let mut at = 0;
     while let Some(found) = rest[at..].find('`') {
         let start = at + found;
@@ -423,7 +466,7 @@ fn destination_length(text: &str) -> usize {
 
 /// The length of the URL `text` starts with, if it does: `scheme://` and what follows up to a space or a
 /// character no URL holds unescaped, less a sentence's trailing punctuation and an unmatched `)` (a link's).
-fn url_length(text: &str) -> Option<usize> {
+pub(crate) fn url_length(text: &str) -> Option<usize> {
     let scheme = text
         .char_indices()
         .find(|&(i, c)| {
@@ -465,7 +508,7 @@ mod tests {
             (1.0, 10.0, 100.0, 1000.0)
         );
         assert_eq!(docs.function_words, ["the", "of"]);
-        weigh(text, &config.docs).total
+        weigh(text, Format::Markdown, &config.docs).total
     }
 
     #[test]
@@ -605,7 +648,7 @@ mod tests {
         // A fence's lines are code: `the` a word, the fences punctuation.
         assert_eq!(counter.comment(" ```\n the\n ```\n"), 1.0 + 200.0);
         assert_eq!(counter.comment(" see https://a.b/c"), 2.0);
-        assert_eq!(counter.weigh("x").total, 1.0);
+        assert_eq!(counter.weigh("x", Format::Markdown).total, 1.0);
     }
 
     #[test]
@@ -624,7 +667,7 @@ mod tests {
             function_words: vec!["some".to_string()],
         };
         assert_eq!(
-            weigh("# Title\n\nSome text.\n", &docs),
+            weigh("# Title\n\nSome text.\n", Format::Markdown, &docs),
             Weighed {
                 total: 5.0,
                 file: 5.0,

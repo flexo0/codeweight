@@ -1,7 +1,8 @@
 # Using codeweight
 
 It reads Java (`.java`), TypeScript (`.ts`, `.mts`, `.cts`), TSX (`.tsx`), JavaScript (`.js`, `.jsx`, `.mjs`, `.cjs`),
-Python (`.py`, `.pyi`), Rust (`.rs`), Go (`.go`) and C (`.c`, `.h`), and weighs Markdown (`.md`, `.markdown`) as docs.
+Python (`.py`, `.pyi`), Rust (`.rs`), Go (`.go`) and C (`.c`, `.h`), and weighs Markdown (`.md`, `.markdown`) and
+reStructuredText (`.rst`, and the `.txt` under a `docs` or `Documentation` folder, Django's and Linux's) as docs.
 
 ```
 codeweight scan [<path>...] [--exclude <pattern>]... [<one>|--short] [-v] [--json]
@@ -40,7 +41,7 @@ at most two decimals, a zero without a sign (`docs 0`). `--short` prints the fou
 rounded to a whole number, all four always there, the comments' `m` (messages): `c+15 m+3 d+17 t-5`, a zero part `d0`. The code's is the weight of the code, its tests left out. The tests' is
 the weight of the tests alone: the test files (`test_globs`), and in a Rust file the items marked `#[cfg(test)]`,
 `#[test]` or a runner's `#[tokio::test]` (any `#[...::test]`), all in them (a `mod tests` and its functions), and a
-whole file marked `#![cfg(test)]`. The docs' is the weight of the Markdown files (`docs_globs`), each by its words
+whole file marked `#![cfg(test)]`. The docs' is the weight of the Markdown and reST files (`docs_globs`), each by its words
 and its runs of other characters, punctuation or symbols (`[docs]`, see [weights-file.md](weights-file.md); a word 0.64,
 a function word in prose (`a`, `the`, `of`) and a punctuation run 0.32 and a symbol run 0.62 by default, so
 `Hello, world.` is 1.92, `## Setup` 1.26 and `the end of it` 1.6). The comments' is the weight of the code's
