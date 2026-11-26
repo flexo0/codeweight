@@ -619,6 +619,40 @@ mod tests {
     }
 
     #[test]
+    fn the_default_test_globs_take_the_common_test_layouts_and_leave_t_and_testing_code() {
+        let matchers = Matchers::new(&config::Config::defaults().unwrap().files).unwrap();
+        let test = |path: &str| matchers.kind(Path::new(path), Path::new(path)).unwrap().1;
+        for path in [
+            "src/test/java/a/ATest.java",
+            "pkg/a_test.go",
+            "integration-tests/rest/src/main/java/a/A.java",
+            "crates/x/integration_tests/a.rs",
+            "tools/testing/selftests/bpf/a.c",
+            "drivers/gpu/drm/i915/selftests/a.c",
+            "testsuite/a/A.java",
+            "test-suite-kotlin/src/main/kotlin/a/A.java",
+            "test-suite/src/main/java/a/A.java",
+            "tck/src/main/java/a/A.java",
+            "tcks/microprofile-config/src/a/A.java",
+            "http-server-tck/src/main/java/a/A.java",
+            "lib/list_kunit.c",
+            "drivers/base/regmap/regmap-kunit.c",
+        ] {
+            assert!(test(path), "{path} is a test");
+        }
+        for path in [
+            "src/main/java/a/A.java",
+            "t/helper/test-tool.c",
+            "packages/core/testing/src/a.ts",
+            "src/testing/testing.go",
+            "rust/helpers/kunit.c",
+            "src/tckit/a.py",
+        ] {
+            assert!(!test(path), "{path} is code");
+        }
+    }
+
+    #[test]
     fn an_exclude_ending_in_a_slash_is_a_folder_at_any_depth_or_from_the_base() {
         let glob = |pattern| exclude(pattern).unwrap();
         assert_eq!(glob("build/"), "**/build/**");

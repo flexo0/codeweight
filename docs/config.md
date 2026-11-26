@@ -57,6 +57,14 @@ Built (`config`, `config::find`):
   prose, as test code's comments are in none); one they don't match is of no kind either, as a `.txt`. The excludes
   and hidden paths apply to docs as to code. A file on its own must hold the key, as it must `test_globs`; the
   engine's tests' is `["**/*.md"]`.
+- The default `test_globs` are the test layouts whose name is tests in every repo: a test file's suffix or prefix,
+  a `test` / `tests` / `__tests__` folder, and the suites' folders, `integration-tests` (Quarkus, Spring),
+  `selftests` (Linux's `tools/testing/selftests`, i915's), `testsuite`, `test-suite*` (Micronaut's
+  `test-suite-kotlin`, ...), `tck`, `tcks` and `*-tck` (Quarkus's, Micronaut's `http-tck`: a compatibility kit is
+  tests), with Linux's KUnit files (`*_kunit.c`, `*-kunit.c`). A name that is tests in one repo and code in another
+  stays out: git's `t/` (a `t` folder can be anything) and `testing/` (Angular's `packages/*/testing` and Go's
+  `testing` package are a library's API, Django's `docs/topics/testing` its docs); a repo with one adds it in its
+  own file.
 
 ```toml
 [nesting]
@@ -134,7 +142,9 @@ test_globs = [
     "**/test/**", "**/tests/**", "**/__tests__/**", "**/*Test.java", "**/*Tests.java",
     "**/*.test.ts", "**/*.spec.ts", "**/*.test.tsx", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py",
     "**/*.test.js", "**/*.spec.js", "**/*.test.jsx", "**/*.spec.jsx", "**/*_test.go",
-    "**/test_*.c", "**/*_test.c",
+    "**/test_*.c", "**/*_test.c", "**/*_kunit.c", "**/*-kunit.c",
+    "**/integration-tests/**", "**/integration_tests/**", "**/selftests/**", "**/testsuite/**", "**/test-suite*/**",
+    "**/tck/**", "**/tcks/**", "**/*-tck/**",
 ]
 docs_globs = ["**/*.md", "**/*.markdown"]   # docs alone, weighed by [docs]; one a test glob matches too is none
 ```
