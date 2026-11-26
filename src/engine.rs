@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use tree_sitter::{Node, Parser};
+use tree_sitter::{Node, Parser, Tree};
 
 use crate::config::{self, Category, Config, LangConfig};
 use crate::lang::{self, Lang, Nesting, Operator, Scope, ScopeKind};
@@ -122,6 +122,8 @@ pub struct Weigher<'c> {
     attributes: Vec<bool>,
     /// Weighs a comment's text, by the `[docs]` weights.
     counter: Counter,
+    /// The weigher of the language's fallback, which parses a text this one's grammar leaves errors in.
+    fallback: Option<Box<Weigher<'c>>>,
 }
 
 impl<'c> Weigher<'c> {
@@ -195,6 +197,7 @@ impl<'c> Weigher<'c> {
             comments,
             attributes,
             counter: Counter::new(&config.docs),
+            fallback: lang.fallback.map(|l| Box::new(Weigher::new(l, config))),
         }
     }
 
@@ -216,14 +219,32 @@ impl<'c> Weigher<'c> {
     /// markers stripped, weighed flat by the `[docs]` weights into its function's, class's or file's entry, or
     /// into the declaration's it is right before; a file's header, a shebang and test code's comments weigh
     /// nothing.
+    /// A text the grammar leaves errors in is parsed again by the language's fallback, and the tree with less of
+    /// the text in errors is walked, the first on a tie.
     fn walk(&self, text: &str, comments: bool) -> Result<(Weighed, Weighed)> {
+        let tree = self.parse(text)?;
+        if let Some(fallback) = &self.fallback
+            && tree.root_node().has_error()
+        {
+            let other = fallback.parse(text)?;
+            if error_bytes(other.root_node()) < error_bytes(tree.root_node()) {
+                return fallback.walk_tree(&other, text, comments);
+            }
+        }
+        self.walk_tree(&tree, text, comments)
+    }
+
+    fn parse(&self, text: &str) -> Result<Tree> {
         let mut parser = Parser::new();
         parser
             .set_language(&self.grammar)
             .with_context(|| format!("loading the {} grammar", self.lang.name))?;
-        let tree = parser
+        parser
             .parse(text, None)
-            .with_context(|| format!("parsing as {}", self.lang.name))?;
+            .with_context(|| format!("parsing as {}", self.lang.name))
+    }
+
+    fn walk_tree(&self, tree: &Tree, text: &str, comments: bool) -> Result<(Weighed, Weighed)> {
         let root = tree.root_node();
         let source = text.as_bytes();
 
@@ -696,6 +717,18 @@ fn is_magic(literal: &str) -> bool {
 }
 
 /// Whether a blank line stands between two nodes, `a` before `b` (a line comment may end with its newline).
+/// The bytes of the text in a tree's error nodes, each counted once (an error inside an error is in it).
+fn error_bytes(node: Node) -> usize {
+    if node.is_error() {
+        return node.byte_range().len();
+    }
+    if !node.has_error() {
+        return 0;
+    }
+    let mut cursor = node.walk();
+    node.children(&mut cursor).map(error_bytes).sum()
+}
+
 fn blank_between(a: Node, b: Node, source: &[u8]) -> bool {
     let newlines = |bytes: &[u8]| bytes.iter().filter(|&&c| c == b'\n').count();
     let gap = source.get(a.end_byte()..b.start_byte()).unwrap_or_default();

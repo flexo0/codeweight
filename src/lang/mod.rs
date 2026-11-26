@@ -21,6 +21,7 @@ pub const ALL: &[&Lang] = &[
     &typescript::TYPESCRIPT,
     &typescript::TSX,
     &javascript::JAVASCRIPT,
+    &javascript::FLOW,
     &python::PYTHON,
     &rust::RUST,
     &go::GO,
@@ -105,6 +106,9 @@ pub struct Lang {
     /// Whether a comment documents its file or module from inside it (Rust's `//!`, `/*!`): at the file's top it
     /// is no header, as a Python module's docstring is none.
     pub inner_doc: fn(Node) -> bool,
+    /// The language whose grammar parses a text again when this one's leaves syntax errors in it (JavaScript's
+    /// TSX-read twin, for Flow's types); the parse with less of the text in errors is weighed.
+    pub fallback: Option<&'static Lang>,
 }
 
 /// A nesting construct: which of its children are one level deeper than it.

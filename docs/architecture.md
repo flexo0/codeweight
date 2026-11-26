@@ -78,7 +78,9 @@ crates.io as well, needs a C compiler.
   arrows). For the comments: the comment kinds (their markers stripped by one `lang::comment_text` for all, `//`,
   `#`, `/* */`), the attribute kinds that may stand between a doc comment and its declaration (Rust's `#[...]`, a
   TS class member's decorator), `docstring` (a node that is one, and its text without its quotes: Python's string
-  statement) and `inner_doc` (a comment that documents its module from inside, so no header: Rust's `//!`). A test checks that
+  statement) and `inner_doc` (a comment that documents its module from inside, so no header: Rust's `//!`); its
+  `fallback`, a language whose grammar parses a text again when this one's leaves errors in it (JavaScript's: `flow`,
+  TSX's grammar and table under JavaScript's key, no extensions). A test checks that
   every kind and field the tables name is in the grammar, so a typo can't silently weigh nothing.
 - A call's arguments are counted alike in every language (`lang::arguments`: its `arguments` field's list items, or
   one lone argument), no hook.
@@ -88,7 +90,9 @@ crates.io as well, needs a C compiler.
   weighed in the same walk, only when asked for (`weigh_with_comments`; `--code` and `--tests` don't ask): a
   comment's text by a `markdown::Counter` built once per weigher (its function words' set not rebuilt per comment),
   so the engine stays pure, text in, weights out; a comment right before a declaration is kept aside by the entry's
-  key and added once the walk has made the entry. The comments come out as a second `Weighed`, its entries the
+  key and added once the walk has made the entry. A tree with errors in a language with a `fallback` is parsed again
+  by the fallback's weigher, and only the tree with fewer bytes in (outermost) ERROR nodes is walked, the first on a
+  tie. The comments come out as a second `Weighed`, its entries the
   code's (the same names and lines, their own weights), so `split`, `only` and `all_tests` never see them.
 - The engine's tests are snippets weighed under `tests/weights.toml` (round numbers, complete on its own, the
   defaults never under it), each sum worked out by hand in the test. The CLI's tests run the binary in temp folders.

@@ -1,9 +1,10 @@
 //! JavaScript, JSX too: the grammar TypeScript's is built on, so its node kinds are TypeScript's. It takes
 //! `typescript`'s table but for the type kinds, its nesting and its hooks; its table in the weights file is its own
-//! (`[languages.javascript]`).
+//! (`[languages.javascript]`). A file its grammar leaves errors in, Flow's types mostly (`@flow`, which it has no
+//! syntax for), is parsed again by TSX's grammar (`FLOW`), which reads most of them.
 
 use super::Lang;
-use super::typescript::{BASE, js_kinds};
+use super::typescript::{BASE, TSX_TABLES, js_kinds};
 use crate::config::Category::*;
 
 pub static JAVASCRIPT: Lang = Lang {
@@ -19,7 +20,18 @@ pub static JAVASCRIPT: Lang = Lang {
         ("jsx_element", Call),
         ("jsx_self_closing_element", Call),
     ),
+    fallback: Some(&FLOW),
     ..BASE
+};
+
+/// JavaScript read by TSX's grammar, its fallback: TSX's tables (Flow's types weigh as TypeScript's), the weights
+/// file's `[languages.javascript]`. It has no extensions: a JavaScript file is weighed by it only when its parse
+/// leaves less of the text in errors than JavaScript's.
+pub static FLOW: Lang = Lang {
+    name: "flow",
+    key: "javascript",
+    extensions: &[],
+    ..TSX_TABLES
 };
 
 /// Snippets weighed under the test weights (see `lang::testing`), each sum worked out by hand.
@@ -157,6 +169,53 @@ mod tests {
         let weighed = testing::weigh_under(&JAVASCRIPT, WEIGHTS, "class A { m() { g( } ");
         assert!(!weighed.clean);
         assert!(weighed.total > 0.0);
+    }
+
+    #[test]
+    fn flow_s_types_are_read_by_tsx_s_grammar_and_weigh_as_typescript_s() {
+        // JavaScript's grammar leaves the types in errors; TSX's reads them, cleanly.
+        let weighed = weigh(
+            "// @flow
+             import type { A } from './a';             // 0
+             type P = { a: ?string, b: number };       // file: statement 1, its two members 1 each
+             function f(x: ?number, y: A): string {    // f: function 100
+               return g((x: any));                     // the last statement 1, call 2; a cast weighs nothing
+             }",
+        );
+        assert_eq!(weighed.file, 3.0);
+        assert_eq!(function(&weighed, "f"), 103.0);
+    }
+
+    #[test]
+    fn javascript_s_grammar_is_kept_unless_tsx_s_leaves_less_in_errors() {
+        let weights = WEIGHTS.replacen("operator  = 0", "operator  = 7", 1);
+        let weigh = |text| testing::weigh_under(&JAVASCRIPT, &weights, text);
+        // `a < b > (c)`: two comparisons to JavaScript's grammar, a call `a<b>(c)` to TSX's.
+        let clean = weigh("a < b > (c);                  // statement 1, two operators 7 each");
+        assert_eq!((clean.file, clean.clean), (15.0, true));
+        // `g(;` is a missing `)` to both: no text in errors either way, JavaScript's kept.
+        let tie = weigh("a < b > (c);  g(;              // 15; statement 1, call 2");
+        assert_eq!((tie.file, tie.clean), (18.0, false));
+        let typed = weigh(
+            "a < b > (c);                  // the call: statement 1, call 2
+             function f(a: number) {}      // f: 100",
+        );
+        assert_eq!((typed.file, typed.clean), (3.0, true));
+        assert_eq!(function(&typed, "f"), 100.0);
+    }
+
+    #[test]
+    fn a_file_read_by_tsx_s_grammar_takes_javascript_s_table() {
+        let weights = format!(
+            "{WEIGHTS}
+             [languages.javascript.weights]
+             call = 7
+             [languages.typescript.weights]
+             call = 9"
+        );
+        let weighed = testing::weigh_under(&JAVASCRIPT, &weights, "function f(x: number) { g(); }");
+        assert!(weighed.clean);
+        assert_eq!(function(&weighed, "f"), 108.0);
     }
 
     #[test]

@@ -83,7 +83,9 @@ code nor the tests weigh it, the docs only such files, each one line of `--docs`
 functions). One the test globs match too (a test's snapshot or golden `.md`, a `README.md` under `tests/`) is in no
 number: test prose, as test code's comments are; narrow `test_globs` to keep such a README in the docs. Files are weighed in parallel; the output is the same on every run.
 
-A file that doesn't parse cleanly is still weighed, as tree-sitter recovered it, with a warning (above). A file in a language
+A file that doesn't parse cleanly is still weighed, as tree-sitter recovered it, with a warning (above); a
+JavaScript one is parsed again by TSX's grammar first, which reads most of Flow's types
+([languages.md](languages.md)). A file in a language
 codeweight doesn't read is left out, never an error. A folder under the one scanned that can't be read (a
 root-owned docker volume, say) is left out with a warning and the rest weighed; a folder given that can't be read is
 an error.

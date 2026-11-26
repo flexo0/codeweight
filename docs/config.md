@@ -13,7 +13,7 @@ Built (`config`, `config::find`):
   unknown key anywhere is an error.
 - Checked after: every `[weights]` key is a category (and every category has a weight, which only a file on its own,
   without the defaults under it, can miss); every `[languages.<name>]` is a language codeweight reads (`java`,
-  `typescript`, `javascript`, `python`, `rust`, `go`, `c`); every `node_kinds` key is a named node kind of that language's grammar and its value a
+  `typescript`, `javascript`, `python`, `rust`, `go`, `c`); every `node_kinds` key is a named node kind of one of that language's grammars and its value a
   category or `"none"`; every weight and factor is a finite number, 0 or above; every `[files]` glob compiles. The
   error names the table and the key, and the file.
 - `typescript` is the table of both `.ts` and `.tsx` files (two grammars, one key): a TS setting reaches TSX too.
@@ -25,7 +25,10 @@ Built (`config`, `config::find`):
   a JS one TS. Its grammar is the one TS's is built on, but it is another language: a JS-only project tunes it under
   its own name, and the two grammars' kinds already differ (JS's class field is `field_definition`, TS's
   `public_field_definition`; JS has `using_declaration`, TS not yet), so one `node_kinds` remap wouldn't reach both.
-  Its `node_kinds` key is a kind of JS's grammar (`interface_declaration` is an unknown node kind there).
+  Its `node_kinds` key is a kind of JS's grammar or of TSX's, which reads a JS file JS's grammar leaves errors in
+  (Flow's types, [languages.md](languages.md)): `type_alias_declaration = "none"` reaches such a file's `type`
+  aliases. A remap of a kind one grammar has alone does nothing in a file the other reads (JS's `field_definition`
+  is TSX's `public_field_definition`).
 - A language's weights are `[weights]` with its `[languages.<name>.weights]` over them; its `node_kinds` override
   its own table (see [architecture.md](architecture.md)).
 - The defaults hold no `[languages.<name>.weights]` (the example above has one only to show the table): the merge

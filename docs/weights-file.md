@@ -149,7 +149,9 @@ node kind is a tree-sitter one, as the language's grammar names it.
 | `parameter` | a method's, constructor's or lambda's parameter (a record's component too), not a receiver (`A this`) | a function's, method's, signature's or arrow's parameter, not a `this` one nor a function type's | a function's or lambda's parameter (`*args`, `**kwargs` too), not the first `self` / `cls` nor a bare `*` / `/` | a function's or closure's parameter, not `self` nor a `fn(...)` type's | each name of a function's, method's, literal's or interface method's parameters (an unnamed one once), not the receiver, the results nor a function type's | a definition's or prototype's parameter (`...` too), not `(void)` nor a function pointer's |
 
 JavaScript's elements are TypeScript's but for the type ones (an interface, an enum, a namespace, a signature, an
-interface's property, a `type` alias); a `using` declaration is a statement, as `let`. C's `#if` / `#ifdef` blocks
+interface's property, a `type` alias); a `using` declaration is a statement, as `let`. A JavaScript file its grammar
+leaves errors in and TSX's reads better (Flow's types) is weighed as TSX's tree, its types as TypeScript's
+([languages.md](languages.md)). C's `#if` / `#ifdef` blocks
 weigh nothing of their own: their code weighs where it is, their condition its operators.
 
 Every operator counts: `a && b && c` is 2 `bool_op`, `a + b - c` 2 `operator`, `a * b + c * d` 3, `x += b + c` 2,

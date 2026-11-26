@@ -23,7 +23,10 @@ pub static TYPESCRIPT: Lang = Lang {
     ..BASE
 };
 
-pub static TSX: Lang = Lang {
+pub static TSX: Lang = TSX_TABLES;
+
+/// TSX's tables, which JavaScript's TSX-read twin (`javascript::FLOW`) takes too.
+pub(super) const TSX_TABLES: Lang = Lang {
     name: "tsx",
     key: "typescript",
     extensions: &["tsx"],
@@ -72,6 +75,7 @@ pub(super) const BASE: Lang = Lang {
     attributes: &["decorator"],
     docstring: |_, _| None,
     inner_doc: |_| false,
+    fallback: None,
 };
 
 /// The number literal.

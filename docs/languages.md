@@ -42,6 +42,25 @@ before `@Override` is the method's.
   field all the same: `onClick = () => ...` is the function `A.onClick`. `using x = ...` (`using_declaration`, which
   TypeScript's grammar doesn't parse yet) is a statement, as `let`. The grammar reads JSX in any file, so a JSX
   element is a call in a `.js` file as in a `.jsx` one. Its weights-file table is its own ([config.md](config.md)).
+- Flow: tree-sitter-javascript has no Flow (`import type`, annotations, `type T = {...}`, `?T`), so a Flow-typed
+  file is mostly errors (React's 1,146 `@flow` files: 61% of their text in ERROR nodes, their code a third lighter
+  than read by TSX's grammar, more than half their functions lost). A JavaScript file that doesn't parse cleanly is
+  parsed again by TSX's grammar, which reads most of Flow (its `?T`, `*`, `(x: T)` cast and `%checks` too, 9.7% of
+  those files' text left in errors), and the parse with less of the text in ERROR nodes is weighed, JavaScript's on
+  a tie: a clean file is parsed once and stays JavaScript's. No `@flow` pragma is looked at: React's Babel reads Flow in a
+  file without one too, and a file TSX's grammar reads worse (two of React's `@flow` ones) keeps JavaScript's. Read
+  by TSX's grammar (the language `flow`, `src/lang/javascript.rs`), a file is weighed by TSX's table, Flow's types
+  as TypeScript's (a `type` alias and an object type's members are statements, a `declare function` a function),
+  under `[languages.javascript]`'s weights. On React (`--exclude flow-typed/`) the syntax-error warnings went from
+  913 to 266, the code from 789,797 to 902,469. A commit whose before parses cleanly and whose after doesn't (its
+  first annotation) changes grammar between its sides: `a < b > (c)` is two comparisons to JavaScript's, a call to
+  TSX's.
+- Known gaps (Flow): what TSX's grammar lacks stays a syntax error, weighed as recovered, with a warning: an
+  unparenthesized function type's parameter (`fetch: I => Thenable<V>`), a variance sigil (`+x`, `<+T>`),
+  `opaque type`, `declare export`, a generic function type with unnamed parameters (`<T>(?() => T) => void`), Flow's
+  `component`, `hook` and `match`. Where the recovery fails as a whole, the file is one error under both grammars
+  (5 of React's, `ReactFiberHooks.js` among them). A Flow cast `(x: T)` is a parenthesized expression to the
+  grammar, no cast under `[conditions] casts`.
 - Comments: `comment`, a line or a block, a JSX `{/* */}` too (`html_comment`, the legacy `<!--`, is none). A
   class member's decorator is beside the member, so a comment before it is the member's.
 

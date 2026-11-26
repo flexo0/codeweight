@@ -35,6 +35,7 @@ pub static C: Lang = Lang {
     attributes: &[],
     docstring: |_, _| None,
     inner_doc: |_| false,
+    fallback: None,
 };
 
 const KINDS: &[(&str, Category)] = &[

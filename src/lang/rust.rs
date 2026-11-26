@@ -41,6 +41,7 @@ pub static RUST: Lang = Lang {
     inner_doc: |node| {
         super::first_child(node).is_some_and(|m| m.kind() == "inner_doc_comment_marker")
     },
+    fallback: None,
 };
 
 /// The number literals.

@@ -36,6 +36,7 @@ pub static PYTHON: Lang = Lang {
     attributes: &[],
     docstring,
     inner_doc: |_| false,
+    fallback: None,
 };
 
 /// The number literals.

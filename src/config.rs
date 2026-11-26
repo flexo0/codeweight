@@ -617,7 +617,7 @@ mod tests {
 
     #[test]
     fn javascript_s_table_is_its_own() {
-        use crate::lang::javascript::JAVASCRIPT;
+        use crate::lang::javascript::{FLOW, JAVASCRIPT};
         use crate::lang::typescript::TYPESCRIPT;
         let config = Config::from_str_over_defaults(
             "[languages.typescript.weights]\nloop = 9\n\
@@ -632,12 +632,19 @@ mod tests {
             None
         );
         assert!(config.lang(&TYPESCRIPT).node_kinds.is_empty());
-        // A TypeScript kind is no JavaScript one.
+        // JavaScript read by TSX's grammar (Flow's types) takes JavaScript's table, and a kind of TSX's is one of it.
+        assert_eq!(config.lang(&FLOW).weight(Category::Loop), 7.0);
+        let config = Config::from_str_over_defaults(
+            "[languages.javascript.node_kinds]\ntype_alias_declaration = \"none\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            config.lang(&FLOW).node_kinds["type_alias_declaration"],
+            None
+        );
         assert!(
-            error_of("[languages.javascript.node_kinds]\ninterface_declaration = \"call\"\n")
-                .contains(
-                    "unknown node kind `interface_declaration` in [languages.javascript.node_kinds]"
-                )
+            error_of("[languages.javascript.node_kinds]\ntype_alias = \"call\"\n")
+                .contains("unknown node kind `type_alias` in [languages.javascript.node_kinds]")
         );
     }
 
