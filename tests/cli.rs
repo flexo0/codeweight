@@ -1143,6 +1143,40 @@ fn show_and_diff_print_the_four_deltas() {
 }
 
 #[test]
+fn show_comments_matches_a_rust_file_s_entries_though_a_test_one_shares_a_name() {
+    let repo = Repo::new();
+    // `impl A` and a `#[cfg(test)] impl A`, a function and its `cfg(not(test))` twin: a test and a non-test entry of
+    // one name each.
+    let rust = |comment: &str| {
+        format!(
+            "struct A;\n\nimpl A {{\n    fn f() {{\n        {comment}\n    }}\n}}\n\n\
+             #[cfg(test)]\nimpl A {{\n    fn g() {{}}\n}}\n\n\
+             #[cfg(test)]\nfn h() {{}}\n\n#[cfg(not(test))]\nfn h() {{\n    // Runs\n}}\n"
+        )
+    };
+    repo.commit(&[("a.rs", Some(&rust("// Calls")))]);
+    // Under tests/weights.toml a word is 1: f's comment two words now, the test code's none.
+    repo.commit(&[("a.rs", Some(&rust("// Calls g")))]);
+    assert_eq!(
+        repo.run(&["show", "--comments"], &["HEAD"]),
+        "total +1
++1  heavier  a.rs  A.f
+"
+    );
+    let json: serde_json::Value =
+        serde_json::from_str(&repo.run(&["show", "--comments"], &["HEAD", "--json"])).unwrap();
+    assert_eq!(json["total"], serde_json::json!(1.0));
+    // The root commit: each comment's entry once, as added.
+    assert_eq!(
+        repo.run(&["show", "--comments"], &["HEAD~1"]),
+        "total +2
++1  added    a.rs  A.f
++1  added    a.rs  h
+"
+    );
+}
+
+#[test]
 fn the_report_s_options_need_one_number_and_short_none() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("A.java"), JAVA).unwrap();

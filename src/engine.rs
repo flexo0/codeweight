@@ -210,7 +210,8 @@ impl<'c> Weigher<'c> {
         Ok(self.walk(text, false)?.0)
     }
 
-    /// A text's code weight and its comments' weight, the entries of both the same functions, classes and file.
+    /// A text's code weight and its comments' weight, the comments' entries the code's functions and classes but
+    /// its test code's.
     pub fn weigh_with_comments(&self, text: &str) -> Result<(Weighed, Weighed)> {
         self.walk(text, true)
     }
@@ -481,9 +482,12 @@ impl<'c> Weigher<'c> {
                 add_to(&mut comment_weights, &mut comments_file, at, weight);
             }
             comment_weights.resize(entries.len(), 0.0);
+            // Test code's entries left out: their comments weigh nothing, and a test and a non-test entry of one
+            // name would be two of one name in the comments' report.
             let entries: Vec<Entry> = entries
                 .iter()
                 .zip(comment_weights)
+                .filter(|(entry, _)| !entry.test)
                 .map(|(entry, weight)| Entry {
                     weight,
                     ..entry.clone()

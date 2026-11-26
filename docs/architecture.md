@@ -6,7 +6,7 @@
 | `config` | loads the weights file, merges it over the defaults, validates it |
 | `source` | an input as `(path, kind, text)` items, a kind a language's code or docs (Markdown, reST, AsciiDoc): from disk (`ignore`, the excludes) or git blobs at a revision |
 | `lang` | a module per language (Java, TS and TSX, JavaScript, Python, Rust, Go, C): grammar, extensions, node kind → category, nesting kinds, function names |
-| `engine` | one tree walked: each node's weight, summed by function, class and file; with the comments asked for, each comment's and docstring's too, by `markdown`'s counter, into a second `Weighed` of the same entries |
+| `engine` | one tree walked: each node's weight, summed by function, class and file; with the comments asked for, each comment's and docstring's too, by `markdown`'s counter, into a second `Weighed` of the same entries, test code's left out |
 | `markdown` | a docs text's weight, Markdown's, reST's or AsciiDoc's, and a comment's text's: its words, punctuation and symbol runs, line by line, no tree-sitter |
 | `rst` | a reStructuredText text's runs, for `markdown`: its lines told apart by reST's rules (comments, literal blocks, directives, roles) |
 | `asciidoc` | an AsciiDoc text's runs, for `markdown`: its lines told apart by AsciiDoc's rules (comments, listing and literal blocks, literal paragraphs, description lists, macros) |
@@ -100,6 +100,8 @@ crates.io as well, needs a C compiler.
   key and added once the walk has made the entry. A tree with errors in a language with a `fallback` is parsed again
   by the fallback's weigher, and only the tree with fewer bytes in (outermost) ERROR nodes is walked, the first on a
   tie. The comments come out as a second `Weighed`, its entries the
-  code's (the same names and lines, their own weights), so `split`, `only` and `all_tests` never see them.
+  code's (the same names and lines, their own weights) but its test code's (they weigh nothing, and a test and a
+  non-test entry of one name would be two rows of one key in a commit's report), so `split`, `only` and `all_tests`
+  never see them.
 - The engine's tests are snippets weighed under `tests/weights.toml` (round numbers, complete on its own, the
   defaults never under it), each sum worked out by hand in the test. The CLI's tests run the binary in temp folders.
