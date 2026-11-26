@@ -3,7 +3,8 @@
 [![crates.io](https://img.shields.io/crates/v/codeweight.svg)](https://crates.io/crates/codeweight)
 [![CI](https://github.com/flexo0/codeweight/actions/workflows/ci.yml/badge.svg)](https://github.com/flexo0/codeweight/actions/workflows/ci.yml)
 
-A CLI that weighs code. Our ambition is to weigh the code's cognitive volume. 
+A CLI that weighs code, and the comments, docs and tests beside it. Our ambition is to weigh the code's cognitive
+volume.
 Every element of a file (a statement, a call, a branch, a loop, a function, ...) has a weight; 
 an element nested in branches, loops and lambdas weighs more,
 a long argument list weighs more, a long dereference chain weighs more, etc. A file's or a function's weight is the
@@ -13,14 +14,22 @@ Designed for autonomous agentic pipelines, for automatic decision-making.
 Use it to see how much module/feature/service/project/you-name-it weights; what delta a commit or uncommitted changes yield;
 to validate amount of docs matches amount of code; to check that refactor reduced weight; etc.
 
-It reads Java, TypeScript (TSX too), JavaScript, Python, Rust, Go and C, each parsed by tree-sitter. Markdown,
-reStructuredText and AsciiDoc files, not to be left out, receive a docs weight of their own.
+It weighs four things apart, never summed into one number:
+
+- **code**: Java, TypeScript (TSX too), JavaScript, Python, Rust, Go and C, each parsed by tree-sitter, its tests
+  left out;
+- **comments**: the code's comments and docstrings, by their words, punctuation and symbols;
+- **docs**: Markdown, reStructuredText and AsciiDoc files, the same way;
+- **tests**: the test files, and Rust's `#[cfg(test)]` code.
+
+Comments and docs are weighed on the code's scale, so a description weighs what the code it describes does, and the
+four numbers compare directly. Did the commit add tests in step with its code? Did the docs keep up? Did a refactor
+drop the comments along with the code?
 
 The default coefficients are calibrated on 1,400+ pairs, each a bad snippet beside its simpler good
 counterpart with the same behaviour, from linters' rule examples, fixers' tests and real refactoring commits
-([code-snippet-pairs](https://github.com/flexo0/code-snippet-pairs)). The docs-weight coefficients are calibrated
-on snippets of code beside their descriptions, each description presumed to carry the very same cognitive volume as
-its code, so that a doc weighs precisely what the code it describes does.
+([code-snippet-pairs](https://github.com/flexo0/code-snippet-pairs)); the docs' and comments', on snippets of code
+beside their descriptions.
 
 It's tested on 17 large open-source projects in five languages, their whole trees and 227,000 of their commits:
 spring-framework, quarkus, micronaut-core, hibernate-orm, django, flask, fastapi, react, vue, angular, linux, git,
