@@ -716,19 +716,23 @@ fn is_magic(literal: &str) -> bool {
     value.is_none_or(|v| v != 0.0 && v != 1.0)
 }
 
-/// Whether a blank line stands between two nodes, `a` before `b` (a line comment may end with its newline).
-/// The bytes of the text in a tree's error nodes, each counted once (an error inside an error is in it).
+/// The bytes of the text in a tree's error nodes, each counted once (an error inside an error is in it); a
+/// loop, not recursion, so a deeply nested tree can't overflow the stack.
 fn error_bytes(node: Node) -> usize {
-    if node.is_error() {
-        return node.byte_range().len();
+    let mut bytes = 0;
+    let mut stack = vec![node];
+    while let Some(node) = stack.pop() {
+        if node.is_error() {
+            bytes += node.byte_range().len();
+        } else if node.has_error() {
+            let mut cursor = node.walk();
+            stack.extend(node.children(&mut cursor));
+        }
     }
-    if !node.has_error() {
-        return 0;
-    }
-    let mut cursor = node.walk();
-    node.children(&mut cursor).map(error_bytes).sum()
+    bytes
 }
 
+/// Whether a blank line stands between two nodes, `a` before `b` (a line comment may end with its newline).
 fn blank_between(a: Node, b: Node, source: &[u8]) -> bool {
     let newlines = |bytes: &[u8]| bytes.iter().filter(|&&c| c == b'\n').count();
     let gap = source.get(a.end_byte()..b.start_byte()).unwrap_or_default();
@@ -771,7 +775,7 @@ struct Frame<'t> {
 
 #[cfg(test)]
 mod tests {
-    use super::is_magic;
+    use super::{error_bytes, is_magic};
 
     #[test]
     fn a_magic_number_is_one_but_0_and_1() {
@@ -786,5 +790,20 @@ mod tests {
         ] {
             assert!(is_magic(literal), "{literal}");
         }
+    }
+
+    #[test]
+    fn error_bytes_counts_an_error_deep_in_brackets_without_overflowing() {
+        let mut parser = tree_sitter::Parser::new();
+        parser
+            .set_language(&tree_sitter_javascript::LANGUAGE.into())
+            .unwrap();
+        let depth = 200_000;
+        let broken = format!("x = {} @@ {};\n", "[".repeat(depth), "]".repeat(depth));
+        let tree = parser.parse(&broken, None).unwrap();
+        assert_eq!(error_bytes(tree.root_node()), 2);
+        let clean = format!("x = {}{};\n", "[".repeat(depth), "]".repeat(depth));
+        let tree = parser.parse(&clean, None).unwrap();
+        assert_eq!(error_bytes(tree.root_node()), 0);
     }
 }
