@@ -251,8 +251,8 @@ impl<'c> Weigher<'c> {
 
         let mut file = 0.0;
         let mut file_tests = 0.0;
-        let mut entries: Vec<Entry> = Vec::new();
-        let mut index: HashMap<EntryKey, usize> = HashMap::new();
+        let mut entries = Entries::default();
+        let mut comments = comments.then(|| Comments::new(self.header_end(root, source)));
         let mut stack = vec![Frame {
             node: root,
             depth: 0,
@@ -260,25 +260,11 @@ impl<'c> Weigher<'c> {
             in_function: false,
             test: false,
         }];
-        let mut children = Vec::new();
         // A loop's body its kind doesn't nest (C's loop macro's block), by its node id: its depth.
         let mut bodies: HashMap<usize, u32> = HashMap::new();
-        // The comments' weights: outside any entry, by entry, and of the declarations they are right before (by
-        // their entry's key once it is there, else the entry they are in).
-        let header = if comments {
-            self.header_end(root, source)
-        } else {
-            0
-        };
-        let mut comments_file = 0.0;
-        let mut comment_weights: Vec<f64> = Vec::new();
-        let mut before: Vec<(EntryKey, Option<usize>, f64)> = Vec::new();
-        // The code a run of comments is before, by its node id, and what it declares: searched once for the run.
-        let mut declares_last: Option<(usize, Option<(Scope, bool)>)> = None;
 
         while let Some(frame) = stack.pop() {
             let node = frame.node;
-            let id = node.kind_id() as usize;
             let depth = if bodies.is_empty() {
                 frame.depth
             } else {
@@ -296,213 +282,44 @@ impl<'c> Weigher<'c> {
             let scope = (self.lang.scope)(node, source);
             let declares = scope.as_ref().map(|s| s.kind);
             if let Some(scope) = scope {
-                let name = match frame.entry {
-                    Some(parent) => format!("{}.{}", entries[parent].name, scope.name),
-                    None => scope.name,
-                };
-                let at = *index.entry((scope.kind, name, test)).or_insert_with_key(
-                    |(kind, name, test)| {
-                        entries.push(Entry {
-                            kind: *kind,
-                            name: name.clone(),
-                            line: node.start_position().row + 1,
-                            weight: 0.0,
-                            test: *test,
-                        });
-                        entries.len() - 1
-                    },
-                );
-                entry = Some(at);
-                nested_scope = frame.in_function;
+                let line = node.start_position().row + 1;
                 in_function |= scope.kind == ScopeKind::Function;
+                entry = Some(entries.enter(frame.entry, scope, test, line));
+                nested_scope = frame.in_function;
             }
 
-            // Each operator counts, one in a chain of them too (`a + b + c` is 2, `a = b = c` 2). A plain `=`
-            // weighs beside the node's own category (Go's assignment is a statement), never in its place.
             let operator = (self.lang.operator)(node);
-            let assigns = self.conditions.assignments && operator == Some(Operator::Assign);
-            let category = match operator.filter(|op| *op != Operator::Assign) {
-                Some(Operator::Nullish) if self.conditions.nullish_operator => {
-                    Some(Category::Operator)
-                }
-                Some(Operator::Logical | Operator::Nullish) => Some(Category::BoolOp),
-                Some(_) => Some(Category::Operator),
-                None if loop_body.is_some() => Some(Category::Loop),
-                None if self.conditions.magic_numbers
-                    && flag(&self.numbers, id)
-                    && is_magic(&lang::text(node, source)) =>
-                {
-                    Some(Category::Access)
-                }
-                None if (self.lang.exempt)(node, source) => None,
-                None => self
-                    .categories
-                    .get(id)
-                    .copied()
-                    .flatten()
-                    .and_then(|category| {
-                        if flag(&self.returns, id) {
-                            if self.is_early_return(node, source) {
-                                Some(Category::Jump)
-                            } else if (self.lang.carried_return)(node) {
-                                None
-                            } else {
-                                Some(category)
-                            }
-                        } else if category == Category::Lambda
-                            && declares == Some(ScopeKind::Function)
-                        {
-                            Some(Category::Function)
-                        } else if category == Category::Case
-                            && self.conditions.free_default
-                            && (self.lang.default_case)(node, source)
-                        {
-                            None
-                        } else {
-                            Some(category)
-                        }
-                    }),
-            };
-            // An access weighs more the further it is in a row of them (`[accesses]`): `a.b.c` is `.b` at 0, `.c` at 1.
-            let row = match category {
-                Some(Category::Access) => self.accesses.factor_at(self.access_place(node, source)),
-                _ => 1.0,
-            };
-            let times = match operator {
-                Some(_) if flag(&self.chains, id) => {
-                    lang::count_children(node, |_| true).saturating_sub(1)
-                }
-                _ => 1,
-            };
-            let weight = category
-                .map(|c| (c, times as f64 * row))
-                .into_iter()
-                .chain((self.lang.also_statement)(node).then_some((Category::Statement, 1.0)))
-                .chain(assigns.then_some((Category::Operator, 1.0)))
-                .map(|(c, n)| n * self.weights.weight(c) * self.nesting.factor_of(c, depth))
-                .sum::<f64>()
-                + self.parameters((self.lang.parameters)(node, source), depth)
-                + match category {
-                    Some(Category::Call | Category::Constructor) => {
-                        self.arguments(lang::arguments(node), depth)
-                    }
-                    _ => 0.0,
-                };
+            let category = self.category(node, source, operator, loop_body.is_some(), declares);
+            let weight = self.weight(node, source, category, operator, depth);
             if weight > 0.0 {
                 match entry {
-                    Some(at) => entries[at].weight += weight,
+                    Some(at) => entries.list[at].weight += weight,
                     None if test => file_tests += weight,
                     None => file += weight,
                 }
             }
-
-            if comments
+            if let Some(comments) = &mut comments
                 && !test
-                && let Some(text) = self.comment_text(node, source, header)
             {
-                let weight = self.counter.comment(&text);
-                // A docstring is its scope's, never the next declaration's.
-                let code = (weight > 0.0 && flag(&self.comments, id))
-                    .then(|| self.code_after(node, source))
-                    .flatten();
-                let declared = code.and_then(|code| match &declares_last {
-                    Some((id, declared)) if *id == code.id() => declared.clone(),
-                    _ => {
-                        let declared = self.declared_by(code, source);
-                        declares_last = Some((code.id(), declared.clone()));
-                        declared
-                    }
-                });
-                match declared {
-                    // Test code's comment, though before it.
-                    Some((_, true)) => {}
-                    Some((scope, false)) => {
-                        let name = match entry {
-                            Some(parent) => format!("{}.{}", entries[parent].name, scope.name),
-                            None => scope.name,
-                        };
-                        before.push(((scope.kind, name, false), entry, weight));
-                    }
-                    None => add_to(&mut comment_weights, &mut comments_file, entry, weight),
-                }
+                comments.add(self, node, source, entry, &entries);
             }
 
-            // A node that declares a function or class (a named lambda) nests as one, not as its construct.
-            let construct = match declares {
-                Some(_) => None,
-                None => self.constructs.get(id).copied().flatten(),
+            let frame = Frame {
+                node,
+                depth,
+                entry,
+                in_function,
+                test,
             };
-            let scope_body = nested_scope
-                .then(|| node.child_by_field_name("body"))
-                .flatten();
-
-            let mut cursor = node.walk();
-            let mut nth = 0;
-            if cursor.goto_first_child() {
-                loop {
-                    let child = cursor.node();
-                    if child.is_named() {
-                        children.push((child, nth, cursor.field_name()));
-                        // A comment is no place: the places are of the code's own children.
-                        nth += usize::from(!child.is_extra());
-                    }
-                    if !cursor.goto_next_sibling() {
-                        break;
-                    }
-                }
-            }
-            for (child, nth, field) in children.drain(..).rev() {
-                let deeper = match construct {
-                    Some(construct) => {
-                        construct.body.hold(nth, field, child.kind())
-                            && !(child.kind_id() == node.kind_id()
-                                && !(construct.ternary && self.conditions.nested_ternaries)
-                                && construct
-                                    .chain
-                                    .as_ref()
-                                    .is_some_and(|chain| chain.hold(nth, field, child.kind())))
-                    }
-                    None if nested_scope => scope_body.is_none_or(|body| body.id() == child.id()),
-                    None => false,
-                };
-                stack.push(Frame {
-                    node: child,
-                    depth: depth + u32::from(deeper),
-                    entry,
-                    in_function,
-                    test,
-                });
-            }
+            self.push_children(frame, declares.is_some(), nested_scope, &mut stack);
         }
 
         let clean = !root.has_error();
-        let comments = if comments {
-            for (key, inside, weight) in before {
-                let at = index.get(&key).copied().or(inside);
-                add_to(&mut comment_weights, &mut comments_file, at, weight);
-            }
-            comment_weights.resize(entries.len(), 0.0);
-            // Test code's entries left out: their comments weigh nothing, and a test and a non-test entry of one
-            // name would be two of one name in the comments' report.
-            let entries: Vec<Entry> = entries
-                .iter()
-                .zip(comment_weights)
-                .filter(|(entry, _)| !entry.test)
-                .map(|(entry, weight)| Entry {
-                    weight,
-                    ..entry.clone()
-                })
-                .collect();
-            Weighed {
-                total: comments_file + entries.iter().map(|e| e.weight).sum::<f64>(),
-                file: comments_file,
-                file_tests: 0.0,
-                entries,
-                clean,
-            }
-        } else {
-            Weighed::none(clean)
+        let comments = match comments {
+            Some(comments) => comments.finish(&entries, clean),
+            None => Weighed::none(clean),
         };
+        let entries = entries.list;
         let total = file + file_tests + entries.iter().map(|e| e.weight).sum::<f64>();
         let code = Weighed {
             total,
@@ -512,6 +329,172 @@ impl<'c> Weigher<'c> {
             clean,
         };
         Ok((code, comments))
+    }
+
+    /// A node's category, if it weighs as one: an operator's by its kind (a plain `=` none, it weighs beside the
+    /// node's own: Go's assignment is a statement), else its kind's in the table, an early return a jump, a named
+    /// lambda a function and a free `default:` none.
+    fn category(
+        &self,
+        node: Node,
+        source: &[u8],
+        operator: Option<Operator>,
+        loop_body: bool,
+        declares: Option<ScopeKind>,
+    ) -> Option<Category> {
+        let id = node.kind_id() as usize;
+        match operator.filter(|op| *op != Operator::Assign) {
+            Some(Operator::Nullish) if self.conditions.nullish_operator => Some(Category::Operator),
+            Some(Operator::Logical | Operator::Nullish) => Some(Category::BoolOp),
+            Some(_) => Some(Category::Operator),
+            None if loop_body => Some(Category::Loop),
+            None if self.conditions.magic_numbers
+                && flag(&self.numbers, id)
+                && is_magic(&lang::text(node, source)) =>
+            {
+                Some(Category::Access)
+            }
+            None if (self.lang.exempt)(node, source) => None,
+            None => self
+                .categories
+                .get(id)
+                .copied()
+                .flatten()
+                .and_then(|category| {
+                    if flag(&self.returns, id) {
+                        if self.is_early_return(node, source) {
+                            Some(Category::Jump)
+                        } else if (self.lang.carried_return)(node) {
+                            None
+                        } else {
+                            Some(category)
+                        }
+                    } else if category == Category::Lambda && declares == Some(ScopeKind::Function)
+                    {
+                        Some(Category::Function)
+                    } else if category == Category::Case
+                        && self.conditions.free_default
+                        && (self.lang.default_case)(node, source)
+                    {
+                        None
+                    } else {
+                        Some(category)
+                    }
+                }),
+        }
+    }
+
+    /// A node's own weight at `depth`, its category's (each operator of a chain, an access by its place in its
+    /// row), a statement's it also is and a plain `=`'s beside it, its parameters' and a call's arguments'.
+    fn weight(
+        &self,
+        node: Node,
+        source: &[u8],
+        category: Option<Category>,
+        operator: Option<Operator>,
+        depth: u32,
+    ) -> f64 {
+        let assigns = self.conditions.assignments && operator == Some(Operator::Assign);
+        // An access weighs more the further it is in a row of them (`[accesses]`): `a.b.c` is `.b` at 0, `.c` at 1.
+        let row = match category {
+            Some(Category::Access) => self.accesses.factor_at(self.access_place(node, source)),
+            _ => 1.0,
+        };
+        // Each operator counts, one in a chain of them too (`a + b + c` is 2, `a = b = c` 2).
+        let times = match operator {
+            Some(_) if flag(&self.chains, node.kind_id() as usize) => {
+                lang::count_children(node, |_| true).saturating_sub(1)
+            }
+            _ => 1,
+        };
+        category
+            .map(|c| (c, times as f64 * row))
+            .into_iter()
+            .chain((self.lang.also_statement)(node).then_some((Category::Statement, 1.0)))
+            .chain(assigns.then_some((Category::Operator, 1.0)))
+            .map(|(c, n)| n * self.weights.weight(c) * self.nesting.factor_of(c, depth))
+            .sum::<f64>()
+            + self.parameters((self.lang.parameters)(node, source), depth)
+            + match category {
+                Some(Category::Call | Category::Constructor) => {
+                    self.arguments(lang::arguments(node), depth)
+                }
+                _ => 0.0,
+            }
+    }
+
+    /// Pushes `frame`'s node's named children on `stack`, to be visited next in their order, each inheriting
+    /// `frame`, one deeper where the node nests it. A node that `declares` a function or class (a named lambda)
+    /// nests as one, not as its construct: its body deeper when it is a `nested_scope` (declared in a function).
+    fn push_children<'t>(
+        &self,
+        frame: Frame<'t>,
+        declares: bool,
+        nested_scope: bool,
+        stack: &mut Vec<Frame<'t>>,
+    ) {
+        let node = frame.node;
+        let construct = if declares {
+            None
+        } else {
+            self.constructs
+                .get(node.kind_id() as usize)
+                .copied()
+                .flatten()
+        };
+        let holder = match construct {
+            Some(construct) => Some(Holder::Construct(construct)),
+            None => nested_scope.then(|| Holder::Scope(node.child_by_field_name("body"))),
+        };
+        let first = stack.len();
+        let mut cursor = node.walk();
+        let mut nth = 0;
+        if cursor.goto_first_child() {
+            loop {
+                let child = cursor.node();
+                if child.is_named() {
+                    let deeper = holder.is_some_and(|holder| {
+                        self.nests(holder, node, child, nth, cursor.field_name())
+                    });
+                    stack.push(Frame {
+                        node: child,
+                        depth: frame.depth + u32::from(deeper),
+                        ..frame
+                    });
+                    // A comment is no place: the places are of the code's own children.
+                    nth += usize::from(!child.is_extra());
+                }
+                if !cursor.goto_next_sibling() {
+                    break;
+                }
+            }
+        }
+        stack[first..].reverse();
+    }
+
+    /// Whether `holder` nests `node`'s child `child` (the `nth` of its code's children, of `field`) one deeper: a
+    /// construct's body does but a link of its chain (`else if`), a nested function's or class's body does (all of
+    /// its children with no body).
+    fn nests(
+        &self,
+        holder: Holder,
+        node: Node,
+        child: Node,
+        nth: usize,
+        field: Option<&str>,
+    ) -> bool {
+        match holder {
+            Holder::Construct(construct) => {
+                construct.body.hold(nth, field, child.kind())
+                    && !(child.kind_id() == node.kind_id()
+                        && !(construct.ternary && self.conditions.nested_ternaries)
+                        && construct
+                            .chain
+                            .as_ref()
+                            .is_some_and(|chain| chain.hold(nth, field, child.kind())))
+            }
+            Holder::Scope(body) => body.is_none_or(|body| body.id() == child.id()),
+        }
     }
 
     /// The text of a comment or a docstring, its markers stripped; `None` for any other node, for a comment of the
@@ -743,19 +726,6 @@ fn blank_between(a: Node, b: Node, source: &[u8]) -> bool {
     newlines(gap) + usize::from(source[..a.end_byte()].ends_with(b"\n")) >= 2
 }
 
-/// A comment's weight added to its entry's, or to the file's outside any.
-fn add_to(weights: &mut Vec<f64>, file: &mut f64, entry: Option<usize>, weight: f64) {
-    match entry {
-        Some(at) => {
-            if weights.len() <= at {
-                weights.resize(at + 1, 0.0);
-            }
-            weights[at] += weight;
-        }
-        None => *file += weight,
-    }
-}
-
 /// A kind's flag; `false` for a kind past the grammar's own (tree-sitter's error node).
 fn flag(flags: &[bool], id: usize) -> bool {
     flags.get(id).copied().unwrap_or(false)
@@ -763,6 +733,154 @@ fn flag(flags: &[bool], id: usize) -> bool {
 
 /// An entry's kind, qualified name and whether it is test code: what tells it from the others.
 type EntryKey = (ScopeKind, String, bool);
+
+/// The classes and functions met so far, in the order first met, each with its code's weight: an entry by its key.
+#[derive(Default)]
+struct Entries {
+    list: Vec<Entry>,
+    index: HashMap<EntryKey, usize>,
+}
+
+impl Entries {
+    /// The entry of `scope`, declared at `line` in `parent` (`None` for the file), made the first time its key is
+    /// met.
+    fn enter(&mut self, parent: Option<usize>, scope: Scope, test: bool, line: usize) -> usize {
+        let key = (scope.kind, self.qualified(parent, scope.name), test);
+        *self
+            .index
+            .entry(key)
+            .or_insert_with_key(|(kind, name, test)| {
+                self.list.push(Entry {
+                    kind: *kind,
+                    name: name.clone(),
+                    line,
+                    weight: 0.0,
+                    test: *test,
+                });
+                self.list.len() - 1
+            })
+    }
+
+    /// A name qualified by its enclosing entry's: `Outer.Inner.method`.
+    fn qualified(&self, parent: Option<usize>, name: String) -> String {
+        match parent {
+            Some(parent) => format!("{}.{}", self.list[parent].name, name),
+            None => name,
+        }
+    }
+}
+
+/// The comments' weights, gathered in the walk: outside any entry, by entry, and of the declarations they are right
+/// before (by their entry's key once it is there, else the entry they are in).
+struct Comments {
+    /// Where the file's header ends, by byte: its comments weigh nothing.
+    header: usize,
+    file: f64,
+    /// By entry index; shorter than the entries when the last ones have none.
+    weights: Vec<f64>,
+    before: Vec<(EntryKey, Option<usize>, f64)>,
+    /// The code a run of comments is before, by its node id, and what it declares: searched once for the run.
+    declares_last: Option<(usize, Option<(Scope, bool)>)>,
+}
+
+impl Comments {
+    fn new(header: usize) -> Comments {
+        Comments {
+            header,
+            file: 0.0,
+            weights: Vec::new(),
+            before: Vec::new(),
+            declares_last: None,
+        }
+    }
+
+    /// Weighs `node` if it is a comment or a docstring, into `entry`'s weight (`None` for the file's), or kept
+    /// aside for the declaration it is right before; a test declaration's comment weighs nothing.
+    fn add(
+        &mut self,
+        weigher: &Weigher,
+        node: Node,
+        source: &[u8],
+        entry: Option<usize>,
+        entries: &Entries,
+    ) {
+        let Some(text) = weigher.comment_text(node, source, self.header) else {
+            return;
+        };
+        let weight = weigher.counter.comment(&text);
+        // A docstring is its scope's, never the next declaration's.
+        let code = (weight > 0.0 && flag(&weigher.comments, node.kind_id() as usize))
+            .then(|| weigher.code_after(node, source))
+            .flatten();
+        let declared = code.and_then(|code| match &self.declares_last {
+            Some((id, declared)) if *id == code.id() => declared.clone(),
+            _ => {
+                let declared = weigher.declared_by(code, source);
+                self.declares_last = Some((code.id(), declared.clone()));
+                declared
+            }
+        });
+        match declared {
+            // Test code's comment, though before it.
+            Some((_, true)) => {}
+            Some((scope, false)) => {
+                let key = (scope.kind, entries.qualified(entry, scope.name), false);
+                self.before.push((key, entry, weight));
+            }
+            None => self.add_to(entry, weight),
+        }
+    }
+
+    /// A comment's weight added to its entry's, or to the file's outside any.
+    fn add_to(&mut self, entry: Option<usize>, weight: f64) {
+        match entry {
+            Some(at) => {
+                if self.weights.len() <= at {
+                    self.weights.resize(at + 1, 0.0);
+                }
+                self.weights[at] += weight;
+            }
+            None => self.file += weight,
+        }
+    }
+
+    /// The comments' weight, once the walk has made every entry: the code's entries with the comments' weights,
+    /// test code's left out (their comments weigh nothing, and a test and a non-test entry of one name would be
+    /// two of one name in the comments' report).
+    fn finish(mut self, entries: &Entries, clean: bool) -> Weighed {
+        for (key, inside, weight) in std::mem::take(&mut self.before) {
+            let at = entries.index.get(&key).copied().or(inside);
+            self.add_to(at, weight);
+        }
+        self.weights.resize(entries.list.len(), 0.0);
+        let list: Vec<Entry> = entries
+            .list
+            .iter()
+            .zip(self.weights)
+            .filter(|(entry, _)| !entry.test)
+            .map(|(entry, weight)| Entry {
+                weight,
+                ..entry.clone()
+            })
+            .collect();
+        Weighed {
+            total: self.file + list.iter().map(|e| e.weight).sum::<f64>(),
+            file: self.file,
+            file_tests: 0.0,
+            entries: list,
+            clean,
+        }
+    }
+}
+
+/// What a node's children nest in, one deeper than it.
+#[derive(Clone, Copy)]
+enum Holder<'t> {
+    /// A nesting construct's body.
+    Construct(&'static Nesting),
+    /// A function or class declared in a function: its body, all of its children with none.
+    Scope(Option<Node<'t>>),
+}
 
 /// A node to visit, with what it inherits from around it.
 struct Frame<'t> {
