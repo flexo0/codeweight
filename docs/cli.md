@@ -37,8 +37,9 @@ JSON instead of text; `--short`, the general one's alone, one line.
 - `--exclude <pattern>` (repeatable, `scan`, `show` and `diff`) leaves out more for one run, added to the weights
   file's `[files] exclude`, not in their place: a folder or two is left out without a weights file, and without
   copying the default excludes into one (a user's list replaces the defaults', [config.md](config.md)). A pattern
-  is an exclude's: a glob, or a folder ending in `/`, gitignore's form (`build/` at any depth, `src/gen/` or
-  `/build/` from the globs' root), as the shorter way to write `**/build/**`. It is what is weighed, so it comes
+  is an exclude's, a `.gitignore` line (`build/`, `*.gen.ts`, `/src/gen/`, `!keep.ts`): the syntax everyone
+  already writes, where a glob of our own (`*.py` matching at the root alone) left out less than it seemed to,
+  silently. It is what is weighed, so it comes
   after the command's own options and before the output's. A bad pattern is a usage error (exit 2).
 - Exit codes: 0 done, 1 an error (a bad path, revision or weights file), 2 a usage error, as is the convention, so a
   script tells a typo in an option from a missing file. `main` prints the error with its context chain

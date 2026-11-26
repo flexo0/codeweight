@@ -74,6 +74,9 @@ codeweight init                 write the default weights file to ./codeweight.t
 
 Each prints four numbers: code, comments, docs and tests (`--short`: the four on one line). `--code`,
 `--tests`, `--docs` or `--comments` prints that number alone, and with `-v` the functions behind it, heaviest first; `--json` the same as JSON.
+`--exclude <pattern>` leaves paths out, each pattern a `.gitignore` line (`build/`, `*.pb.go`, `/src/gen/`,
+`!keep.ts`), as are the weights file's `[files] exclude`. In a git repo, `scan` honours its `.gitignore`s too, so
+what git ignores isn't weighed.
 
 ## More
 

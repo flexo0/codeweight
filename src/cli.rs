@@ -113,8 +113,8 @@ struct Repo {
 /// What a run leaves out besides the weights file's excludes, the same for the three.
 #[derive(Args)]
 struct Excludes {
-    /// The paths to leave out besides the weights file's excludes: a folder ending in `/` (`build/` at any depth,
-    /// `src/gen/` from the repo's root), or a glob (`**/*.gen.ts`); repeatable
+    /// The paths to leave out besides the weights file's excludes, each a `.gitignore` line (`build/`, `*.gen.ts`,
+    /// `/src/gen/`, `!keep.ts`); repeatable
     #[arg(long = "exclude", value_name = "PATTERN", value_parser = exclude)]
     patterns: Vec<String>,
 }
@@ -129,7 +129,7 @@ impl Excludes {
 /// An `--exclude` checked, a bad one a usage error.
 fn exclude(pattern: &str) -> Result<String, String> {
     source::exclude(pattern)
-        .map(|_| pattern.to_string())
+        .map(|()| pattern.to_string())
         .map_err(|error| format!("{error:#}"))
 }
 

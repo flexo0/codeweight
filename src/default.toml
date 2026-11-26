@@ -72,10 +72,11 @@ function_words = [      # whatever their case; a list of one's own replaces this
 ]
 
 [files]
-# an exclude ending in / is a folder: build/ at any depth, src/gen/ or /build/ from the root; --exclude adds more
+# each a .gitignore line: build/ a folder at any depth, *.pb.go at any depth, /src/gen/ from the root, ! takes back;
+# --exclude adds more
 exclude = [
-    "**/node_modules/**", "**/build/**", "**/target/**", "**/generated/**", "**/vendor/**", "**/*.d.ts",
-    "**/*.min.js", "**/*.pb.go", "**/zz_generated*.go",
+    "node_modules/", "build/", "target/", "generated/", "vendor/", "*.d.ts", "*.min.js", "*.pb.go",
+    "zz_generated*.go",
 ]
 test_globs = [
     "**/test/**", "**/tests/**", "**/__tests__/**", "**/*Test.java", "**/*Tests.java",

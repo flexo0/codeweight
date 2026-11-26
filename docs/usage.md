@@ -74,10 +74,12 @@ a function too) it is a lambda, its code the function's around it. A Rust method
 type (`T.M` for `func (r *T) M()`). A weight has at most two decimals.
 
 A folder is walked for the files in it: its `.gitignore` is honoured, hidden files, the `[files]` excludes and
-`--exclude`'s are left out (a file named on the command line is weighed even if excluded). An exclude is a glob, or
-a folder when it ends in `/`: `build/` is a folder of that name at any depth (`**/build/**`), `src/gen/` (with a
-`/` before its end) or `/build/` (a leading `/`) the one from the root (`src/gen/**`, `build/**`); a file named
-`build` isn't one. The globs are matched against a file's path from the root of its git repo (outside a repo, from
+`--exclude`'s are left out (a file named on the command line is weighed even if excluded). An exclude is a line of
+a `.gitignore`, read as git reads it: without a slash it matches at any depth (`*.pb.go`, `out` a file or a
+folder), a `/` at its end makes it a folder only (`build/`), one at its start or before its end anchors it to the
+root (`/build/`, `src/gen/`), `*` stays within a path's part and `**` crosses them, and a `!` takes back what an
+earlier line left out (`!src/gen/keep.ts`), though not a path under an excluded folder; the `[files]` excludes
+come first, then `--exclude`'s. The excludes and the globs are matched against a file's path from the root of its git repo (outside a repo, from
 the current folder, or from the folder given when the path is outside the current one), whichever folder is
 scanned: `codeweight scan src --exclude src/gen/`. The code leaves the test files (`test_globs`) and a Rust file's
 tests out, the tests are only them. A file the docs globs match (`docs_globs`) is docs alone: neither the

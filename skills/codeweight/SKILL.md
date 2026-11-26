@@ -33,7 +33,8 @@ Options: `--json` (JSON; without a flag `{code, comments, docs, tests, warnings}
 with `--code`, `--tests`, `--docs` or `--comments` the whole report: `total`, `rows`, `warnings`, a commit's rows with `before`,
 `after`, `delta`, `status`, and its `from` / `to` the hashes, `to` null for `diff`'s uncommitted changes).
 `--exclude <pattern>` (`scan`, `show`, `diff`; repeatable): leave out more besides the weights file's excludes,
-a folder ending in `/` (`gen/` at any depth, `src/gen/` from the repo's root) or a glob (`**/*.gen.ts`).
+each a `.gitignore` line (`gen/` a folder at any depth, `*.gen.ts` at any depth, `/src/gen/` from the repo's root,
+`!keep.ts` taken back, though not inside an excluded folder).
 `-v`: the warnings (syntax errors, unreadable folders) on stderr; with `--code`, `--tests`, `--docs` or
 `--comments`, the whole report. With `--code`, `--tests`, `--docs` or `--comments` only: `--top N` (only the first N lines), `--by file`
 (files instead of functions); `--top` and `--by` imply `-v`. Without them, these are a usage error, as `--short`
