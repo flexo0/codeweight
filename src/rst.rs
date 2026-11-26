@@ -95,7 +95,7 @@ fn text_line(runs: &mut Runs, line: &str, indent: usize) -> Block {
         return Block::Text;
     }
     if indent == 0 && is_adornment(rest) {
-        rest.chars().for_each(|c| runs.markup(c));
+        runs.markup(rest);
         runs.end();
         return Block::Text;
     }
@@ -104,8 +104,7 @@ fn text_line(runs: &mut Runs, line: &str, indent: usize) -> Block {
         return Block::Doctest;
     }
     if rest == "::" {
-        runs.markup(':');
-        runs.markup(':');
+        runs.markup("::");
         runs.end();
         return Block::Code { indent };
     }
@@ -140,8 +139,7 @@ fn explicit(runs: &mut Runs, after: &str, indent: usize) -> Block {
             empty: false,
         };
     }
-    runs.markup('.');
-    runs.markup('.');
+    runs.markup("..");
     runs.end();
     if target {
         prose(runs, after, false);
@@ -159,16 +157,9 @@ fn explicit(runs: &mut Runs, after: &str, indent: usize) -> Block {
         prose(runs, after, false);
         return Block::Text;
     };
-    for c in after[..name].chars() {
-        if c == ':' {
-            runs.markup(c);
-        } else {
-            runs.push(c);
-        }
-    }
+    colons_markup(runs, &after[..name]);
     runs.end();
-    runs.markup(':');
-    runs.markup(':');
+    runs.markup("::");
     prose(runs, &after[name + 2..], false);
     if CODE_DIRECTIVES.contains(&&after[..name]) {
         Block::Options { indent }
@@ -277,7 +268,7 @@ fn prose(runs: &mut Runs, text: &str, field: bool) {
             continue;
         }
         if c == ':' && (at == start || Some(at) == field_end) && field_end.is_some() {
-            runs.markup(c);
+            runs.markup(":");
             at += 1;
             continue;
         }
@@ -285,13 +276,7 @@ fn prose(runs: &mut Runs, text: &str, field: bool) {
             && !runs.in_word()
             && let Some(end) = role_end(rest)
         {
-            for c in rest[..end].chars() {
-                if c == ':' {
-                    runs.markup(c);
-                } else {
-                    runs.push(c);
-                }
-            }
+            colons_markup(runs, &rest[..end]);
             at += end;
             continue;
         }
@@ -326,6 +311,17 @@ fn prose(runs: &mut Runs, text: &str, field: bool) {
         }
         runs.push(c);
         at += c.len_utf8();
+    }
+}
+
+/// A directive's or a role's name (`py:function`, `:ref:`), its colons markup.
+fn colons_markup(runs: &mut Runs, name: &str) {
+    for c in name.chars() {
+        if c == ':' {
+            runs.markup(":");
+        } else {
+            runs.push(c);
+        }
     }
 }
 

@@ -300,9 +300,9 @@ impl<'a> Runs<'a> {
         self.push_as(c, false);
     }
 
-    /// One more character that is markup, a symbol run's whatever it is: reST's `..` and `::`, a role's `:`.
-    pub(crate) fn markup(&mut self, c: char) {
-        self.push_as(c, true);
+    /// More characters that are markup, a symbol run's whatever they are: reST's `..` and `::`, a role's `:`.
+    pub(crate) fn markup(&mut self, text: &str) {
+        text.chars().for_each(|c| self.push_as(c, true));
     }
 
     fn push_as(&mut self, c: char, markup: bool) {
