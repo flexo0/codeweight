@@ -130,7 +130,7 @@ pub fn from_commit(
                 .path
                 .components()
                 .any(|c| c.as_os_str().to_string_lossy().starts_with('.'));
-            if hidden || matchers.excluded(&side.path, false) {
+            if hidden || matchers.excluded(&side.path, false, Path::new("")) {
                 return None;
             }
             let (kind, test) = matchers.kind(&side.path, &side.path)?;
@@ -238,10 +238,10 @@ pub fn from_paths(paths: &[PathBuf], files: &Files) -> Result<Input> {
         let walk = WalkBuilder::new(path)
             .sort_by_file_name(|a, b| a.cmp(b))
             .filter_entry(move |entry| {
-                // An excluded folder isn't walked; the folder given always is.
+                // An excluded folder isn't walked; the folder given always is, though excluded itself.
                 entry.depth() == 0
                     || !entry.file_type().is_some_and(|t| t.is_dir())
-                    || !walk_matchers.excluded(&walk_base.key(entry.path()), true)
+                    || !walk_matchers.excluded(&walk_base.key(entry.path()), true, &walk_base.key)
             })
             .build();
         for entry in walk {
@@ -262,7 +262,7 @@ pub fn from_paths(paths: &[PathBuf], files: &Files) -> Result<Input> {
                 continue;
             }
             let key = base.key(entry.path());
-            if matchers.excluded(&key, false) {
+            if matchers.excluded(&key, false, &base.key) {
                 continue;
             }
             input.add(entry.path(), &key, &matchers, &mut seen);
@@ -329,13 +329,16 @@ impl Matchers {
         })
     }
 
-    /// Whether the excludes leave out the path `key` (a folder's if `is_dir`), as git ignores it: under an excluded
-    /// folder, always (a `!` can't take it back, git never looks inside); else as the last line that matches it says.
-    fn excluded(&self, key: &Path, is_dir: bool) -> bool {
+    /// Whether the excludes leave out the path `key` (a folder's if `is_dir`), found under the folder `from` (the
+    /// key of a folder given, empty for the root), as git ignores it: under an excluded folder below `from`, always
+    /// (a `!` can't take it back, git never looks inside); else as the last line that matches it says. The folder
+    /// given and those above it aren't matched, so one named on the command line is walked though excluded.
+    fn excluded(&self, key: &Path, is_dir: bool, from: &Path) -> bool {
         let ignored =
             |path: &Path, is_dir| matches!(self.exclude.matched(path, is_dir), Match::Ignore(_));
         key.ancestors()
             .skip(1)
+            .take_while(|folder| *folder != from && folder.starts_with(from))
             .filter(|folder| !folder.as_os_str().is_empty())
             .any(|folder| ignored(folder, true))
             || ignored(key, is_dir)
@@ -731,7 +734,7 @@ mod tests {
             &[],
         ))
         .unwrap();
-        let excluded = |path: &str| matchers.excluded(Path::new(path), false);
+        let excluded = |path: &str| matchers.excluded(Path::new(path), false, Path::new(""));
         // No slash: at any depth, a file or a folder; a slash at its end: a folder only.
         for path in [
             "a.log",
@@ -744,8 +747,8 @@ mod tests {
             assert!(excluded(path), "{path}");
         }
         assert!(!excluded("x/build.py"));
-        assert!(!matchers.excluded(Path::new("x/build"), false));
-        assert!(matchers.excluded(Path::new("x/build"), true));
+        assert!(!matchers.excluded(Path::new("x/build"), false, Path::new("")));
+        assert!(matchers.excluded(Path::new("x/build"), true, Path::new("")));
         // A slash at its start or before its end: from the root.
         assert!(excluded("gen/a.py") && excluded("src/tmp/a.py"));
         assert!(!excluded("x/gen/a.py") && !excluded("x/src/tmp/a.py"));
@@ -793,6 +796,39 @@ mod tests {
         let file = root.join("gen/a.ts");
         let input = from_paths(&[file.clone(), file], &files(&["**/gen/**"], &[])).unwrap();
         assert_eq!(found(&input, root), vec!["gen/a.ts".to_string()]);
+    }
+
+    #[test]
+    fn a_folder_given_is_walked_though_excluded_the_excludes_under_it_still_apply() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        fs::create_dir(root.join(".git")).unwrap();
+        write(
+            root,
+            &[
+                "build/proj/a.py",
+                "build/proj/src/b.py",
+                "build/proj/src/c.d.ts",
+                "build/proj/node_modules/d.js",
+                "build/proj/build/e.py",
+                "gen/f.ts",
+            ],
+        );
+        let excludes = files(&["build/", "node_modules/", "*.d.ts", "gen/**"], &[]);
+        let input = from_paths(&[root.join("build/proj")], &excludes).unwrap();
+        assert_eq!(
+            found(&input, root),
+            vec![
+                "build/proj/a.py".to_string(),
+                "build/proj/src/b.py".to_string()
+            ]
+        );
+        // Each file under it a line matches itself is left out still.
+        let input = from_paths(&[root.join("gen")], &excludes).unwrap();
+        assert!(found(&input, root).is_empty());
+        // From the root, the excluded folder isn't walked.
+        let input = from_paths(&[root.to_path_buf()], &excludes).unwrap();
+        assert!(found(&input, root).is_empty());
     }
 
     #[cfg(unix)]

@@ -26,7 +26,11 @@ and their weights file, the README and the license; `exclude` in `Cargo.toml` le
 URLs, which work from crates.io too. The grammars are C, built by their crates' `cc`: building, `cargo install` from
 crates.io as well, needs a C compiler.
 
-- `source` (built): a file given is weighed as is, though an exclude matches it; a folder is walked by `ignore`, its
+- `source` (built): a file given is weighed as is, though an exclude matches it; a folder given is walked though
+  it, or a folder above it, is excluded (`scan build/proj`, or `scan` run in it), as `ignore` walks a gitignored
+  folder given: the excludes match from it down, it and the folders above it not matched
+  (`Matchers::excluded`'s `from`), though a line that matches a file itself (`build/**`) still leaves it out (a
+  folder named weighed `total 0`, silently, before); a folder is walked by `ignore`, its
   `.gitignore`s (and `.ignore`s, the global gitignore) honoured, hidden files and folders left out, each folder's
   entries in the order of their names, so the walk is the same on every run. The excludes (the weights file's, then
   `--exclude`'s) are the lines of one `.gitignore`, matched by `ignore`'s own `Gitignore` from the globs' root, so

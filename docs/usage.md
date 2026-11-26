@@ -74,7 +74,9 @@ a function too) it is a lambda, its code the function's around it. A Rust method
 type (`T.M` for `func (r *T) M()`). A weight has at most two decimals.
 
 A folder is walked for the files in it: its `.gitignore` is honoured, hidden files, the `[files]` excludes and
-`--exclude`'s are left out (a file named on the command line is weighed even if excluded). An exclude is a line of
+`--exclude`'s are left out (a file named on the command line is weighed even if excluded; a folder named, or the
+current one, is walked even if it or a folder above it is excluded, `scan build/proj`, the excludes matched from it
+down). An exclude is a line of
 a `.gitignore`, read as git reads it: without a slash it matches at any depth (`*.pb.go`, `out` a file or a
 folder), a `/` at its end makes it a folder only (`build/`), one at its start or before its end anchors it to the
 root (`/build/`, `src/gen/`), `*` stays within a path's part and `**` crosses them, and a `!` takes back what an
