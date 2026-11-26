@@ -49,9 +49,10 @@ pub fn resolve(repo: &Path, spec: &str) -> Result<Range> {
     }
     let to = commit(repo, spec)?;
     // From the commit object itself, not `git rev-list --parents`: that follows a shallow clone's grafts, which
-    // make the commit at its boundary look like a root, its whole tree added.
-    let object = run(repo, &["cat-file", "commit", &to])?;
-    let from = first_parent(&object).map(str::to_string);
+    // make the commit at its boundary look like a root, its whole tree added. As bytes: its author and message
+    // may be in any encoding (a header's `encoding`, or none at all).
+    let object = run_bytes(repo, &["cat-file", "commit", &to])?;
+    let from = first_parent(&object);
     if let Some(parent) = &from {
         let there = git(repo)
             .args(["cat-file", "-e", &format!("{parent}^{{commit}}")])
@@ -69,12 +70,12 @@ pub fn resolve(repo: &Path, spec: &str) -> Result<Range> {
 }
 
 /// A commit object's first parent: its first `parent` header, before the blank line that ends the headers.
-fn first_parent(object: &str) -> Option<&str> {
+fn first_parent(object: &[u8]) -> Option<String> {
     object
-        .lines()
+        .split(|&b| b == b'\n')
         .take_while(|line| !line.is_empty())
-        .find_map(|line| line.strip_prefix("parent "))
-        .map(str::trim)
+        .find_map(|line| line.strip_prefix(b"parent "))
+        .map(|parent| String::from_utf8_lossy(parent.trim_ascii()).into_owned())
 }
 
 /// The commit a revision names, as its full hash.
@@ -101,11 +102,12 @@ fn commit(repo: &Path, rev: &str) -> Result<String> {
 /// the tree written from the copy), so the repo's own index isn't touched; its blobs and trees are written to the
 /// repo's objects, unreferenced (`git gc` drops them).
 pub fn uncommitted(repo: &Path, staged: bool) -> Result<Range> {
-    let index = run(
+    // As bytes: the repo's folder may have a name that isn't UTF-8.
+    let index = run_bytes(
         repo,
         &["rev-parse", "--path-format=absolute", "--git-path", "index"],
     )?;
-    let index = PathBuf::from(index.trim_end_matches('\n'));
+    let index = path_of(index.strip_suffix(b"\n").unwrap_or(&index));
     let head = git(repo)
         .args(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"])
         .output()
@@ -411,12 +413,18 @@ mod tests {
 
     #[test]
     fn the_first_parent_is_the_first_parent_header() {
-        let merge = "tree t\nparent p1\nparent p2\nauthor a\n\nparent in the message\n";
-        assert_eq!(first_parent(merge), Some("p1"));
+        let merge = b"tree t\nparent p1\nparent p2\nauthor a\n\nparent in the message\n";
+        assert_eq!(first_parent(merge).as_deref(), Some("p1"));
         assert_eq!(
-            first_parent("tree t\nauthor a\n\nparent in the message\n"),
+            first_parent(b"tree t\nauthor a\n\nparent in the message\n"),
             None
         );
+    }
+
+    #[test]
+    fn a_commit_whose_author_and_message_aren_t_utf8_has_its_parent_read() {
+        let latin1 = b"tree t\nparent p1\nauthor J\xfcrgen <j@x> 1 +0000\n\nfix by J\xfcrgen\n";
+        assert_eq!(first_parent(latin1).as_deref(), Some("p1"));
     }
 
     #[test]

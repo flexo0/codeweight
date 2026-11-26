@@ -5,14 +5,17 @@ Built (`git`, `source::from_commit`, `report`):
 1. The two sides (`git::resolve`): a revision is `git rev-parse --verify <rev>^{commit}`, compared against its first
    parent (a merge too, so it shows what the merge brought in), the root commit against the empty tree. The parent is the commit object's first `parent` line (`git cat-file commit`), not
    `git rev-list --parents`: that follows a shallow clone's grafts, so the commit at its boundary (CI's depth-1
-   checkout) would look like a root and its whole tree added. A parent missing from the repo is an error that says
-   to fetch more history. `A..B` is the two revisions, an empty side `HEAD` as in git;
+   checkout) would look like a root and its whole tree added. The object is read as its bytes: its author and
+   message may be in any encoding (an `encoding` header's, or Latin-1 an older git kept as given:
+   spring-framework's commits of 2012-2014 by `Jürgen`). A parent missing from the repo is an error that says to
+   fetch more history. `A..B` is the two revisions, an empty side `HEAD` as in git;
    `A...B` (against the merge base) is an error, not silently read as `A..B`. A revision starting with `-` is an
    error, so it can't pass for an option.
    `diff` (`git::uncommitted`): `HEAD` (the empty tree in a repo with no commit) against a tree of the working
    tree, made by `git add -A` into a copy of the index (`GIT_INDEX_FILE`, in a temp folder of its own) and
-   `git write-tree`. So the untracked files are in it and the ignored ones aren't, renames are found between a
-   tracked file and an untracked one, the index's stat cache spares hashing the unchanged files, and the rest of
+   `git write-tree`, the index's path (`git rev-parse --git-path index`) read as its bytes, so a repo in a folder
+   whose name isn't UTF-8 works too. So the untracked files are in it and the ignored ones aren't, renames are
+   found between a tracked file and an untracked one, the index's stat cache spares hashing the unchanged files, and the rest of
    the pipeline is the one a commit goes through. The user's index is never touched; the blobs and trees go to the
    repo's objects, unreferenced, for `git gc`. `--staged` skips the `git add -A`: the tree is the index's own,
    written from its copy (`git write-tree` may update an index's cached trees, so not from the repo's own), the

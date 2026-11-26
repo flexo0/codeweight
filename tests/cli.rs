@@ -831,6 +831,46 @@ fn show_weighs_a_file_whose_name_isn_t_utf8() {
     );
 }
 
+#[cfg(target_os = "linux")]
+#[test]
+fn diff_works_in_a_repo_whose_folder_name_isn_t_utf8() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path().join(OsStr::from_bytes(b"caf\xe9"));
+    fs::create_dir(&repo).unwrap();
+    let init = Command::new("git")
+        .args(["init", "-q"])
+        .arg(&repo)
+        .output()
+        .unwrap();
+    assert!(init.status.success(), "{}", stderr(&init));
+    fs::write(repo.join("a.py"), F).unwrap();
+    let weights = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/weights.toml");
+    let output = codeweight(&repo, &["diff", "--code", "--config", weights]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(stdout(&output), "+103\n");
+}
+
+#[test]
+fn show_weighs_a_commit_whose_author_and_message_aren_t_utf8() {
+    let repo = Repo::new();
+    let parent = repo.commit(&[("a.py", Some(F))]);
+    fs::write(repo.path().join("a.py"), FG).unwrap();
+    repo.git(&["add", "-A"]);
+    let tree = repo.git(&["write-tree"]);
+    // Latin-1, as git kept an author and a message before UTF-8 was the rule (today's git re-encodes them, so the
+    // object is written as is).
+    let mut object = format!("tree {tree}\nparent {parent}\n").into_bytes();
+    object.extend_from_slice(
+        b"author J\xfcrgen <j@x> 1 +0000\ncommitter J\xfcrgen <j@x> 1 +0000\n\nfix by J\xfcrgen\n",
+    );
+    let file = repo.path().join(".git").join("object");
+    fs::write(&file, object).unwrap();
+    let commit = repo.git(&["hash-object", "-t", "commit", "-w", file.to_str().unwrap()]);
+    assert_eq!(repo.weigh(&[&commit]), "total +3\n+3  heavier  a.py  f\n");
+}
+
 #[test]
 fn show_at_a_shallow_clone_s_boundary_is_an_error_not_a_root() {
     let repo = Repo::new();
