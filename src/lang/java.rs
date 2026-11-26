@@ -103,8 +103,9 @@ const NESTING: &[Nesting] = &[
     Nesting::body("lambda_expression"),
 ];
 
-/// A switch's group or rule whose labels hold `default` (`default:`, `default ->`).
-fn default_case(node: Node, _: &[u8]) -> bool {
+/// A switch's group or rule whose labels hold `default` (`default:`, `default ->`, `case null, default`). Told by
+/// its text: the grammar parses the `default` of `case null, default` as an `identifier`, not a `default` token.
+fn default_case(node: Node, source: &[u8]) -> bool {
     let mut cursor = node.walk();
     node.named_children(&mut cursor)
         .filter(|child| child.kind() == "switch_label")
@@ -112,7 +113,7 @@ fn default_case(node: Node, _: &[u8]) -> bool {
             let mut cursor = label.walk();
             label
                 .children(&mut cursor)
-                .any(|token| token.kind() == "default")
+                .any(|token| text(token, source) == "default")
         })
 }
 
@@ -763,6 +764,25 @@ mod tests {
             on - off,
             (10.0 + 4.0 + 20.0 + 12.0) - (20.0 + 12.0) - 10.0 - 10.0
         );
+    }
+
+    #[test]
+    fn a_case_null_default_weighs_nothing_under_free_default() {
+        let (off, on) = testing::ternaries_and_defaults(
+            &JAVA,
+            "class A {
+               void f(Object o) {
+                 switch (o) {
+                   case String s: g(); break;       // a case 10 either way
+                   case null, default: g();         // on: the default case 10 weighs nothing
+                 }
+                 int y = switch (o) {
+                   case null, default -> 3;         // on: nothing either
+                 };
+               }
+             }",
+        );
+        assert_eq!(on - off, -10.0 - 10.0);
     }
 
     #[test]

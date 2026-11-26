@@ -127,10 +127,10 @@ all but `nullish_operator`, which there only ties 11 pairs more; `nested_ternari
   b else z`) nests, as one in its consequence does, rather than being a sibling, as an `else if` is: a nested
   ternary is one expression to unravel, where an `else if` chain is a list of statements. On by default.
 - `free_default`: a switch's or match's default case weighs nothing, as an `else` weighs nothing: Java's `default`
-  (`default:`, `default ->`), TS's and JS's `default:`, Go's `default:` (of a switch or a select), C's `default:`, a bare `_` of
-  Rust's `match` and Python's `match` (not one with a guard, `_ if x`). So a switch weighs less than the if-chain it
-  replaces as long as a `case` weighs less than a `branch`, which the tuning keeps. Its body still nests. On by
-  default.
+  (`default:`, `default ->`, `case null, default`), TS's and JS's `default:`, Go's `default:` (of a switch or a select),
+  C's `default:`, a bare `_` of Rust's `match` and Python's `match` (not one with a guard, `_ if x`). So a switch weighs
+  less than the if-chain it replaces as long as a `case` weighs less than a `branch`, which the tuning keeps. Its body
+  still nests. On by default.
 - `assignments`: a plain `=` assignment is an `operator` too, as a compound one (`x += 1`) is, beside its
   statement: writing a variable is something to follow, so `case 1 -> x = f();` weighs more than the switch
   expression's `case 1 -> f();`, and `int x; x = 1;` more than `int x = 1;`. Each counts: `a = b = c` is 2. A
