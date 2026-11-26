@@ -262,5 +262,9 @@ mod tests {
         let text = "/* one two */\nfunction f() {\n  /** three\n   * four */\n}\n";
         let comments = testing::comments(&JAVASCRIPT, text);
         assert_eq!((comments.file, function(&comments, "f")), (0.0, 2.0 + 2.0));
+        // A shebang and the header after it dropped.
+        let text = "#!/usr/bin/env node\n// Copyright words\n// more words\n\nfunction f() {\n  // inside\n}\n";
+        let comments = testing::comments(&JAVASCRIPT, text);
+        assert_eq!((comments.total, function(&comments, "f")), (1.0, 1.0));
     }
 }

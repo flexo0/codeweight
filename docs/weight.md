@@ -278,7 +278,8 @@ sits in, but it is text, not code: it weighs as a Markdown file's text does.
     file, it swells a scan and says nothing of the code; in a diff it shows only when a file is added. A doc comment
     touching the first declaration still weighs, and so do Rust's `//!` and `/*!` (the module's docs, as Python's
     module docstring is code and weighs too).
-  - A shebang (`#!/usr/bin/env python3`), a comment in Python's grammar.
+  - A shebang (`#!/usr/bin/env python3`), a comment in Python's grammar and one of JavaScript's, TypeScript's
+    and Rust's comment kinds, so a header after it is still the header.
   - Test code's comments: a test file's, a Rust `#[cfg(test)]` or `#[test]` item's, and one right before such an
     item. The tests' number is the test code's; its comments are in no number.
   - A docs file's: it has no comments number (0), its comments (`<!-- -->`, reST's `..`, AsciiDoc's `//`) staying nothing.

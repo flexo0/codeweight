@@ -71,7 +71,7 @@ pub(super) const BASE: Lang = Lang {
     default_case: |node, _| node.kind() == "switch_default",
     carried_return: |_| false,
     loop_body: |_| None,
-    comments: &["comment"],
+    comments: &["comment", "hash_bang_line"],
     attributes: &["decorator"],
     docstring: |_, _| None,
     inner_doc: |_| false,
@@ -679,5 +679,10 @@ class A {
         // A JSX comment.
         let comments = testing::comments(&TSX, "const a = <div>{/* in jsx */}</div>;\n");
         assert_eq!(comments.file, 2.0);
+        // A shebang and the header after it dropped.
+        let text = "#!/usr/bin/env node\n// Copyright words\n\nconst x = 1; // one\n";
+        for lang in [&TYPESCRIPT, &TSX] {
+            assert_eq!(testing::comments(lang, text).total, 1.0);
+        }
     }
 }

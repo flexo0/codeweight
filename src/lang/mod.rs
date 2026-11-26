@@ -95,7 +95,8 @@ pub struct Lang {
     /// category; its body, a child or not, is one level deeper than it.
     pub loop_body: for<'t> fn(Node<'t>) -> Option<Node<'t>>,
     /// The kinds of a comment, line or block, doc comment or not: its text, its markers stripped (`comment_text`),
-    /// weighs in the comments number.
+    /// weighs in the comments number. A shebang's kind too, though the grammar's is no comment: it starts the
+    /// file's header, and weighs nothing.
     pub comments: &'static [&'static str],
     /// The kinds of an attribute or a decorator that is its declaration's sibling (Rust's `#[...]`, a class
     /// member's decorator in TypeScript): a comment before it is still right before the declaration.

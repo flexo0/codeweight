@@ -35,7 +35,7 @@ pub static RUST: Lang = Lang {
     },
     carried_return: |_| false,
     loop_body: |_| None,
-    comments: &["line_comment", "block_comment"],
+    comments: &["line_comment", "block_comment", "shebang"],
     attributes: &["attribute_item"],
     docstring: |_, _| None,
     inner_doc: |node| {
@@ -731,5 +731,11 @@ fn t() {}
         assert_eq!(function(&comments, "f"), 2.0 + 1.0 + 2.0);
         assert_eq!(class(&comments, "S"), 3.0);
         assert_eq!(comments.total, 2.0 + 5.0 + 3.0);
+        // A shebang and the header after it dropped; an inner attribute (`#![...]`) is code, no shebang.
+        let text = "#!/usr/bin/env rust-script\n// Copyright words\n\nfn f() {\n    // inside\n}\n";
+        let comments = testing::comments(&RUST, text);
+        assert_eq!((comments.total, function(&comments, "f")), (1.0, 1.0));
+        let text = "#![allow(dead_code)]\n// Words\n\nfn f() {}\n";
+        assert_eq!(testing::comments(&RUST, text).file, 1.0);
     }
 }

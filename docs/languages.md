@@ -62,7 +62,8 @@ before `@Override` is the method's.
   (5 of React's, `ReactFiberHooks.js` among them). A Flow cast `(x: T)` is a parenthesized expression to the
   grammar, no cast under `[conditions] casts`.
 - Comments: `comment`, a line or a block, a JSX `{/* */}` too (`html_comment`, the legacy `<!--`, is none). A
-  class member's decorator is beside the member, so a comment before it is the member's.
+  class member's decorator is beside the member, so a comment before it is the member's. A shebang
+  (`hash_bang_line`) is a comment kind too, so a header after it is still the header; it weighs nothing.
 
 ## Python
 
@@ -139,7 +140,8 @@ before `@Override` is the method's.
 - Comments: `line_comment` and `block_comment`, doc comments (`///`, `/** */`, `//!`, `/*! */`) too; an attribute
   (`#[...]`) between a doc comment and its item keeps it the item's. `//!` and `/*!` document the module from inside,
   so at the file's top they are no header and weigh. A test item's comments weigh nothing, and so does a comment
-  right before one (`// ...` over `#[cfg(test)] mod tests`).
+  right before one (`// ...` over `#[cfg(test)] mod tests`). A shebang (`shebang`, not `#![...]`) is a comment
+  kind too, so a header after it is still the header; it weighs nothing.
 
 ## Go
 
