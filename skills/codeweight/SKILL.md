@@ -62,5 +62,8 @@ with one of them, two of them, or `--short` with `--json`.
 - Exit 0 on success (a pipe to `head` that quits early too, silent), 1 on an error (`error: ...` on stderr), 2 on a
   usage error (a bad command or option, options that don't go together).
 - `-C <path>` (`--repo <path>`): any path inside the repo, as `git -C`.
-- `codeweight: command not found`: install it, `cargo install codeweight` (needs a C compiler; or
+- `codeweight: command not found`: install it, on Linux or macOS
+  `curl -LsSf https://github.com/flexo0/codeweight/releases/latest/download/install.sh | sh` (into `~/.local/bin`),
+  on Windows `powershell -ExecutionPolicy Bypass -c "irm https://github.com/flexo0/codeweight/releases/latest/download/install.ps1 | iex"`;
+  or from source, `cargo install codeweight` (needs a C compiler; or
   `cargo install --git https://github.com/flexo0/codeweight`, `cargo install --path .` in a clone).

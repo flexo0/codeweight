@@ -1,5 +1,7 @@
-# On a `vX.Y.Z` tag: the release binaries, each archived with README.md and LICENSE, attached to a GitHub release of
-# that tag, its notes CHANGELOG.md's section for the version. How a release is made: docs/releasing.md.
+# On a `vX.Y.Z` tag: the release binaries, each archived with README.md and LICENSE beside its `.sha256`, and the
+# installers (install.sh, install.ps1) set to the tag, attached to a GitHub release of that tag, its notes
+# CHANGELOG.md's section for the version; then each installer is run from the release. How a release is made:
+# docs/releasing.md.
 name: release
 
 on:
@@ -57,11 +59,19 @@ jobs:
           cp "target/${{ matrix.target }}/release/$exe" README.md LICENSE "dist/$name/"
           cd dist
           if [[ "${{ matrix.target }}" == *windows* ]]; then
-            7z a "$name.zip" "$name"
+            archive="$name.zip"
+            7z a "$archive" "$name"
           else
-            tar -czf "$name.tar.gz" "$name"
+            archive="$name.tar.gz"
+            tar -czf "$archive" "$name"
           fi
           rm -r "$name"
+          # The hash, then the file's name, as sha256sum writes it; macOS has shasum only.
+          if command -v sha256sum >/dev/null; then
+            sha256sum "$archive" > "$archive.sha256"
+          else
+            shasum -a 256 "$archive" > "$archive.sha256"
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
@@ -89,4 +99,31 @@ jobs:
             echo "::error::CHANGELOG.md has no section for $version"
             exit 1
           fi
+          # The installers, each set to install this release by default.
+          sed 's/^release_tag=""$/release_tag="'"$GITHUB_REF_NAME"'"/' install.sh > dist/install.sh
+          sed "s/^    \$releaseTag = ''\$/    \$releaseTag = '$GITHUB_REF_NAME'/" install.ps1 > dist/install.ps1
+          grep -q "^release_tag=\"$GITHUB_REF_NAME\"$" dist/install.sh || { echo "::error::install.sh's release_tag not set"; exit 1; }
+          grep -q "^    \$releaseTag = '$GITHUB_REF_NAME'$" dist/install.ps1 || { echo "::error::install.ps1's \$releaseTag not set"; exit 1; }
           gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag
+
+  # Each installer run as a user runs it, from the release just made, and the binary it installs run.
+  installers:
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, macos-15-intel, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: install.sh
+        if: runner.os != 'Windows'
+        run: |
+          curl -LsSf "https://github.com/${{ github.repository }}/releases/download/$GITHUB_REF_NAME/install.sh" | sh
+          "$HOME/.local/bin/codeweight" --version | grep -qx "codeweight ${GITHUB_REF_NAME#v}"
+      - name: install.ps1
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          irm "https://github.com/${{ github.repository }}/releases/download/$env:GITHUB_REF_NAME/install.ps1" | iex
+          $version = & "$env:LOCALAPPDATA\Programs\codeweight\codeweight.exe" --version
+          if ($version -ne "codeweight $($env:GITHUB_REF_NAME.Substring(1))") { throw "installed $version" }

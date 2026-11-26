@@ -47,9 +47,22 @@ total +112.46
 
 ## Install
 
-A binary for Linux (x86_64, static), macOS (x86_64 and Apple silicon) or Windows (x86_64) from
-[the releases](https://github.com/flexo0/codeweight/releases/latest): unpack the archive for your platform and put
-`codeweight` (`codeweight.exe` on Windows) on your `PATH`.
+On Linux (x86_64) or macOS (x86_64 and Apple silicon), into `~/.local/bin`:
+
+```
+curl -LsSf https://github.com/flexo0/codeweight/releases/latest/download/install.sh | sh
+```
+
+On Windows (x86_64, or ARM64 by emulation), into `%LOCALAPPDATA%\Programs\codeweight`, added to your `Path`:
+
+```
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/flexo0/codeweight/releases/latest/download/install.ps1 | iex"
+```
+
+Each checks the archive's SHA-256 before installing; `CODEWEIGHT_VERSION` picks a version, `CODEWEIGHT_INSTALL_DIR`
+the folder. Or by hand: download the archive for your platform from
+[the releases](https://github.com/flexo0/codeweight/releases/latest), check it against its `.sha256`, unpack it and
+put `codeweight` (`codeweight.exe` on Windows) on your `PATH`.
 
 Or from source, with Rust 1.100 or later and a C compiler (the tree-sitter grammars are C, built from source with the
 crate):

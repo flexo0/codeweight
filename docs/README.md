@@ -15,4 +15,4 @@ building goes into its subject's file, in the same commit.
 - [languages.md](languages.md): what TypeScript, TSX and JavaScript's, Python's, Rust's, Go's and C's elements are, beyond the general rules
 - [architecture.md](architecture.md): the modules and dependencies, the inputs, the language tables, the engine
 - [commit.md](commit.md): how `show` and `diff` work out a commit's or a range's net delta
-- [releasing.md](releasing.md): the version (what a break is, which bump), CHANGELOG.md, the steps of a release, the binaries a tag builds
+- [releasing.md](releasing.md): the version (what a break is, which bump), CHANGELOG.md, the steps of a release, the binaries a tag builds, the installers

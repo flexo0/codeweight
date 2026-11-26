@@ -49,7 +49,7 @@ a change to the JSON, the CLI or the weights file changes its doc in the same co
    commit's).
 6. `git tag v0.2.0` on that commit and `git push origin master v0.2.0`. If the push is rejected (master moved),
    rebase and tag again before pushing, never move a pushed tag. The tag's push starts the release workflow (below):
-   watch it make the GitHub release.
+   watch it make the GitHub release and its `installers` job install it.
 7. `cargo publish`. A published version can't be published again: a mistake is the next patch (`cargo yank` takes a
    broken one off).
 
@@ -70,8 +70,9 @@ saves here:
 ## The binaries
 
 `.github/workflows/release.yml`, on a `v*` tag's push: a `--release` binary for each target, archived with README.md
-and LICENSE as `codeweight-vX.Y.Z-<target>.tar.gz` (`.zip` for Windows) holding a folder of the same name, and a
-GitHub release of the tag with the archives attached, its notes CHANGELOG.md's section for the version. It fails,
+and LICENSE as `codeweight-vX.Y.Z-<target>.tar.gz` (`.zip` for Windows) holding a folder of the same name, beside its
+`.sha256` (the hash, then the file's name, as `sha256sum` writes it), and a GitHub release of the tag with the
+archives, their `.sha256` and the installers attached, its notes CHANGELOG.md's section for the version. It fails,
 releasing nothing, when the tag isn't `v` and Cargo.toml's version or CHANGELOG.md has no section for it: the tagged
 commit is wrong then, and a pushed tag isn't moved, so the fix is the next patch's release. A run that failed on its
 own (a runner, the network) is rerun from GitHub.
@@ -92,4 +93,28 @@ own (a runner, the network) is rerun from GitHub.
   target added to another toolchain (the runner's stable) isn't the one cargo builds with.
 - The target triple is in the archive's name, so a tool downloading the binary for its platform maps to it plainly.
 
-Left: no version is tagged or published yet, 0.1.0 is the first, so the workflow hasn't run on GitHub yet.
+0.1.0 was the first release (2026-11-27), before the installers and the `.sha256`: the installers install 0.1.1 and
+later.
+
+## The installers
+
+`install.sh` (Linux, macOS; POSIX `sh`, curl or wget) and `install.ps1` (Windows; Windows PowerShell 5.1 or
+PowerShell 7) at the repo's root, so a user installs with one line, no Rust and no package manager:
+`curl -LsSf https://github.com/flexo0/codeweight/releases/latest/download/install.sh | sh`, or
+`irm .../install.ps1 | iex`. Each maps the OS and CPU to a target, downloads its archive and `.sha256`, refuses an
+archive whose SHA-256 differs, and copies the binary into `~/.local/bin` (`%LOCALAPPDATA%\Programs\codeweight` on
+Windows, added to the user's `Path`); `CODEWEIGHT_VERSION` and `CODEWEIGHT_INSTALL_DIR` change the version and the
+folder.
+
+- The release attaches them, `release_tag` (`$releaseTag`) set to its tag, so `releases/latest/download/install.sh`
+  is always the latest release's and installs it without asking GitHub's API; the repo's copies, with it empty, ask
+  the API for the latest. The `installers` job then runs each, as a user does, from the release just made, on Linux,
+  macOS ARM and Intel and Windows: a broken installer shows up at once, not in a user's report.
+- Written by hand, not by `cargo-dist`: it generates both, but replaces release.yml with its own workflow, its own
+  archive names, and setup of its own to keep up (as [Why by hand](#why-by-hand) says of the release tools).
+- `install.sh` doesn't touch the shell's rc files: it says when the folder isn't on the `PATH`, with the line to add.
+  On Windows, where few users edit the `Path` by hand, `install.ps1` adds it (`CODEWEIGHT_NO_MODIFY_PATH` to not).
+- Windows on ARM64 gets the x86_64 binary, which Windows 11 runs by emulation; Linux on ARM gets an error pointing at
+  `cargo install`, until the release builds `aarch64-unknown-linux-musl`.
+- The whole of `install.sh` is a `main` called on its last line, so a `curl | sh` cut short runs nothing;
+  `install.ps1` is a script block, since `irm | iex` runs it in the user's own session, where `exit` would close it.

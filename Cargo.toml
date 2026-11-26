@@ -10,9 +10,9 @@ authors = ["Dmitriy Churilov"]
 repository = "https://github.com/flexo0/codeweight"
 keywords = ["code-metrics", "complexity", "cognitive-complexity", "static-analysis", "tree-sitter"]
 categories = ["command-line-utilities", "development-tools"]
-# The design docs, the agents' skill, CI and the agents' notes are for the repo, not the crate; the README links to
-# docs/ on GitHub.
-exclude = ["/docs/", "/skills/", "/.github/", "/AGENTS.md", "/CLAUDE.md"]
+# The design docs, the agents' skill, CI, the installers and the agents' notes are for the repo, not the crate; the
+# README links to docs/ on GitHub.
+exclude = ["/docs/", "/skills/", "/.github/", "/install.sh", "/install.ps1", "/AGENTS.md", "/CLAUDE.md"]
 
 [dependencies]
 anyhow = "1"
