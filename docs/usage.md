@@ -41,7 +41,7 @@ code, comments, docs, tests: `code +15.5`, `comments +3`, `docs +17`, `tests -5`
 at most two decimals, a zero without a sign (`docs 0`). `--short` prints the four on one line in the same order, each
 rounded to a whole number, all four always there, the comments' `m` (messages): `c+15 m+3 d+17 t-5`, a zero part `d0`. The code's is the weight of the code, its tests left out. The tests' is
 the weight of the tests alone: the test files (`test_globs`), and in a Rust file the items marked `#[cfg(test)]`,
-`#[test]` or a runner's `#[tokio::test]` (any `#[...::test]`), all in them (a `mod tests` and its functions), and a
+`#[test]` or a runner's `#[tokio::test]` (any `#[...::test]`, with arguments or not), all in them (a `mod tests` and its functions), and a
 whole file marked `#![cfg(test)]`. The docs' is the weight of the Markdown, reST and AsciiDoc files (`docs_globs`), each by its words
 and its runs of other characters, punctuation or symbols (`[docs]`, see [weights-file.md](weights-file.md); a word 0.64,
 a function word in prose (`a`, `the`, `of`) and a punctuation run 0.32 and a symbol run 0.62 by default, so

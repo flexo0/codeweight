@@ -254,8 +254,8 @@ const ITEMS: &[&str] = &[
     "extern_crate_declaration",
 ];
 
-/// Test code: an item marked `#[cfg(test)]`, `#[test]` or a runner's `#[tokio::test]` (any `...::test`), the
-/// attribute among those right before it; a file marked `#![cfg(test)]`.
+/// Test code: an item marked `#[cfg(test)]`, `#[test]` or a runner's `#[tokio::test]` (any `...::test`, with
+/// arguments or not), the attribute among those right before it; a file marked `#![cfg(test)]`.
 fn tests(node: Node, source: &[u8]) -> bool {
     let mut cursor = node.walk();
     match node.kind() {
@@ -280,7 +280,8 @@ fn tests(node: Node, source: &[u8]) -> bool {
     }
 }
 
-/// Whether an attribute (`#[...]`, `#![...]`) is `test`, `...::test` or `cfg(test)`.
+/// Whether an attribute (`#[...]`, `#![...]`) is `cfg(test)`, or its path is `test` or `...::test`, whatever its
+/// arguments (`#[tokio::test(flavor = "multi_thread")]`).
 fn is_test_attribute(item: Node, source: &[u8]) -> bool {
     let mut cursor = item.walk();
     let Some(attribute) = item
@@ -289,8 +290,19 @@ fn is_test_attribute(item: Node, source: &[u8]) -> bool {
     else {
         return false;
     };
-    let text: String = text(attribute, source).split_whitespace().collect();
-    text == "test" || text.ends_with("::test") || text == "cfg(test)"
+    let whole: String = text(attribute, source).split_whitespace().collect();
+    if whole == "cfg(test)" {
+        return true;
+    }
+    let mut cursor = attribute.walk();
+    let Some(path) = attribute
+        .named_children(&mut cursor)
+        .find(|c| !c.is_extra())
+    else {
+        return false;
+    };
+    let path: String = text(path, source).split_whitespace().collect();
+    path == "test" || path.ends_with("::test")
 }
 
 /// A type's name without its type arguments, references and path: `Vec<T>`, `&mut a::Foo<'_>` are `Vec`, `Foo`.
@@ -579,6 +591,8 @@ mod tests {
              #[tokio::test]
              /// A doc comment between.
              async fn r() { }                        // r: 100, test code
+             #[tokio::test(flavor = \"multi_thread\")]
+             async fn a() { }                        // a: 100, test code, whatever the arguments
              #[cfg(not(test))]
              fn f() { }                              // f again, not test code: one f, 100 more",
         );
@@ -587,10 +601,11 @@ mod tests {
         assert_eq!(function(&code, "f"), 203.0);
         assert_eq!(code.file, 0.0);
         let tests = weighed.only(true);
-        assert_eq!(tests.total, 1.0 + 1000.0 + 103.0 + 100.0);
+        assert_eq!(tests.total, 1.0 + 1000.0 + 103.0 + 100.0 + 100.0);
         assert_eq!(class(&tests, "tests"), 1000.0);
         assert_eq!(function(&tests, "tests.t"), 103.0);
         assert_eq!(function(&tests, "r"), 100.0);
+        assert_eq!(function(&tests, "a"), 100.0);
         assert_eq!(tests.outside(), 1.0);
     }
 

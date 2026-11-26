@@ -128,7 +128,7 @@ before `@Override` is the method's.
   `let ... else { }` is no branch, its block not deeper; an `async`
   block is no lambda.
 - Tests inside a source file (the `tests` hook): an item marked `#[cfg(test)]`, `#[test]` or `#[...::test]`
-  (`tokio::test`), the attribute among the attributes and comments right before it, is test code with all in it
+  (`tokio::test`, its arguments or none: `#[tokio::test(flavor = "multi_thread")]`), the attribute among the attributes and comments right before it, is test code with all in it
   (a `mod tests`, its functions); a file marked `#![cfg(test)]` is all test code. Its entries are test entries
   (a test and a non-test one of one name are two, so `#[cfg(test)] fn f` and `#[cfg(not(test))] fn f` stay
   apart), its code outside any class the file's test code; the code's number (`scan`, `show`, `diff`,
