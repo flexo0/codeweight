@@ -309,91 +309,15 @@ impl Config {
 
     /// The weights of `lang`.
     pub fn lang(&self, lang: &Lang) -> &LangConfig {
-        // Every language of `lang::ALL` gets an entry in `from_value`.
+        // Every language of `lang::ALL` gets an entry in `lang_configs`.
         &self.languages[lang.name]
     }
 
     fn from_value(table: toml::Table) -> Result<Config> {
         let raw: RawConfig = toml::Value::Table(table).try_into()?;
-        check_non_negative("[nesting] factor", raw.nesting.factor)?;
-        check_non_negative("[parameters] step", raw.parameters.step)?;
-        check_non_negative("[parameters] max", raw.parameters.max)?;
-        check_non_negative("[accesses] step", raw.accesses.step)?;
-        check_non_negative("[accesses] max", raw.accesses.max)?;
-        check_non_negative("[docs] word", raw.docs.word)?;
-        check_non_negative("[docs] function_word", raw.docs.function_word)?;
-        for word in &raw.docs.function_words {
-            if word.is_empty() || !word.chars().all(char::is_alphanumeric) {
-                bail!("[docs] function_words `{word}` isn't a word: letters and digits only");
-            }
-        }
-        check_non_negative("[docs] punctuation", raw.docs.punctuation)?;
-        check_non_negative("[docs] symbol", raw.docs.symbol)?;
-        for glob in &raw.files.exclude {
-            source::exclude(glob).with_context(|| format!("[files] exclude `{glob}`"))?;
-        }
-        for glob in &raw.files.test_globs {
-            source::glob(glob).with_context(|| format!("[files] test_globs `{glob}`"))?;
-        }
-        for glob in &raw.files.docs_globs {
-            source::glob(glob).with_context(|| format!("[files] docs_globs `{glob}`"))?;
-        }
-
-        let mut base = [0.0; Category::ALL.len()];
-        let mut given = [false; Category::ALL.len()];
-        for (key, value) in &raw.weights {
-            let category = category("[weights]", key)?;
-            check_non_negative(&format!("[weights] {key}"), *value)?;
-            base[category.index()] = *value;
-            given[category.index()] = true;
-        }
-        if let Some(missing) = Category::ALL.iter().find(|c| !given[c.index()]) {
-            bail!("[weights] has no weight for `{}`", missing.name());
-        }
-
-        for name in raw.languages.keys() {
-            if lang::by_key(name).next().is_none() {
-                bail!(
-                    "unknown language `{name}` in [languages], expected one of: {}",
-                    lang::keys().join(", ")
-                );
-            }
-        }
-        let mut languages = BTreeMap::new();
-        for lang in lang::ALL {
-            let raw_lang = raw.languages.get(lang.key);
-            let mut weights = base;
-            let mut node_kinds = BTreeMap::new();
-            if let Some(raw_lang) = raw_lang {
-                let table = format!("[languages.{}.weights]", lang.key);
-                for (key, value) in &raw_lang.weights {
-                    let category = category(&table, key)?;
-                    check_non_negative(&format!("{table} {key}"), *value)?;
-                    weights[category.index()] = *value;
-                }
-                // A kind of any grammar of the key (TSX's JSX ones are TSX's only); a grammar without it ignores it.
-                let table = format!("[languages.{}.node_kinds]", lang.key);
-                let grammars: Vec<_> = lang::by_key(lang.key).map(|l| (l.grammar)()).collect();
-                for (kind, target) in &raw_lang.node_kinds {
-                    if !grammars.iter().any(|g| lang::is_named_kind(g, kind)) {
-                        bail!("unknown node kind `{kind}` in {table}");
-                    }
-                    let target = match target.as_str() {
-                        "none" => None,
-                        name => Some(category(&format!("{table} {kind}"), name)?),
-                    };
-                    node_kinds.insert(kind.clone(), target);
-                }
-            }
-            languages.insert(
-                lang.name,
-                LangConfig {
-                    weights,
-                    node_kinds,
-                },
-            );
-        }
-
+        check_values(&raw)?;
+        let base = base_weights(&raw.weights)?;
+        let languages = lang_configs(&raw.languages, &base)?;
         Ok(Config {
             nesting: raw.nesting,
             parameters: raw.parameters,
@@ -404,6 +328,101 @@ impl Config {
             languages,
         })
     }
+}
+
+/// Checks the values the weights file holds as is: its numbers 0 or above, its function words words, its globs
+/// globs.
+fn check_values(raw: &RawConfig) -> Result<()> {
+    check_non_negative("[nesting] factor", raw.nesting.factor)?;
+    check_non_negative("[parameters] step", raw.parameters.step)?;
+    check_non_negative("[parameters] max", raw.parameters.max)?;
+    check_non_negative("[accesses] step", raw.accesses.step)?;
+    check_non_negative("[accesses] max", raw.accesses.max)?;
+    check_non_negative("[docs] word", raw.docs.word)?;
+    check_non_negative("[docs] function_word", raw.docs.function_word)?;
+    for word in &raw.docs.function_words {
+        if word.is_empty() || !word.chars().all(char::is_alphanumeric) {
+            bail!("[docs] function_words `{word}` isn't a word: letters and digits only");
+        }
+    }
+    check_non_negative("[docs] punctuation", raw.docs.punctuation)?;
+    check_non_negative("[docs] symbol", raw.docs.symbol)?;
+    for glob in &raw.files.exclude {
+        source::exclude(glob).with_context(|| format!("[files] exclude `{glob}`"))?;
+    }
+    for glob in &raw.files.test_globs {
+        source::glob(glob).with_context(|| format!("[files] test_globs `{glob}`"))?;
+    }
+    for glob in &raw.files.docs_globs {
+        source::glob(glob).with_context(|| format!("[files] docs_globs `{glob}`"))?;
+    }
+    Ok(())
+}
+
+/// The base weights, `[weights]`: a weight for each category, every one given.
+fn base_weights(raw: &BTreeMap<String, f64>) -> Result<[f64; Category::ALL.len()]> {
+    let mut base = [0.0; Category::ALL.len()];
+    let mut given = [false; Category::ALL.len()];
+    for (key, value) in raw {
+        let category = category("[weights]", key)?;
+        check_non_negative(&format!("[weights] {key}"), *value)?;
+        base[category.index()] = *value;
+        given[category.index()] = true;
+    }
+    if let Some(missing) = Category::ALL.iter().find(|c| !given[c.index()]) {
+        bail!("[weights] has no weight for `{}`", missing.name());
+    }
+    Ok(base)
+}
+
+/// Each language's weights, by its name: its `[languages.<key>]` over the `base` weights, an entry for every
+/// language of `lang::ALL`.
+fn lang_configs(
+    raw: &BTreeMap<String, RawLang>,
+    base: &[f64; Category::ALL.len()],
+) -> Result<BTreeMap<&'static str, LangConfig>> {
+    for name in raw.keys() {
+        if lang::by_key(name).next().is_none() {
+            bail!(
+                "unknown language `{name}` in [languages], expected one of: {}",
+                lang::keys().join(", ")
+            );
+        }
+    }
+    let mut languages = BTreeMap::new();
+    for lang in lang::ALL {
+        let mut weights = *base;
+        let mut node_kinds = BTreeMap::new();
+        if let Some(raw_lang) = raw.get(lang.key) {
+            let table = format!("[languages.{}.weights]", lang.key);
+            for (key, value) in &raw_lang.weights {
+                let category = category(&table, key)?;
+                check_non_negative(&format!("{table} {key}"), *value)?;
+                weights[category.index()] = *value;
+            }
+            // A kind of any grammar of the key (TSX's JSX ones are TSX's only); a grammar without it ignores it.
+            let table = format!("[languages.{}.node_kinds]", lang.key);
+            let grammars: Vec<_> = lang::by_key(lang.key).map(|l| (l.grammar)()).collect();
+            for (kind, target) in &raw_lang.node_kinds {
+                if !grammars.iter().any(|g| lang::is_named_kind(g, kind)) {
+                    bail!("unknown node kind `{kind}` in {table}");
+                }
+                let target = match target.as_str() {
+                    "none" => None,
+                    name => Some(category(&format!("{table} {kind}"), name)?),
+                };
+                node_kinds.insert(kind.clone(), target);
+            }
+        }
+        languages.insert(
+            lang.name,
+            LangConfig {
+                weights,
+                node_kinds,
+            },
+        );
+    }
+    Ok(languages)
 }
 
 /// The weights file to use, the first found: `explicit` (`--config`), `codeweight.toml` in `cwd`, `codeweight.toml`
