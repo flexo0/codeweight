@@ -49,8 +49,9 @@ Built (`config`, `config::find`):
   does (`word` 1, `symbol` 10, `punctuation` 100, `function_word` 1000, `function_words` `the` and `of`).
 - `[files]` is for what is weighed ([architecture.md](architecture.md), `source`). `docs_globs` are the Markdown
   files, weighed for their docs weight alone, the docs' number of `scan`, `show` and `diff` ([cli.md](cli.md)):
-  a file they match is docs and no test though a test glob matches it too (a `README.md` under `tests/`), and
-  Markdown whatever its extension; one they don't match is of no kind codeweight reads, as a `.txt`. The excludes
+  a file they match is docs and no test, and Markdown whatever its extension; one a test glob matches too is of
+  no kind codeweight reads, in no number (a test's snapshot or golden file, a `README.md` under `tests/` too: test
+  prose, as test code's comments are in none); one they don't match is of no kind either, as a `.txt`. The excludes
   and hidden paths apply to docs as to code. A file on its own must hold the key, as it must `test_globs`; the
   engine's tests' is `["**/*.md"]`.
 
@@ -132,7 +133,7 @@ test_globs = [
     "**/*.test.js", "**/*.spec.js", "**/*.test.jsx", "**/*.spec.jsx", "**/*_test.go",
     "**/test_*.c", "**/*_test.c",
 ]
-docs_globs = ["**/*.md", "**/*.markdown"]   # docs alone, weighed by [docs], though a test glob matches them too
+docs_globs = ["**/*.md", "**/*.markdown"]   # docs alone, weighed by [docs]; one a test glob matches too is none
 ```
 
 Folder walks honour `.gitignore` too (the `ignore` crate).

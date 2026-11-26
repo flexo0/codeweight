@@ -40,8 +40,9 @@ crates.io as well, needs a C compiler.
   under a `build` or `tests` folder is neither excluded nor taken for tests whatever the path's spelling. A
   file the test globs match is a test file: the code's number leaves it out, the tests' keeps it and the files of a
   language with tests inside its source files (Rust's), each weighed for its tests alone. A file the docs globs match is
-  Markdown (`source::Kind`), docs alone and never a test file, though a test glob matches it too: the docs' number has
-  only such files, the code's and the tests' none (`source::Mode`: the code, the tests, the docs or the comments,
+  Markdown (`source::Kind`), docs alone and never a test file; one a test glob matches too is of no kind, in no
+  number (test prose: snapshots, golden files, as test code's comments are in none). The docs' number has
+  only the Markdown files, the code's and the tests' none (`source::Mode`: the code, the tests, the docs or the comments,
   whose files are the code's: a test file has no comments that weigh). The general command weighs every file once
   and splits it into the four (`Weighed::split` for the code and the tests, the comments' `Weighed` beside them);
   `--code`, `--tests`, `--docs` or `--comments` keeps only that one's files (`Input::keep`). A path is shown as given,

@@ -335,14 +335,16 @@ impl Matchers {
     }
 
     /// The kind of the file at `path` (its globs' path `key`), and whether it is a test file: a file the docs globs
-    /// match is Markdown and no test, though the test globs match it too; else its language's, by `path`; `None`
-    /// for a file of no kind codeweight reads.
+    /// match is Markdown and no test; one the test globs match too is of no kind (a test's snapshot or golden
+    /// file, a README in `tests/`: test prose, in no number as test code's comments); else its language's, by
+    /// `path`; `None` for a file of no kind codeweight reads.
     fn kind(&self, path: &Path, key: &Path) -> Option<(Kind, bool)> {
+        let test = self.tests.is_match(key);
         if self.docs.is_match(key) {
-            return Some((Kind::Markdown, false));
+            return (!test).then_some((Kind::Markdown, false));
         }
         let lang = lang::for_path(path)?;
-        Some((Kind::Code(lang), self.tests.is_match(key)))
+        Some((Kind::Code(lang), test))
     }
 }
 
@@ -558,7 +560,7 @@ mod tests {
     }
 
     #[test]
-    fn a_file_the_docs_globs_match_is_docs_alone_though_under_tests() {
+    fn a_file_the_docs_globs_match_is_docs_alone_and_under_a_test_glob_none() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         fs::create_dir(root.join(".git")).unwrap();
@@ -570,17 +572,19 @@ mod tests {
                 "build/b.md",
                 ".hidden/h.md",
                 "docs/guide.markdown",
-                "tests/notes.md",
+                "tests/README.md",
+                "src/__tests__/a.expect.md",
                 "tests/test_a.py",
             ],
         );
-        let mut globs = files(&["**/build/**"], &["**/tests/**"]);
+        let mut globs = files(&["**/build/**"], &["**/tests/**", "**/__tests__/**"]);
         globs.docs_globs = strings(&["**/*.md", "**/*.markdown"]);
         let scan = |globs: &Files, mode| {
             let mut input = from_paths(&[root.to_path_buf()], globs).unwrap();
             input.keep(mode);
             found(&input, root)
         };
+        // The Markdown files under a test glob are in no number, neither the docs' nor the tests'.
         assert_eq!(scan(&globs, Mode::Code), vec!["a.py".to_string()]);
         assert_eq!(
             scan(&globs, Mode::Tests),
@@ -591,20 +595,25 @@ mod tests {
             vec![
                 "README.md (docs)".to_string(),
                 "docs/guide.markdown (docs)".to_string(),
-                "tests/notes.md (docs)".to_string(),
             ]
         );
+        // Named on the command line, one is no more weighed.
+        let given = from_paths(&[root.join("tests/README.md")], &globs).unwrap();
+        assert!(given.items.is_empty());
 
         // Overridden: a Markdown file they don't match is read by no kind; one they match is docs, whatever its
         // extension.
-        globs.docs_globs = strings(&["tests/**"]);
-        assert_eq!(scan(&globs, Mode::Code), vec!["a.py".to_string()]);
-        assert!(scan(&globs, Mode::Tests).is_empty());
+        globs.docs_globs = strings(&["docs/**", "a.py"]);
+        assert!(scan(&globs, Mode::Code).is_empty());
+        assert_eq!(
+            scan(&globs, Mode::Tests),
+            vec!["tests/test_a.py (test)".to_string()]
+        );
         assert_eq!(
             scan(&globs, Mode::Docs),
             vec![
-                "tests/notes.md (docs)".to_string(),
-                "tests/test_a.py (docs)".to_string(),
+                "a.py (docs)".to_string(),
+                "docs/guide.markdown (docs)".to_string(),
             ]
         );
     }

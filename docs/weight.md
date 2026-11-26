@@ -142,7 +142,10 @@ all but `nullish_operator`, which there only ties 11 pairs more; `nested_ternari
 
 A Markdown file's weight is its docs weight, a number of its own, never summed with code's but on its scale
 (`markdown`, pure as the engine is: text in, weight out); the docs' number of `scan`, `show` and `diff` weighs it,
-a file the `[files] docs_globs` match ([cli.md](cli.md)):
+a file the `[files] docs_globs` match ([cli.md](cli.md)) and no test glob does: a Markdown file under the test
+globs (a test's snapshot or golden file, a README in `tests/`) is test prose, in no number, as test code's comments
+are (below). Such files can outweigh a project's own docs: React's compiler snapshots (`__tests__/**/*.expect.md`)
+were 318k of its 557k docs, Angular's test Markdown (`test/golden/*.md`, ...) about 317k of 851k.
 
 ```
 docs weight = words × word + function words × function_word

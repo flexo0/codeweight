@@ -83,7 +83,7 @@ test_globs = [
     "**/*.test.js", "**/*.spec.js", "**/*.test.jsx", "**/*.spec.jsx", "**/*_test.go",
     "**/test_*.c", "**/*_test.c",
 ]
-docs_globs = ["**/*.md", "**/*.markdown"]   # docs alone, weighed by [docs], though a test glob matches them too
+docs_globs = ["**/*.md", "**/*.markdown"]   # docs alone, weighed by [docs]; one a test glob matches too is none
 ```
 
 The defaults were first tuned on real Java, TypeScript and Python code (and re-checked on Rust) so that the heaviest

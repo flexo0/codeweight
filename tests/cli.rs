@@ -327,7 +327,7 @@ fn scan_docs_weighs_the_markdown_files_alone_and_scan_and_scan_tests_never_see_t
         ("README.md", "# Title\n\nSome words here.\n"),
         // `Hello`, `world`, `,` and `.`: 4.
         ("docs/guide.markdown", "Hello, world.\n"),
-        // Under `tests/`, still docs alone: `-`, `a`, `b` are 3.
+        // Under `tests/`, a test glob's: in no number, the docs' nor the tests'.
         ("tests/notes.md", "- a b\n"),
         ("node_modules/x/y.md", "# excluded\n"),
         (".hidden/h.md", "# hidden\n"),
@@ -342,14 +342,13 @@ fn scan_docs_weighs_the_markdown_files_alone_and_scan_and_scan_tests_never_see_t
 
     let docs = codeweight(root, &["scan", "--docs", "."]);
     assert!(docs.status.success(), "{}", stderr(&docs));
-    assert_eq!(stdout(&docs), "13\n");
+    assert_eq!(stdout(&docs), "10\n");
     let verbose = codeweight(root, &["scan", "--docs", ".", "-v"]);
     assert_eq!(
         stdout(&verbose),
-        "total 13\n\
+        "total 10\n\
          6  README.md  (file)\n\
-         4  docs/guide.markdown  (file)\n\
-         3  tests/notes.md  (file)\n"
+         4  docs/guide.markdown  (file)\n"
     );
     assert_eq!(
         stdout(&codeweight(root, &["scan", "--code", ".", "-v"])),
@@ -1041,11 +1040,13 @@ fn show_and_diff_print_the_four_deltas() {
         assert!(output.status.success(), "{}", stderr(&output));
         stdout(&output)
     };
-    // Under tests/weights.toml: F's f is 103, the test's too, FG's 106; `# A` and a word are 10 + 2.
+    // Under tests/weights.toml: F's f is 103, the test's too, FG's 106; `# A` and a word are 10 + 2; a Markdown
+    // file under the test globs (a snapshot) is in no number.
     let first = repo.commit(&[
         ("a.py", Some(F)),
         ("tests/test_a.py", Some(FG)),
         ("doc.md", Some("# A word\n")),
+        ("tests/snap.md", Some("# A word\n")),
     ]);
     assert_eq!(
         run(&["show", "HEAD"]),

@@ -78,9 +78,10 @@ a folder when it ends in `/`: `build/` is a folder of that name at any depth (`*
 `build` isn't one. The globs are matched against a file's path from the root of its git repo (outside a repo, from
 the current folder, or from the folder given when the path is outside the current one), whichever folder is
 scanned: `codeweight scan src --exclude src/gen/`. The code leaves the test files (`test_globs`) and a Rust file's
-tests out, the tests are only them. A file the docs globs match (`docs_globs`) is docs alone, though it is under `tests/`: neither the
+tests out, the tests are only them. A file the docs globs match (`docs_globs`) is docs alone: neither the
 code nor the tests weigh it, the docs only such files, each one line of `--docs`' report (its `(file)`, as it has no
-functions). Files are weighed in parallel; the output is the same on every run.
+functions). One the test globs match too (a test's snapshot or golden `.md`, a `README.md` under `tests/`) is in no
+number: test prose, as test code's comments are; narrow `test_globs` to keep such a README in the docs. Files are weighed in parallel; the output is the same on every run.
 
 A file that doesn't parse cleanly is still weighed, as tree-sitter recovered it, with a warning (above). A file in a language
 codeweight doesn't read is left out, never an error. A folder under the one scanned that can't be read (a

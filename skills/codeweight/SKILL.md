@@ -24,8 +24,8 @@ a fixed threshold.
 | `codeweight scan [<path>...] --code -v` | `total N`, then `<weight>  <path>  <name>` per function/class, heaviest first |
 | `codeweight show [<rev>] --code -v` (or `diff`, `--tests`, `--docs`, `--comments`) | `total +N`, then `<delta>  <status>  <path>  <name>` per changed function (`added`, `removed`, `heavier`, `lighter`); a Markdown file is one line, `(file)` |
 
-The tests are the test files and Rust `#[cfg(test)]` items; the docs the Markdown files (`*.md`, `*.markdown`, under
-`tests/` too); the comments the code's comments and Python docstrings (a file's top license header, a shebang and
+The tests are the test files and Rust `#[cfg(test)]` items; the docs the Markdown files (`*.md`, `*.markdown`; one under
+the test globs, a snapshot or a `tests/README.md`, in no number); the comments the code's comments and Python docstrings (a file's top license header, a shebang and
 test code's comments left out), each in its function, or the declaration's it is right before. The code, the tests,
 the docs and the comments are always four numbers, never summed: report them apart.
 
