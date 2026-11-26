@@ -105,6 +105,44 @@ fn scan_leaves_out_an_unsupported_file_and_warns_of_syntax_errors() {
     assert_eq!(stderr(&quiet), "");
 }
 
+#[cfg(unix)]
+#[test]
+fn scan_leaves_out_a_file_under_a_folder_that_can_t_be_read_and_weighs_the_rest() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir(dir.path().join("d")).unwrap();
+    fs::write(dir.path().join("d/A.java"), JAVA).unwrap();
+    let locked = dir.path().join("d/B.java");
+    fs::write(&locked, JAVA).unwrap();
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
+    if fs::read(&locked).is_ok() {
+        // Run as root, which reads it anyway.
+        return;
+    }
+    let output = codeweight(dir.path(), &["scan", "--code", "-v", "d"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(
+        stdout(&output),
+        "total 8.04\n   5  d/A.java  A (class)\n3.04  d/A.java  A.f\n\
+         warning: d/B.java can't be read (permission denied), left out\n"
+    );
+    let json = codeweight(dir.path(), &["scan", "--code", "--json", "d"]);
+    let report: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
+    assert_eq!(
+        report["warnings"],
+        serde_json::json!([{"path": "d/B.java", "kind": "unreadable", "side": null}])
+    );
+
+    // Named itself, it is an error.
+    let named = codeweight(dir.path(), &["scan", "d/B.java"]);
+    assert_eq!(named.status.code(), Some(1));
+    assert!(
+        stderr(&named).contains("reading d/B.java"),
+        "{}",
+        stderr(&named)
+    );
+}
+
 #[test]
 fn a_bad_path_or_weights_file_ends_with_exit_1() {
     let dir = tempfile::tempdir().unwrap();

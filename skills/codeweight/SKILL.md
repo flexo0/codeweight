@@ -35,7 +35,7 @@ with `--code`, `--tests`, `--docs` or `--comments` the whole report: `total`, `r
 `--exclude <pattern>` (`scan`, `show`, `diff`; repeatable): leave out more besides the weights file's excludes,
 each a `.gitignore` line (`gen/` a folder at any depth, `*.gen.ts` at any depth, `/src/gen/` from the repo's root,
 `!keep.ts` taken back, though not inside an excluded folder).
-`-v`: the warnings (syntax errors, unreadable folders) on stderr; with `--code`, `--tests`, `--docs` or
+`-v`: the warnings (syntax errors, unreadable folders and files) on stderr; with `--code`, `--tests`, `--docs` or
 `--comments`, the whole report. With `--code`, `--tests`, `--docs` or `--comments` only: `--top N` (only the first N lines), `--by file`
 (files instead of functions); `--top` and `--by` imply `-v`. Without them, these are a usage error, as `--short`
 with one of them, two of them, or `--short` with `--json`.

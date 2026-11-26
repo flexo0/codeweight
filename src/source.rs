@@ -40,14 +40,23 @@ pub struct Item {
     pub kind: Kind,
     /// Whether the test globs match it (never a docs file).
     pub test: bool,
+    /// Whether a walk of a folder given found it, not named itself on the command line.
+    pub walked: bool,
 }
 
 impl Item {
-    /// Its text, lossy where it isn't UTF-8.
-    pub fn text(&self) -> Result<String> {
-        let bytes =
-            fs::read(&self.path).with_context(|| format!("reading {}", self.path.display()))?;
-        Ok(lossy(bytes))
+    /// Its text, lossy where it isn't UTF-8. A file a walk found that can't be read (its mode, or gone since the
+    /// walk) is unreadable, left out with a warning as the walk's own unreadable paths are; a file given that
+    /// can't be read is an error.
+    pub fn text(&self) -> Result<Result<String, Unreadable>> {
+        match fs::read(&self.path) {
+            Ok(bytes) => Ok(Ok(lossy(bytes))),
+            Err(error) if self.walked => Ok(Err(Unreadable {
+                path: self.path.clone(),
+                reason: error.kind().to_string(),
+            })),
+            Err(error) => Err(error).with_context(|| format!("reading {}", self.path.display())),
+        }
     }
 }
 
@@ -59,15 +68,15 @@ fn lossy(bytes: Vec<u8>) -> String {
     }
 }
 
-/// The files to weigh and the paths under a folder given that couldn't be read, all in the order found; a file in
-/// no language codeweight reads is left out.
+/// The files to weigh and the paths under a folder given that the walk couldn't read, all in the order found; a
+/// file in no language codeweight reads is left out.
 pub struct Input {
     pub items: Vec<Item>,
     pub unreadable: Vec<Unreadable>,
 }
 
-/// A path under a folder given that the walk couldn't read (a folder it may not list, most often), left out with
-/// a warning so the rest is weighed.
+/// A path under a folder given that couldn't be read (a folder the walk may not list, most often, or a file read
+/// when weighed), left out with a warning so the rest is weighed.
 pub struct Unreadable {
     /// As the report shows it, as an item's.
     pub path: PathBuf,
@@ -219,8 +228,9 @@ fn excludes(patterns: &[String]) -> Result<Gitignore> {
 
 /// The files at `paths`: a file as given, a folder walked (its `.gitignore`s honoured, hidden files and the
 /// excluded ones left out, in the order of the names), the test files and the docs among them. A path given twice,
-/// or found under two given folders, is one item. A path under a folder given that can't be read is left out and
-/// listed as unreadable; a folder given that can't be read is an error.
+/// or found under two given folders, is one item. A folder under a folder given that can't be listed is left out
+/// and listed as unreadable (a file there that can't be read is, when its text is read: `Item::text`); a folder
+/// given that can't be read is an error.
 pub fn from_paths(paths: &[PathBuf], files: &Files) -> Result<Input> {
     let matchers = Matchers::new(files)?;
     let mut input = Input {
@@ -232,7 +242,7 @@ pub fn from_paths(paths: &[PathBuf], files: &Files) -> Result<Input> {
         let meta = fs::metadata(path).with_context(|| format!("reading {}", path.display()))?;
         let base = Base::of(path);
         if !meta.is_dir() {
-            input.add(path, &base.key(path), &matchers, &mut seen);
+            input.add(path, &base.key(path), false, &matchers, &mut seen);
             continue;
         }
         let walk_matchers = matchers.clone();
@@ -267,7 +277,7 @@ pub fn from_paths(paths: &[PathBuf], files: &Files) -> Result<Input> {
             if matchers.excluded(&key, false, &base.key) {
                 continue;
             }
-            input.add(entry.path(), &key, &matchers, &mut seen);
+            input.add(entry.path(), &key, true, &matchers, &mut seen);
         }
     }
     Ok(input)
@@ -282,7 +292,14 @@ impl Input {
             .retain(|item| weighed_for(item.test, item.kind, mode));
     }
 
-    fn add(&mut self, path: &Path, key: &Path, matchers: &Matchers, seen: &mut HashSet<PathBuf>) {
+    fn add(
+        &mut self,
+        path: &Path,
+        key: &Path,
+        walked: bool,
+        matchers: &Matchers,
+        seen: &mut HashSet<PathBuf>,
+    ) {
         let path = shown(path);
         if !seen.insert(path.clone()) {
             return;
@@ -290,7 +307,12 @@ impl Input {
         let Some((kind, test)) = matchers.kind(&path, key) else {
             return;
         };
-        self.items.push(Item { path, kind, test });
+        self.items.push(Item {
+            path,
+            kind,
+            test,
+            walked,
+        });
     }
 }
 

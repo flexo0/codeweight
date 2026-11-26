@@ -58,7 +58,7 @@ both, a code file toward the code and the comments.
 
 With `--code`, `--tests`, `--docs` or `--comments`, a command prints that number alone: `scan` its total (`4698.25`), `show` and
 `diff` their net delta, signed (`+42.5`, `-17`, `0`). `--verbose` (`-v`) prints its whole report instead, as
-`--top` and `--by` do. A file's syntax errors and a folder that can't be read are a warning: in the report, in the
+`--top` and `--by` do. A file's syntax errors and a folder or file that can't be read are a warning: in the report, in the
 JSON, and with `-v` on stderr after the four numbers (or `--short`'s line); the numbers alone, without `-v`, print
 none.
 
@@ -92,9 +92,9 @@ number: test prose, as test code's comments are; narrow `test_globs` to keep suc
 A file that doesn't parse cleanly is still weighed, as tree-sitter recovered it, with a warning (above); a
 JavaScript one is parsed again by TSX's grammar first, which reads most of Flow's types
 ([languages.md](languages.md)). A file in a language
-codeweight doesn't read is left out, never an error. A folder under the one scanned that can't be read (a
-root-owned docker volume, say) is left out with a warning and the rest weighed; a folder given that can't be read is
-an error.
+codeweight doesn't read is left out, never an error. A folder or file under the one scanned that can't be read
+(a root-owned docker volume, a file of mode 000, one deleted mid-scan) is left out with a warning and the rest
+weighed; a folder or file given that can't be read is an error.
 
 Exit codes: 0 done, 1 an error (a bad path, revision or weights file, or not in a git repo), 2 a usage error (an
 unknown command or option, options that don't go together). A reader that quits early (`codeweight scan -v . | head`)

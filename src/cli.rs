@@ -163,7 +163,7 @@ struct Output {
     /// The four numbers on one line, each rounded to a whole number, the comments' `m`: `c+15 m+3 d+17 t-5`
     #[arg(long, conflicts_with_all = ["json", "only"])]
     short: bool,
-    /// The warnings too (syntax errors, unreadable folders), to stderr; with `--code`, `--tests`, `--docs` or
+    /// The warnings too (syntax errors, unreadable paths), to stderr; with `--code`, `--tests`, `--docs` or
     /// `--comments`, the whole report: the total, a line per function (or file), the warnings
     #[arg(short, long)]
     verbose: bool,
@@ -264,24 +264,36 @@ fn scan(cli: &Cli, args: &ScanArgs) -> Result<()> {
         input.keep(mode);
     }
     let weighers = Weighers::new(&config);
-    // In parallel, each file read when weighed; `collect` keeps the input's order.
-    let (files, parts): (Vec<Weighted>, Vec<Parts>) = input
+    // In parallel, each file read when weighed; `collect` keeps the input's order. A file found in a walk that
+    // can't be read is left out, unreadable, after the walk's own.
+    let weighed = input
         .items
         .into_par_iter()
         .map(|item| {
-            let (weighed, parts) =
-                weighers.weigh(item.kind, &item.text()?, item.test, &item.path, mode)?;
-            Ok((
+            let text = match item.text()? {
+                Ok(text) => text,
+                Err(unreadable) => return Ok(Err(unreadable)),
+            };
+            let (weighed, parts) = weighers.weigh(item.kind, &text, item.test, &item.path, mode)?;
+            Ok(Ok((
                 Weighted {
                     path: item.path,
                     weighed,
                 },
                 parts,
-            ))
+            )))
         })
-        .collect::<Result<Vec<_>>>()?
-        .into_iter()
-        .unzip();
+        .collect::<Result<Vec<_>>>()?;
+    let (mut files, mut parts) = (Vec::<Weighted>::new(), Vec::<Parts>::new());
+    for file in weighed {
+        match file {
+            Ok((file, file_parts)) => {
+                files.push(file);
+                parts.push(file_parts);
+            }
+            Err(unreadable) => input.unreadable.push(unreadable),
+        }
+    }
     if mode.is_none() {
         let parts = parts.into_iter().sum();
         return output.parts(

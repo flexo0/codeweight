@@ -38,9 +38,11 @@ crates.io as well, needs a C compiler.
   (the defaults are folder lines, `node_modules/`, so they prune); a commit's paths are matched with their folders,
   an excluded folder winning over a later `!`, as git never looks inside one. `source::exclude` checks a line names
   a path (no blank, comment, bare `/` or `!`); the weights file's is checked when it is loaded, `--exclude`'s by clap
-  (a bad one exit 2). A file in no language codeweight reads is left out, unlisted. A path under a folder given that the walk can't read (a folder
-  it may not list) is left out and listed as unreadable, a warning, so one root-owned folder doesn't make the tree
-  unscannable; a folder given that can't be read is an error, as it leaves nothing to weigh. The globs (`*` and `?` within a path's part, `**` across parts)
+  (a bad one exit 2). A file in no language codeweight reads is left out, unlisted. A path under a folder given that can't be read (a folder the
+  walk may not list, or a file whose read fails when it is weighed: its mode, or gone since the walk) is left out
+  and listed as unreadable, a warning, so one root-owned folder or file doesn't make the tree unscannable, the
+  walk's paths first, then the files' in the walk's order; a folder or file given that can't be read is an error,
+  as it was asked for by name. The globs (`*` and `?` within a path's part, `**` across parts)
   are matched against a file's path from the root of the git repo it is in (the root `config::find` uses), so one
   glob means the same from any folder scanned, and later for `show` and `diff`; outside a repo, from the current folder when
   the path is in it, else from the folder given (a file given: its name), never with the folders above, so a project

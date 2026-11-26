@@ -88,14 +88,14 @@ the same order, `--config` last before `--help`.
   in no number, test prose as test code's comments are. A docs file
   is one line of the report, its `(file)` (`--by function` too: it has no functions), and never has a warning.
   With the numbers alone (the four, `--short`, or a specific one's total), the warnings (syntax errors, unreadable
-  folders) are left out, and the general one's go to stderr with `--verbose`: a file tree-sitter can't parse cleanly
+  paths) are left out, and the general one's go to stderr with `--verbose`: a file tree-sitter can't parse cleanly
   (a grammar behind the language, Java 25's statements before `super(...)`, say) is weighed near enough, and a
   warning on every run is noise, read when asked for. A specific command's JSON is its whole report, `--verbose` or not: a machine reads the
   fields it wants.
 - `scan`'s text with `--verbose`: the total, then one line per function or class (`<weight>  <path>  <name>`, a class as
   `Name (class)`, a file's code outside any class as `(file)`) or per file with `--by file`, heaviest first, then by
-  path and the shown name; then the warnings (syntax errors, then the folders that couldn't be read: `<path> can't be read (<why>), left
-  out`). A line that weighs 0 (at two
+  path and the shown name; then the warnings (syntax errors, then the folders and files under a folder given that couldn't be read: `<path> can't be read (<why>),
+  left out`). A line that weighs 0 (at two
   decimals) is left out. A file in no language codeweight reads isn't listed, in the text or the JSON: the
   report is of the code weighed.
 - `show`'s and `diff`'s text with `--verbose`: the total delta (`total +42.5`), then `<delta>  <status>  <path>  <name>` per line, a renamed
