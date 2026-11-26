@@ -87,20 +87,22 @@ pub struct Unreadable {
 impl Unreadable {
     /// The path an error of the walk of `folder` is about (`folder` when it names none), and why.
     fn of(error: &ignore::Error, folder: &Path) -> Unreadable {
-        fn path_of(error: &ignore::Error) -> Option<&Path> {
-            match error {
-                ignore::Error::WithPath { path, .. } => Some(path),
-                ignore::Error::WithDepth { err, .. } => path_of(err),
-                _ => None,
-            }
-        }
         Unreadable {
-            path: shown(path_of(error).unwrap_or(folder)),
+            path: shown(error_path(error).unwrap_or(folder)),
             reason: match error.io_error() {
                 Some(io) => io.kind().to_string(),
                 None => error.to_string(),
             },
         }
+    }
+}
+
+/// The path an error of a walk is about, if it names one.
+fn error_path(error: &ignore::Error) -> Option<&Path> {
+    match error {
+        ignore::Error::WithPath { path, .. } => Some(path),
+        ignore::Error::WithDepth { err, .. } => error_path(err),
+        _ => None,
     }
 }
 
@@ -227,8 +229,9 @@ fn excludes(patterns: &[String]) -> Result<Gitignore> {
 }
 
 /// The files at `paths`: a file as given, a folder walked (its `.gitignore`s honoured, hidden files and the
-/// excluded ones left out, in the order of the names), the test files and the docs among them. A path given twice,
-/// or found under two given folders, is one item. A folder under a folder given that can't be listed is left out
+/// excluded ones left out, in the order of the names), the test files and the docs among them. A file given twice,
+/// in any spelling (relative and absolute, through `..` or a symlink), or found under two given folders, is one
+/// item, shown as first found. A folder under a folder given that can't be listed is left out
 /// and listed as unreadable (a file there that can't be read is, when its text is read: `Item::text`); a folder
 /// given that can't be read is an error.
 pub fn from_paths(paths: &[PathBuf], files: &Files) -> Result<Input> {
@@ -242,7 +245,9 @@ pub fn from_paths(paths: &[PathBuf], files: &Files) -> Result<Input> {
         let meta = fs::metadata(path).with_context(|| format!("reading {}", path.display()))?;
         let base = Base::of(path);
         if !meta.is_dir() {
-            input.add(path, &base.key(path), false, &matchers, &mut seen);
+            if seen.insert(base.identity(path)) {
+                input.add(path, &base.key(path), false, &matchers);
+            }
             continue;
         }
         let walk_matchers = matchers.clone();
@@ -261,7 +266,7 @@ pub fn from_paths(paths: &[PathBuf], files: &Files) -> Result<Input> {
                 Ok(entry) => entry,
                 Err(error) if error.depth().is_some_and(|depth| depth > 0) => {
                     let unreadable = Unreadable::of(&error, path);
-                    if seen.insert(unreadable.path.clone()) {
+                    if seen.insert(base.identity(error_path(&error).unwrap_or(path))) {
                         input.unreadable.push(unreadable);
                     }
                     continue;
@@ -277,7 +282,9 @@ pub fn from_paths(paths: &[PathBuf], files: &Files) -> Result<Input> {
             if matchers.excluded(&key, false, &base.key) {
                 continue;
             }
-            input.add(entry.path(), &key, true, &matchers, &mut seen);
+            if seen.insert(base.identity(entry.path())) {
+                input.add(entry.path(), &key, true, &matchers);
+            }
         }
     }
     Ok(input)
@@ -292,18 +299,9 @@ impl Input {
             .retain(|item| weighed_for(item.test, item.kind, mode));
     }
 
-    fn add(
-        &mut self,
-        path: &Path,
-        key: &Path,
-        walked: bool,
-        matchers: &Matchers,
-        seen: &mut HashSet<PathBuf>,
-    ) {
+    /// The file at `path` (its globs' path `key`), if of a kind codeweight reads.
+    fn add(&mut self, path: &Path, key: &Path, walked: bool, matchers: &Matchers) {
         let path = shown(path);
-        if !seen.insert(path.clone()) {
-            return;
-        }
         let Some((kind, test)) = matchers.kind(&path, key) else {
             return;
         };
@@ -393,6 +391,8 @@ struct Base {
     given: PathBuf,
     /// The given path's own key.
     key: PathBuf,
+    /// The given path with no `..`, `.` or symlink in it, if it can be resolved.
+    canonical: Option<PathBuf>,
 }
 
 impl Base {
@@ -423,6 +423,18 @@ impl Base {
         Base {
             given: given.to_path_buf(),
             key,
+            canonical,
+        }
+    }
+
+    /// What tells the file at `path`, the given path or one under it, from another, whatever its spelling: its
+    /// canonical path (a walk follows no symlink under the folder given, so the given path's canonical one joined
+    /// with the rest is), else the path as shown.
+    fn identity(&self, path: &Path) -> PathBuf {
+        match (&self.canonical, path.strip_prefix(&self.given)) {
+            (Some(canonical), Ok(rest)) if rest.as_os_str().is_empty() => canonical.clone(),
+            (Some(canonical), Ok(rest)) => canonical.join(rest),
+            _ => shown(path),
         }
     }
 
@@ -820,6 +832,23 @@ mod tests {
         let file = root.join("gen/a.ts");
         let input = from_paths(&[file.clone(), file], &files(&["**/gen/**"], &[])).unwrap();
         assert_eq!(found(&input, root), vec!["gen/a.ts".to_string()]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_file_reached_through_a_symlink_or_dot_dot_is_one_item_shown_as_first_found() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write(root, &["s/t/x.py"]);
+        std::os::unix::fs::symlink(root.join("s"), root.join("link")).unwrap();
+        std::os::unix::fs::symlink(root.join("s/t/x.py"), root.join("x.py")).unwrap();
+        let globs = files(&[], &[]);
+        let input = from_paths(&[root.join("s"), root.join("link")], &globs).unwrap();
+        assert_eq!(found(&input, root), vec!["s/t/x.py".to_string()]);
+        let input = from_paths(&[root.join("link"), root.join("s")], &globs).unwrap();
+        assert_eq!(found(&input, root), vec!["link/t/x.py".to_string()]);
+        let input = from_paths(&[root.join("x.py"), root.join("s/t/../t/x.py")], &globs).unwrap();
+        assert_eq!(found(&input, root), vec!["x.py".to_string()]);
     }
 
     #[test]

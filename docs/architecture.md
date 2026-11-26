@@ -55,8 +55,9 @@ crates.io as well, needs a C compiler.
   whose files are the code's: a test file has no comments that weigh). The general command weighs every file once
   and splits it into the four (`Weighed::split` for the code and the tests, the comments' `Weighed` beside them);
   `--code`, `--tests`, `--docs` or `--comments` keeps only that one's files (`Input::keep`). A path is shown as given,
-  or the folder given joined with the path in it, without a leading `./`; a path given twice, or under two folders
-  given, is weighed once.
+  or the folder given joined with the path in it, without a leading `./`; a file given twice, in any spelling
+  (relative and absolute, through `..` or a symlink: the same canonical path, `Base::identity`), or under two folders
+  given, is weighed once, shown as first found.
 - `source` for `show` and `diff` (`from_commit`): a changed file's each side is kept as a walk of the repo's root would keep
   it: its path (from the root, as `git diff-tree` gives it) not hidden (no part starting with `.`), not excluded, in
   a language codeweight reads or docs, and, with `--code`, `--tests`, `--docs` or `--comments`, kept for that one as a scan keeps a file (never two in

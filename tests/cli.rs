@@ -144,6 +144,26 @@ fn scan_leaves_out_a_file_under_a_folder_that_can_t_be_read_and_weighs_the_rest(
 }
 
 #[test]
+fn scan_weighs_a_file_named_in_two_spellings_once_shown_as_first_named() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir_all(dir.path().join("s/t")).unwrap();
+    fs::write(dir.path().join("s/t/A.java"), JAVA).unwrap();
+    let absolute = dir.path().join("s").to_string_lossy().into_owned();
+    for args in [
+        &["scan", "--code", "-v", "s", &absolute][..],
+        &["scan", "--code", "-v", "./s", "s/../s/t/A.java"],
+    ] {
+        let output = codeweight(dir.path(), args);
+        assert!(output.status.success(), "{}", stderr(&output));
+        assert_eq!(
+            stdout(&output),
+            "total 8.04\n   5  s/t/A.java  A (class)\n3.04  s/t/A.java  A.f\n",
+            "{args:?}"
+        );
+    }
+}
+
+#[test]
 fn a_bad_path_or_weights_file_ends_with_exit_1() {
     let dir = tempfile::tempdir().unwrap();
     let missing = codeweight(dir.path(), &["scan", "Missing.java"]);
