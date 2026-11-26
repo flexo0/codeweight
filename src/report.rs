@@ -652,15 +652,11 @@ fn rounded(weight: f64) -> f64 {
     if rounded == 0.0 { 0.0 } else { rounded }
 }
 
-/// A weight as shown: at most two decimals, no trailing zeros.
+/// A weight as shown: at most two decimals, no trailing zeros, rounded as the JSON's (`rounded`).
 pub fn number(weight: f64) -> String {
-    let text = format!("{weight:.2}");
-    let text = text.trim_end_matches('0').trim_end_matches('.');
-    if text == "-0" {
-        "0".to_string()
-    } else {
-        text.to_string()
-    }
+    // `{:.2}` alone rounds a tie to even (`0.625` to `0.62`); `rounded` takes it away from zero, as the JSON does.
+    let text = format!("{:.2}", rounded(weight));
+    text.trim_end_matches('0').trim_end_matches('.').to_string()
 }
 
 /// A delta as shown: `+` before a gain.
@@ -685,6 +681,10 @@ mod tests {
         assert_eq!(number(1.0 / 3.0), "0.33");
         assert_eq!(number(-17.0), "-17");
         assert_eq!(number(0.0), "0");
+        assert_eq!(number(-0.001), "0");
+        assert_eq!(number(0.625), "0.63");
+        assert_eq!(number(-0.625), "-0.63");
+        assert_eq!(number(0.125), "0.13");
         assert_eq!(signed(42.5), "+42.5");
         assert_eq!(signed(-17.0), "-17");
         assert_eq!(signed(0.001), "0");
