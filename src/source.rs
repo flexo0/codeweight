@@ -111,10 +111,12 @@ pub struct Changed {
     pub after: Option<Blob>,
 }
 
-/// The files `range` changed in the repo at `repo`, as a walk of the repo's root would weigh them on each side, for
-/// the code, the tests or the docs (`mode`, as a scan keeps them; `None`: all three): a side that is hidden (a part
-/// of its path starts with `.`), excluded, of no kind codeweight reads, or not kept is left out, and a change with
-/// neither side left; the rest (at least one side each) in git's order.
+/// The files `range` changed in the repo at `repo`, as a walk of the repo's root would weigh them on each side but
+/// for the ignore files, for the code, the tests or the docs (`mode`, as a scan keeps them; `None`: all three): a
+/// side that is hidden (a part of its path starts with `.`), excluded, of no kind codeweight reads, or not kept is
+/// left out, and a change with neither side left; the rest (at least one side each) in git's order. A tracked file
+/// that a `.gitignore` (or a `.ignore`, `.git/info/exclude`, the global gitignore) matches is kept, as git tracks
+/// it, though a walk leaves it out.
 pub fn from_commit(
     repo: &Path,
     range: &Range,

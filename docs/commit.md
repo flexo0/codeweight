@@ -43,6 +43,13 @@ Rust file's tests left out; its docs; its tests alone; its code's comments; each
 (`source::from_commit`'s `mode`, `Weighed::only`). A sum of the two, or a factor that weighs
 the tests less in it, would let a change to one hide in the other's number.
 
+A side keeps what a walk of the repo's root would, but for the ignore files: `show` and `diff` weigh what git
+tracks, while `scan` (the `ignore` crate's walk) leaves out what a `.gitignore`, a `.ignore`, `.git/info/exclude` or
+the global gitignore matches, even a committed file (one added before its line, or with `git add -f`: a committed
+`src/ign.py` that `src/.gitignore` names). The trees are read with the walk's hidden-file rule and the excludes, not
+the ignore files, so such a file's delta is weighed, and `show` of a commit is then not the difference of two scans.
+It is rare: 37 of about 300,000 tracked files in 23 large open-source repos (`git ls-files -ci --exclude-standard`).
+
 The `show` and `diff` tests make throwaway repos (`tempfile`, git's global and system config off): an add, a delete, a
 rename, a merge, the root commit, a range, the excludes, the code and the tests apart, a bad revision, a shallow clone's
 boundary; the uncommitted changes (staged, unstaged, untracked, ignored, the index unchanged after), the staged ones alone, a rename
