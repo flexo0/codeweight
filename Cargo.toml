@@ -1,6 +1,6 @@
 [package]
 name = "codeweight"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.100"
 description = "Weighs code: every element by its weight, heavier when nested, for files, folders and a commit's net delta; Java, TypeScript, JavaScript, Python, Rust, Go, C; weights tuned on 1,400+ bad/good code pairs"

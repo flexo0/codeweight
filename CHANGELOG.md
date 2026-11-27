@@ -5,6 +5,33 @@ or a weights-file key renamed, removed or changed) or the default weights' numbe
 addition or a fix a patch; from 1.0, a break is a major bump. The whole policy and how a release is made:
 [docs/releasing.md](https://github.com/flexo0/codeweight/blob/master/docs/releasing.md).
 
+## 0.2.0 - 2026-11-27
+
+### Added
+
+- One-line installers, `install.sh` (Linux, macOS) and `install.ps1` (Windows), attached to each release set to its
+  tag; each checks the archive against the `.sha256` each archive now gets, and the release runs each from it.
+
+### Fixed
+
+- `scan` weighs a file named in two spellings once (relative and absolute, through `..` or a symlink), deduped on its
+  canonical path and shown as first found, so `scan s $PWD/s` totals one file's weight, not twice it.
+- A file under a folder scanned that can't be read (mode 000, gone since the walk) is left out with an `unreadable`
+  warning and the rest weighed, instead of ending `scan` with exit 1; a file named itself stays an error.
+- A folder given is walked though it or a folder above it is excluded, the excludes matched from it down, so
+  `scan build/proj` (or `scan` run in it) weighs its files instead of a silent total 0.
+- The text rounds a weight as the JSON does, a tie at the third decimal away from zero, so `statement = 0.625` shows
+  0.63 in `scan --code` as in `--json`, not 0.62.
+- A shebang is a comment kind in JavaScript, TypeScript and Rust (`hash_bang_line`, `shebang`), so a license header
+  after `#!/usr/bin/env node` is still the file's header and weighs nothing in the comments, as in Python.
+- The comments' weight leaves out test code's entries, so `show --comments -v` on a Rust file with a test and a
+  non-test entry of one name (`impl A` beside `#[cfg(test)] impl A`) no longer panics.
+- A deeply nested broken JavaScript file no longer aborts the scan with a stack overflow.
+- Rust: a test attribute is told by its path, so `#[tokio::test(flavor = "multi_thread")]` marks test code as
+  `#[tokio::test]` does, whatever its arguments.
+- Java: `case null, default` (whose default the grammar parses as an identifier) weighs nothing under `free_default`,
+  as `default:` and `default ->` do.
+
 ## 0.1.0 - 2026-11-27
 
 The first release.

@@ -93,7 +93,7 @@ own (a runner, the network) is rerun from GitHub.
   target added to another toolchain (the runner's stable) isn't the one cargo builds with.
 - The target triple is in the archive's name, so a tool downloading the binary for its platform maps to it plainly.
 
-0.1.0 was the first release (2026-11-27), before the installers and the `.sha256`: the installers install 0.1.1 and
+0.1.0 was the first release (2026-11-27), before the installers and the `.sha256`: the installers install 0.2.0 and
 later.
 
 ## The installers

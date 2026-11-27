@@ -2,7 +2,7 @@
 #
 #   powershell -ExecutionPolicy Bypass -c "irm https://github.com/flexo0/codeweight/releases/latest/download/install.ps1 | iex"
 #
-# CODEWEIGHT_VERSION picks the release (`0.1.1` or `v0.1.1`; the default: this script's own release, else the latest),
+# CODEWEIGHT_VERSION picks the release (`0.2.0` or `v0.2.0`; the default: this script's own release, else the latest),
 # CODEWEIGHT_INSTALL_DIR the folder (default `%LOCALAPPDATA%\Programs\codeweight`), which is added to the user's Path
 # unless CODEWEIGHT_NO_MODIFY_PATH is set. The archive is checked against its `.sha256` before anything is installed.
 # How it's released: docs/releasing.md.
